@@ -104,7 +104,7 @@ describe("单曲循环控制器", () => {
     expect(mode.state.cleared?.reason).toBe(LOOP_REASONS.seekFailed);
   });
 
-  it("无静默权限时在剩余 2 秒内预发重播，5 秒内回读成功即保持点亮", () => {
+  it("无静默权限时在剩余 5 秒窗口内预发重播，5 秒内回读成功即保持点亮", () => {
     const { mode, io, memory, push, light } = setup();
     memory.record(PAYLOAD);
     memory.record(CARD);
@@ -112,7 +112,7 @@ describe("单曲循环控制器", () => {
     mode.toggle("loop");
     expect(mode.mode).toBe("loop");
 
-    push({ controlMode: "owner", current: 198.5 });
+    push({ controlMode: "owner", current: 196.5 });
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
     expect(io.sendCard).toHaveBeenCalledExactlyOnceWith(CARD);
 
@@ -210,7 +210,7 @@ describe("单曲循环控制器", () => {
     memory.record(PAYLOAD);
     push({ controlMode: "owner" });
     light();
-    push({ current: 198.5, controlMode: "owner" });
+    push({ current: 196.5, controlMode: "owner" });
     expect(io.sendCard).not.toHaveBeenCalled();
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
   });

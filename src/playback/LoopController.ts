@@ -27,7 +27,6 @@ export const LOOP_REASONS = {
 /** 循环的触发窗口与单曲随机的发送窗口共用同一口径。 */
 export const loopThreshold = endWindow;
 
-const REPLAY_WINDOW_SECONDS = 2;
 const SEEK_VERIFY_MS = 2000;
 const REPLAY_VERIFY_MS = 5000;
 const MANUAL_SEEK_GUARD_MS = 2000;
@@ -131,8 +130,8 @@ export class LoopController {
       return;
     }
     if (!hit) return;
-    if (remaining > REPLAY_WINDOW_SECONDS) return;
-    // 剩余不足 2 秒或已结束（宿站自动续播前的兜底）都在这里接管。
+    // 与快退同一窗口：2 秒窗口会被 250ms 轮询整体跳过，实测导致重播从未发出。
+    if (remaining > threshold) return;
     if (this.tooShort(snapshot, threshold)) return;
     this.replay(snapshot, hit, threshold);
   }
