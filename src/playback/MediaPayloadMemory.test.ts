@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { MediaPayloadMemory } from "./MediaPayloadMemory";
+
+beforeEach(() => {
+  // 默认存储器是 sessionStorage：每个用例都从干净状态开始。
+  sessionStorage.clear();
+});
 
 const payload = (title: string) =>
   `&1${JSON.stringify({
@@ -110,5 +115,73 @@ describe("播放报文缓存", () => {
     expect(memory.hit("room-a", " 甲 ")?.payload).toBe(payload("甲"));
     memory.clear();
     expect(memory.hit("room-a", "甲")).toBeNull();
+  });
+});
+
+function memoryStore(): Storage {
+  const map = new Map<string, string>();
+  return {
+    get length() {
+      return map.size;
+    },
+    clear: () => map.clear(),
+    getItem: (key: string) => map.get(key) ?? null,
+    key: (index: number) => [...map.keys()][index] ?? null,
+    removeItem: (key: string) => void map.delete(key),
+    setItem: (key: string, value: string) => void map.set(key, value),
+  } as Storage;
+}
+
+describe("刷新后恢复报文缓存", () => {
+  it("新实例读到上一页留下的报文与卡片", () => {
+    const store = memoryStore();
+    const first = new MediaPayloadMemory(() => "room-a", () => 1000, store);
+    first.record(card("甲"));
+    first.record(payload("甲"));
+
+    const second = new MediaPayloadMemory(() => "room-a", () => 2000, store);
+    expect(second.hit("room-a", "甲")).toEqual({
+      card: card("甲"),
+      payload: payload("甲"),
+    });
+  });
+
+  it("换房间后存档不再命中，新房间重新记录才生效", () => {
+    const store = memoryStore();
+    const first = new MediaPayloadMemory(() => "room-a", () => 1000, store);
+    first.record(payload("甲"));
+
+    const other = new MediaPayloadMemory(() => "room-b", () => 2000, store);
+    expect(other.hit("room-b", "甲")).toBeNull();
+    other.record(payload("乙"));
+    expect(other.hit("room-b", "乙")?.payload).toBe(payload("乙"));
+  });
+
+  it("存档过期后不再命中", () => {
+    const store = memoryStore();
+    const first = new MediaPayloadMemory(() => "room-a", () => 1000, store);
+    first.record(payload("甲"));
+    const later = new MediaPayloadMemory(
+      () => "room-a",
+      () => 1000 + 7 * 60 * 60 * 1000,
+      store,
+    );
+    expect(later.hit("room-a", "甲")).toBeNull();
+  });
+
+  it("clear 会清掉存档，损坏存档按空处理", () => {
+    const store = memoryStore();
+    const memory = new MediaPayloadMemory(() => "room-a", () => 1000, store);
+    memory.record(payload("甲"));
+    memory.clear();
+    expect(store.getItem("imwMediaPayload")).toBeNull();
+
+    store.setItem("imwMediaPayload", "{bad json");
+    expect(
+      new MediaPayloadMemory(() => "room-a", () => 1000, store).hit(
+        "room-a",
+        "甲",
+      ),
+    ).toBeNull();
   });
 });
