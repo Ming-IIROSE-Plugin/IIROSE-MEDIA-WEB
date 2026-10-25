@@ -78,6 +78,8 @@ export class ShuffleController {
   private failures = 0;
   private played = new Set<string>();
   private armed = true;
+  private sending = false;
+  private idleStarted = false;
   private includeCollections: boolean | null = null;
 
   constructor(
@@ -107,6 +109,7 @@ export class ShuffleController {
       this.pending = undefined;
       this.prepared = undefined;
       this.armed = true;
+      this.idleStarted = false;
       return;
     }
     if (this.pending) {
@@ -115,13 +118,20 @@ export class ShuffleController {
     }
     if (state.standby) return;
     const duration = snapshot.duration;
-    if (
-      !snapshot.playing ||
-      !finite(snapshot.current) ||
-      !finite(duration) ||
-      duration <= 0
-    )
+    if (!snapshot.playing) {
+      const noMedia = !finite(duration) || duration <= 0;
+      const ended =
+        finite(duration) &&
+        finite(snapshot.current) &&
+        snapshot.current >= duration - 1;
+      // 完全没媒体或已播完时可以立即起播；一次点亮只自动起播一次，避免空转。
+      if ((noMedia || ended) && this.platform !== null && !this.idleStarted) {
+        this.idleStarted = true;
+        void this.send(snapshot);
+      }
       return;
+    }
+    if (!finite(snapshot.current) || !finite(duration) || duration <= 0) return;
 
     const remaining = duration - snapshot.current;
     const threshold = thresholdOf(duration);
@@ -255,6 +265,17 @@ export class ShuffleController {
   }
 
   private async send(snapshot: MediaSnapshot): Promise<void> {
+    // 空闲时每帧都会走到这里：一次只允许一个发送在途。
+    if (this.sending || this.pending) return;
+    this.sending = true;
+    try {
+      await this.sendingFlow(snapshot);
+    } finally {
+      this.sending = false;
+    }
+  }
+
+  private async sendingFlow(snapshot: MediaSnapshot): Promise<void> {
     if (!this.prepared) {
       await this.ensurePrepared(snapshot);
       if (!this.prepared) return;
@@ -279,6 +300,7 @@ export class ShuffleController {
       this.pending = undefined;
       this.failures = 0;
       this.armed = true;
+      this.idleStarted = false;
       return;
     }
     if (this.deps.now() - pending.at < VERIFY_MS) return;

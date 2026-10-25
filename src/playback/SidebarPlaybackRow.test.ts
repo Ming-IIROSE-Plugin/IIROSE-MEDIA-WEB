@@ -83,16 +83,19 @@ describe("侧栏播放模式开关行", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("无当前媒体时灰化，点击仅提示原因且不点亮", () => {
+  it("无当前媒体时只有循环灰化，收藏随机仍可开启", () => {
     const { mode } = setup();
     mode.setMediaPresent(false);
     expect(disabled("imw-toggle-loop")).toBe("true");
-    expect(disabled("imw-toggle-shuffle")).toBe("true");
     expect(button("imw-toggle-loop").title).toBe("直播或时间未知，无法使用");
+    // 收藏随机不依赖当前媒体：空闲也能直接开始
+    expect(disabled("imw-toggle-shuffle")).toBe("false");
     button("imw-toggle-loop").click();
     expect(show).toHaveBeenCalledExactlyOnceWith("直播或时间未知，无法使用");
     expect(pressed("imw-toggle-loop")).toBe("false");
     expect(mode.mode).toBe("none");
+    button("imw-toggle-shuffle").click();
+    expect(pressed("imw-toggle-shuffle")).toBe("true");
   });
 
   it("灰化按钮仍可聚焦，Enter 触发同样的原因提示", () => {

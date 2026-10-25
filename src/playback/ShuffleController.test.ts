@@ -240,4 +240,35 @@ describe("收藏随机控制器", () => {
     expect(mode.mode).toBe("none");
     expect(mode.state.shuffle.reason).toBe(SHUFFLE_REASONS.empty);
   });
+
+  it("没在播时开启随机也会立即点播一首，且只发一次", async () => {
+    const { mode, play, prepare, push, light } = setup();
+    push();
+    await settle();
+    push();
+    mode.toggle("shuffle");
+    expect(mode.mode).toBe("shuffle");
+    // 空闲态：没有播放、没有时长
+    push({ playing: false, current: null, duration: null });
+    await settle();
+    expect(prepare).toHaveBeenCalled();
+    expect(play).toHaveBeenCalledTimes(1);
+    push({ playing: false, current: null, duration: null });
+    await settle();
+    expect(prepare).toHaveBeenCalled();
+    expect(play).toHaveBeenCalledTimes(1);
+  });
+
+  it("空闲起播后换曲即视为成功，继续接力", async () => {
+    const { mode, push, light } = setup();
+    push();
+    await settle();
+    push();
+    light();
+    push({ playing: false, current: null, duration: null });
+    await settle();
+    push({ playing: true, current: 3, duration: 200, title: "甲" });
+    expect(mode.mode).toBe("shuffle");
+    expect(mode.state.cleared).toBeNull();
+  });
 });

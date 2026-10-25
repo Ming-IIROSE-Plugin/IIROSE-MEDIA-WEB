@@ -883,7 +883,7 @@ describe("浮窗原生交互与页面生命周期", () => {
     expect(loop.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("组合根装配开关行：断线或媒体消失都灰化，卸载后移除且无遗留定时器", async () => {
+  it("组合根装配开关行：媒体消失只灰化循环，卸载后移除且无遗留定时器", async () => {
     const host = window as unknown as MediaHost;
     const alert = vi.fn();
     Object.assign(window, { _alert: alert });
@@ -907,7 +907,8 @@ describe("浮窗原生交互与页面生命周期", () => {
     for (let index = 0; index < 5; index++) await Promise.resolve();
     expect(host.shareMediaDuration).toBe(300);
     expect(host.socket!.readyState).toBe(1);
-    expect(attrs("aria-disabled")).toEqual(["true", "true"]);
+    // 媒体消失只影响循环；收藏随机不依赖当前媒体，仍可开启。
+    expect(attrs("aria-disabled")).toEqual(["true", "false"]);
     expect(attrs("aria-pressed")).toEqual(["false", "false"]);
     expect(
       document.getElementById("functionHolderExtBox")!.lastElementChild,

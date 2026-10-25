@@ -271,14 +271,18 @@ describe("侧栏媒体入口", () => {
     expect(document.querySelectorAll("#imw-playback-controls")).toHaveLength(1);
     const box = document.getElementById("functionHolderExtBox")!;
     expect(box.lastElementChild).toBe(row.element);
-    for (const id of ["imw-toggle-loop", "imw-toggle-shuffle"]) {
-      expect(document.getElementById(id)!.getAttribute("aria-pressed")).toBe(
-        "false",
-      );
-      expect(document.getElementById(id)!.getAttribute("aria-disabled")).toBe(
-        "true",
-      );
-    }
+    // 媒体消失只禁循环；收藏随机不依赖当前媒体，仍可开启。
+    expect(
+      document.getElementById("imw-toggle-loop")!.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(
+      document.getElementById("imw-toggle-loop")!.getAttribute("aria-disabled"),
+    ).toBe("true");
+    expect(
+      document
+        .getElementById("imw-toggle-shuffle")!
+        .getAttribute("aria-disabled"),
+    ).toBe("false");
     box.insertAdjacentHTML(
       "beforeend",
       '<div class="functionButtonExt"><div id="shareMediaBox"></div></div>',

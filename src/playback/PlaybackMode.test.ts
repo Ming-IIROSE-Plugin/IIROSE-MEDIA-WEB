@@ -20,7 +20,8 @@ describe("播放模式状态机", () => {
     expect(mode.state).toEqual({
       mode: "none",
       loop: { enabled: false, reason: "直播或时间未知，无法使用" },
-      shuffle: { enabled: false, reason: "直播或时间未知，无法使用" },
+      // 收藏随机不依赖媒体：默认可用性来自收藏侧（此处尚未注入，取默认可用）
+      shuffle: { enabled: true, reason: "" },
       standby: false,
       standbyReason: "",
       cleared: null,
@@ -99,31 +100,34 @@ describe("播放模式状态机", () => {
       reason: "直播或时间未知，无法使用",
     });
     mode.applySnapshot(snapshot({ duration: 0 }));
-    expect(mode.state.shuffle).toEqual({
+    expect(mode.state.loop).toEqual({
       enabled: false,
       reason: "直播或时间未知，无法使用",
     });
+    // 没在播也能开收藏随机：它只受收藏可用性与连接影响
     mode.applySnapshot(snapshot({ duration: 200, playing: false }));
-    expect(mode.state.shuffle).toEqual({
-      enabled: false,
-      reason: "暂无播放内容，无法开启自动播放",
-    });
+    expect(mode.state.shuffle.enabled).toBe(true);
   });
 
-  it("可用性派生顺序：无媒体 → 断线 → 时长未知 → 单模式原因", () => {
+  it("循环按「无媒体 → 断线 → 时长未知 → 播放状态」派生；随机只看连接与收藏", () => {
     const mode = ready();
     mode.setAvailability("shuffle", {
       enabled: false,
       reason: "当前页面没有收藏",
     });
+    // 随机：媒体/时长都不影响，只跟连接与收藏走
     mode.applySnapshot(snapshot({ duration: null }));
-    expect(reasonOf(mode.state.shuffle)).toBe("直播或时间未知，无法使用");
+    expect(reasonOf(mode.state.shuffle)).toBe("当前页面没有收藏");
     mode.applySnapshot(snapshot({ connected: false }));
     expect(reasonOf(mode.state.shuffle)).toBe(
       "连接未就绪或已断开，暂时无法调整",
     );
     mode.setMediaPresent(false);
-    expect(reasonOf(mode.state.shuffle)).toBe("直播或时间未知，无法使用");
+    expect(reasonOf(mode.state.shuffle)).toBe(
+      "连接未就绪或已断开，暂时无法调整",
+    );
+    // 循环：媒体缺失优先
+    expect(reasonOf(mode.state.loop)).toBe("直播或时间未知，无法使用");
     mode.setMediaPresent(true);
     mode.applySnapshot(snapshot());
     expect(reasonOf(mode.state.shuffle)).toBe("当前页面没有收藏");

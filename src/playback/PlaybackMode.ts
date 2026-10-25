@@ -69,7 +69,8 @@ export class PlaybackMode {
 
   get state(): PlaybackModeState {
     // 待命只对已点亮的模式成立：熄灭时没有「等待恢复」的对象。
-    const standby = this.current !== "none" && !this.ownMedia;
+    // 待命只在「有媒体在播但不是我点的」时成立；空闲态没有等待对象。
+    const standby = this.current !== "none" && this.playing && !this.ownMedia;
     return {
       mode: this.current,
       loop: { ...this.availability("loop") },
@@ -84,6 +85,11 @@ export class PlaybackMode {
   // 前三种是更根本的原因，优先于模式自身（如收藏为空）。
   // 归属不参与可用性：他人点播只是待命，按钮保持可点、不灰化。
   private availability(kind: PlaybackModeKind): PlaybackModeAvailability {
+    // 收藏随机不依赖当前媒体：没在播时也能开启并立即点播一首。
+    if (kind === "shuffle")
+      return this.connected
+        ? this.extras.shuffle
+        : { enabled: false, reason: DISCONNECTED };
     if (!this.present) return { enabled: false, reason: MEDIA_UNAVAILABLE };
     if (!this.connected) return { enabled: false, reason: DISCONNECTED };
     if (this.duration === null || this.duration <= 0)
