@@ -40,27 +40,22 @@ describe("自己喊 cut 的检测", () => {
       () => clock,
       () => "铭铭280",
     );
-    watcher.feedMessage("铭铭280 cut");
-    expect(watcher.recent()).toBe(true);
-    watcher.consume();
-    watcher.feedMessage("北城空 cut");
-    expect(watcher.recent()).toBe(false);
-    watcher.feedMessage("铭铭280 我要 cut 一下");
-    expect(watcher.recent()).toBe(false);
-    watcher.feedMessage("铭铭280 recut");
-    expect(watcher.recent()).toBe(false);
-    watcher.consume();
-    watcher.feedMessage("铭铭280 CUT");
-    expect(watcher.recent()).toBe(true);
-    watcher.consume();
-    watcher.feedMessage("铭铭280：cut");
-    expect(watcher.recent()).toBe(true);
-    watcher.consume();
-    watcher.feedMessage("12:34 铭铭280 cut");
-    expect(watcher.recent()).toBe(true);
-    watcher.consume();
-    watcher.feedMessage("铭铭280 说我 cut");
-    expect(watcher.recent()).toBe(true);
+    const cases = [
+      ["铭铭280 cut", true],
+      ["铭铭280 CUT", true],
+      ["cut铭铭280 人工智能", true],
+      ["铭铭280：cut", true],
+      ["12:34 铭铭280 cut", true],
+      ["北城空 cut", false],
+      ["铭铭280 我要 cut 一下", false],
+      ["铭铭280 recut", false],
+      ["我要 cut 一下铭铭280 人工智能", false],
+    ];
+    for (const [text, expected] of cases) {
+      watcher.consume();
+      watcher.feedMessage(text as string);
+      expect(watcher.recent(), String(text)).toBe(expected);
+    }
     watcher.dispose();
   });
 

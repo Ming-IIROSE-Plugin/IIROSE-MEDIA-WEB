@@ -339,11 +339,25 @@ describe("单曲循环控制器", () => {
     expect(cut.consume).toHaveBeenCalled();
   });
 
+  it("cut 让播放停止时仍先重播，不被「暂无播放内容」提前熄灭", () => {
+    const { mode, io, memory, push, light, cut } = setup();
+    memory.record(PAYLOAD);
+    push({ controlMode: "owner" });
+    light();
+    cut.activate();
+    // cut 后宿站直接把播放置为停止、进度清成 -1
+    push({ controlMode: "owner", current: -1, playing: false });
+    expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
+    expect(mode.mode).toBe("loop");
+  });
+
   it("他人点播时即使本端喊 cut 也不重播", () => {
-    const { io, memory, push, light, cut } = setup();
+    sessionStorage.clear();
+    const { mode, io, memory, push, cut } = setup();
     memory.record(PAYLOAD);
     push({ controlMode: "owner", ownMedia: false });
-    light();
+    mode.toggle("loop");
+    expect(mode.mode).toBe("loop");
     cut.activate();
     push({
       controlMode: "owner",

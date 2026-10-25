@@ -98,6 +98,13 @@ export class LoopController {
     this.seekVersion = snapshot.seekVersion;
     if (snapshot.ownMedia) this.lastOwn = true;
     if (!snapshot.ownMedia && snapshot.playing) this.lastOwn = false;
+    // cut 会让 playing 立刻变 false：必须在可用性刷新把它熄灭之前处理重播。
+    if (this.mode.state.mode === "loop" && !snapshot.playing) {
+      if (this.replayAfterSelfCut(snapshot)) {
+        this.publishAvailability(snapshot);
+        return;
+      }
+    }
     this.publishAvailability(snapshot);
 
     const state = this.mode.state;

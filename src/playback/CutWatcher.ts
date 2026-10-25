@@ -57,10 +57,20 @@ export class CutWatcher {
     const me = this.myself().trim();
     if (!me) return;
     const normalized = text.replace(/\s+/g, " ").trim();
-    if (!normalized || !/cut$/i.test(normalized)) return;
-    // 「recut」这类词不算；允许「昵称：cut」「昵称 cut」「12:34 昵称 cut」等排版。
-    if (/[a-z0-9_]$/i.test(normalized.slice(0, -3))) return;
-    if (!normalized.includes(me)) return;
+    if (!normalized) return;
+    // 宿站渲染是「内容 + 昵称 + 标签」，例如 `cut铭铭280 人工智能`：
+    // 取昵称之前的部分当正文，正文去掉空白/冒号后必须正好是 cut。
+    const at = normalized.indexOf(me);
+    if (at < 0) return;
+    const body = normalized
+      .slice(0, at)
+      .replace(/[\s:：,，·\-—|]+$/g, "")
+      .trim();
+    const rest = normalized
+      .slice(at + me.length)
+      .replace(/^[\s:：,，·\-—|]+/g, "")
+      .trim();
+    if (!/^cut$/i.test(body) && !/^cut$/i.test(rest)) return;
     this.cutAt = this.now();
   }
 
