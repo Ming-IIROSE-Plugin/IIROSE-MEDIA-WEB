@@ -19,7 +19,11 @@ describe("自己喊 cut 的检测", () => {
   it("socket 报文命中：本端发出的 cut 指令", () => {
     const socket = hostSocket();
     let clock = 1000;
-    const watcher = new CutWatcher(() => socket, () => clock, () => "铭铭280");
+    const watcher = new CutWatcher(
+      () => socket,
+      () => clock,
+      () => "铭铭280",
+    );
     watcher.tick();
     expect(watcher.recent()).toBe(false);
     socket.send(chat("cut"));
@@ -72,7 +76,11 @@ describe("自己喊 cut 的检测", () => {
 
   it("consume 后不再命中，重复 tick 不会二次包装", () => {
     const socket = hostSocket();
-    const watcher = new CutWatcher(() => socket, () => 1000, () => "铭铭280");
+    const watcher = new CutWatcher(
+      () => socket,
+      () => 1000,
+      () => "铭铭280",
+    );
     watcher.tick();
     const patched = socket.send;
     watcher.tick();
