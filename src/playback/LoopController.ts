@@ -139,7 +139,9 @@ export class LoopController {
     // 进度回到开头（快退或重播生效）后重新武装：同一实例可循环多次。
     if (!this.armed && remaining > threshold * 2) this.armed = true;
     if (!this.armed) return;
-    if (this.now() < this.seekNotBefore) return;
+    // 手动定位抑制只在「曲子还长」时生效：拖到/跳到结尾附近恰恰是要接管的时机，
+    // 而宿站的 seek 会把 seekVersion 顶起来，若不加这个例外，窗口永远被自己跳过。
+    if (remaining > threshold * 2 && this.now() < this.seekNotBefore) return;
 
     const hit = this.memory.hit(snapshot.roomKey, snapshot.title);
     const silentUsable =

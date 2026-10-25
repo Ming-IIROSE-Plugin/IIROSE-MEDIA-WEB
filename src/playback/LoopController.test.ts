@@ -195,12 +195,19 @@ describe("单曲循环控制器", () => {
     expect(mode.state.cleared?.reason).toBe(LOOP_REASONS.tooShort);
   });
 
-  it("手动定位后 2 秒内不触发", () => {
+  it("曲子还长时手动定位后 2 秒内不触发", () => {
     const { send, push, light, advance } = setup();
     light();
-    push({ current: 196, seekVersion: 1 });
+    push({ current: 100, seekVersion: 1 });
     expect(send).not.toHaveBeenCalled();
     advance(2100);
+    push({ current: 100, seekVersion: 1 });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("定位到结尾附近不受抑制，立即接管", () => {
+    const { send, push, light } = setup();
+    light();
     push({ current: 196, seekVersion: 1 });
     expect(send).toHaveBeenCalledTimes(1);
   });
