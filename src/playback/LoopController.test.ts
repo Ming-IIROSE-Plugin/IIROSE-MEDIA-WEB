@@ -276,4 +276,22 @@ describe("单曲循环控制器", () => {
     expect(mode.mode).toBe("none");
     expect(mode.state.cleared?.reason).toBe(LOOP_REASONS.replayFailed);
   });
+
+  it("手动拖到结尾（宿站直接停止）也会重播", () => {
+    const { io, memory, push, light } = setup();
+    memory.record(PAYLOAD);
+    push({ controlMode: "owner" });
+    light();
+    push({ controlMode: "owner", current: 279, duration: 279, playing: false });
+    expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
+  });
+
+  it("中途暂停不会重播", () => {
+    const { io, memory, push, light } = setup();
+    memory.record(PAYLOAD);
+    push({ controlMode: "owner" });
+    light();
+    push({ controlMode: "owner", current: 40, playing: false });
+    expect(io.sendPayload).not.toHaveBeenCalled();
+  });
 });

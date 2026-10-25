@@ -104,8 +104,12 @@ export class LoopController {
       return;
     }
     if (state.standby) return;
+    // 手动拖到结尾时宿站直接置为停止，不会留出「剩余 ≤ 阈值」的一格：结束态也要接管。
+    if (!snapshot.playing) {
+      this.replayEnded(snapshot);
+      return;
+    }
     if (
-      !snapshot.playing ||
       !finiteNumber(snapshot.current) ||
       !finiteNumber(snapshot.duration) ||
       snapshot.duration <= 0
@@ -134,6 +138,19 @@ export class LoopController {
     if (remaining > threshold) return;
     if (this.tooShort(snapshot, threshold)) return;
     this.replay(snapshot, hit, threshold);
+  }
+
+  // 播放已停止且停在末尾（拖到底/自然结束）时，按缓存的报文重新点播一次。
+  private replayEnded(snapshot: MediaSnapshot): void {
+    if (this.pending) return;
+    if (!finiteNumber(snapshot.current) || !finiteNumber(snapshot.duration))
+      return;
+    if (snapshot.duration <= 0) return;
+    if (snapshot.current < snapshot.duration - 1) return;
+    const hit = this.memory.hit(snapshot.roomKey, snapshot.title);
+    if (!hit) return;
+    if (this.tooShort(snapshot, loopThreshold(snapshot.duration))) return;
+    this.replay(snapshot, hit, loopThreshold(snapshot.duration));
   }
 
   private publishAvailability(snapshot: MediaSnapshot): void {
