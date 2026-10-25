@@ -23,7 +23,21 @@ const PAYLOAD = `&1${JSON.stringify({
   l: "",
 })}`;
 
-function setup() {
+function fakeCut(active = false) {
+  let recent = active;
+  return {
+    tick: vi.fn(),
+    recent: () => recent,
+    consume: vi.fn(() => {
+      recent = false;
+    }),
+    activate: () => {
+      recent = true;
+    },
+  };
+}
+
+function setup(cut = fakeCut()) {
   const mode = new PlaybackMode();
   mode.setMediaPresent(true);
   let listener: ((value: MediaSnapshot) => void) | null = null;
@@ -40,7 +54,14 @@ function setup() {
   const io = { sendCard: vi.fn(), sendPayload: vi.fn(), localSeek: vi.fn() };
   let clock = 1_000_000;
   const memory = new MediaPayloadMemory(() => "fixture-room");
-  const controller = new LoopController(mode, bridge, memory, io, () => clock);
+  const controller = new LoopController(
+    mode,
+    bridge,
+    memory,
+    io,
+    () => clock,
+    cut as unknown as never,
+  );
   controller.attach();
 
   const push = (patch: Partial<MediaSnapshot> = {}) => {
@@ -56,7 +77,7 @@ function setup() {
   const advance = (ms: number) => {
     clock += ms;
   };
-  return { mode, memory, io, send, push, light, advance, controller };
+  return { mode, memory, io, send, push, light, advance, controller, cut };
 }
 
 describe("单曲循环控制器", () => {
@@ -299,6 +320,41 @@ describe("单曲循环控制器", () => {
   });
 
   it("中途暂停不会重播", () => {
+    const { io, memory, push, light } = setup();
+    memory.record(PAYLOAD);
+    push({ controlMode: "owner" });
+    light();
+    push({ controlMode: "owner", current: 40, playing: false });
+    expect(io.sendPayload).not.toHaveBeenCalled();
+  });
+
+  it("自己喊 cut 导致中途结束：本人点播才重播", () => {
+    const { io, memory, push, light, cut } = setup();
+    memory.record(PAYLOAD);
+    push({ controlMode: "owner" });
+    light();
+    cut.activate();
+    push({ controlMode: "owner", current: 40, playing: false });
+    expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
+    expect(cut.consume).toHaveBeenCalled();
+  });
+
+  it("他人点播时即使本端喊 cut 也不重播", () => {
+    const { io, memory, push, light, cut } = setup();
+    memory.record(PAYLOAD);
+    push({ controlMode: "owner", ownMedia: false });
+    light();
+    cut.activate();
+    push({
+      controlMode: "owner",
+      ownMedia: false,
+      current: 40,
+      playing: false,
+    });
+    expect(io.sendPayload).not.toHaveBeenCalled();
+  });
+
+  it("没有 cut、也不是播放到末尾时停止不重播", () => {
     const { io, memory, push, light } = setup();
     memory.record(PAYLOAD);
     push({ controlMode: "owner" });

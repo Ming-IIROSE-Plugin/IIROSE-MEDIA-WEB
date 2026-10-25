@@ -7,6 +7,7 @@ import { PlaybackMode } from "../playback/PlaybackMode";
 import { SidebarPlaybackRow } from "../playback/SidebarPlaybackRow";
 import { LoopController } from "../playback/LoopController";
 import { ShuffleController } from "../playback/ShuffleController";
+import { CutWatcher } from "../playback/CutWatcher";
 import {
   prepareShuffleTarget,
   queryShuffleCandidates,
@@ -58,6 +59,7 @@ function initMediaProgress() {
   let playbackRow!: SidebarPlaybackRow;
   let loop!: LoopController;
   let shuffle: ShuffleController | undefined;
+  const cutWatcher = new CutWatcher();
   let memory: MediaPayloadMemory | undefined;
   let sidebar!: SidebarMediaEntry;
   let unsubscribePlayback: (() => void) | undefined;
@@ -112,20 +114,27 @@ function initMediaProgress() {
     prepare: (record) => prepareShuffleTarget(record),
     now: () => Date.now(),
   });
-  loop = new LoopController(playback, bridge, memory, {
-    sendCard: (card) => Announce.sendMediaCard(new Socket(), card),
-    sendPayload: (payload) => new Socket().send(payload),
-    localSeek: (seconds) => {
-      const service = (
-        window as unknown as {
-          Utils?: { service?: { seekDemandMedia?: (time: number) => void } };
-        }
-      ).Utils?.service;
-      if (typeof service?.seekDemandMedia !== "function")
-        throw new Error("宿站本地定位不可用");
-      service.seekDemandMedia(seconds);
+  loop = new LoopController(
+    playback,
+    bridge,
+    memory,
+    {
+      sendCard: (card) => Announce.sendMediaCard(new Socket(), card),
+      sendPayload: (payload) => new Socket().send(payload),
+      localSeek: (seconds) => {
+        const service = (
+          window as unknown as {
+            Utils?: { service?: { seekDemandMedia?: (time: number) => void } };
+          }
+        ).Utils?.service;
+        if (typeof service?.seekDemandMedia !== "function")
+          throw new Error("宿站本地定位不可用");
+        service.seekDemandMedia(seconds);
+      },
     },
-  });
+    () => Date.now(),
+    cutWatcher,
+  );
   let visible = false;
   let lastPosition = readMediaProgressPosition();
   close = (restoreFocus = true) => {

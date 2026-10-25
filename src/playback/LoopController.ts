@@ -3,6 +3,7 @@ import type { MediaPayloadHit, MediaPayloadMemory } from "./MediaPayloadMemory";
 import type { PlaybackMode } from "./PlaybackMode";
 import { isSeekCommand, rewindCommand } from "../media-progress/model";
 import { endWindow, finiteNumber } from "./endWindow";
+import type { CutWatcher } from "./CutWatcher";
 
 /** 循环动作与宿站的唯一接口：卡片走播报档位，报文直发。 */
 export interface LoopIo {
@@ -71,6 +72,7 @@ export class LoopController {
     private memory: MediaPayloadMemory,
     private io: LoopIo,
     private now: () => number = () => Date.now(),
+    private cut?: CutWatcher,
   ) {}
 
   attach(): void {
@@ -87,6 +89,7 @@ export class LoopController {
   }
 
   private onSnapshot(snapshot: MediaSnapshot): void {
+    this.cut?.tick();
     // 首次订阅不建立抑制窗口：只有「已经在跟踪后又发生定位」才算手动操作。
     if (this.seekVersion !== null && snapshot.seekVersion !== this.seekVersion)
       this.seekNotBefore = this.now() + MANUAL_SEEK_GUARD_MS;
@@ -108,6 +111,7 @@ export class LoopController {
     if (state.standby) return;
     // 手动拖到结尾时宿站直接置为停止，不会留出「剩余 ≤ 阈值」的一格：结束态也要接管。
     if (!snapshot.playing) {
+      if (this.replayAfterSelfCut(snapshot)) return;
       this.replayEnded(snapshot);
       return;
     }
@@ -144,6 +148,17 @@ export class LoopController {
     }
     // 无缓存但仍是本人点播：本地回到开头（房间不跟随）。
     if (snapshot.ownMedia) this.seekLocal(snapshot, threshold);
+  }
+
+  // 自己喊 cut 导致的中途结束：只有本次操作是本端发出、且曲目仍是本人点播时才重播。
+  private replayAfterSelfCut(snapshot: MediaSnapshot): boolean {
+    if (!this.cut?.recent()) return false;
+    if (!snapshot.ownMedia) return false;
+    const hit = this.memory.last(snapshot.roomKey);
+    if (!hit) return false;
+    this.cut.consume();
+    this.replay(snapshot, hit, loopThreshold(snapshot.duration ?? 0));
+    return true;
   }
 
   // 播放已停止且停在末尾（拖到底/自然结束）时，按缓存的报文重新点播一次。

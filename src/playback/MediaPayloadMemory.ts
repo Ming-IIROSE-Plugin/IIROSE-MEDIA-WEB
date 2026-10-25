@@ -145,6 +145,18 @@ export class MediaPayloadMemory {
     return { card, payload: this.payload.text };
   }
 
+  /** 不比对标题的最后一条报文：cut 之后宿站可能已清空歌名。 */
+  last(roomKey: string | null): MediaPayloadHit | null {
+    if (!this.payload || roomKey === null) return null;
+    if (roomKey !== this.roomKey || this.roomOf() !== this.roomKey) return null;
+    if (this.now() - this.payload.at > MAX_AGE_MS) return null;
+    const card =
+      this.card && this.card.title === this.payload.title
+        ? this.card.text
+        : null;
+    return { card, payload: this.payload.text };
+  }
+
   clear(): void {
     this.roomKey = null;
     this.payload = null;
