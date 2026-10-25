@@ -49,7 +49,17 @@ describe("自己喊 cut 的检测", () => {
     expect(watcher.recent()).toBe(false);
     watcher.feedMessage("铭铭280 recut");
     expect(watcher.recent()).toBe(false);
+    watcher.consume();
     watcher.feedMessage("铭铭280 CUT");
+    expect(watcher.recent()).toBe(true);
+    watcher.consume();
+    watcher.feedMessage("铭铭280：cut");
+    expect(watcher.recent()).toBe(true);
+    watcher.consume();
+    watcher.feedMessage("12:34 铭铭280 cut");
+    expect(watcher.recent()).toBe(true);
+    watcher.consume();
+    watcher.feedMessage("铭铭280 说我 cut");
     expect(watcher.recent()).toBe(true);
     watcher.dispose();
   });

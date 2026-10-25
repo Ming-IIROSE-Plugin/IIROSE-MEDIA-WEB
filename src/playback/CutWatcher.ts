@@ -57,7 +57,9 @@ export class CutWatcher {
     const me = this.myself().trim();
     if (!me) return;
     const normalized = text.replace(/\s+/g, " ").trim();
-    if (!normalized || !/(^|\s)cut$/i.test(normalized)) return;
+    if (!normalized || !/cut$/i.test(normalized)) return;
+    // 「recut」这类词不算；允许「昵称：cut」「昵称 cut」「12:34 昵称 cut」等排版。
+    if (/[a-z0-9_]$/i.test(normalized.slice(0, -3))) return;
     if (!normalized.includes(me)) return;
     this.cutAt = this.now();
   }
