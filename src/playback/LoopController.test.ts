@@ -1,10 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaSnapshot } from "../media-progress/model";
 import { snapshot } from "./fixtures";
 import { LoopController, LOOP_REASONS, loopThreshold } from "./LoopController";
 import type { LoopBridge } from "./LoopController";
 import { MediaPayloadMemory } from "./MediaPayloadMemory";
 import { PlaybackMode } from "./PlaybackMode";
+
+beforeEach(() => {
+  // 默认存储器是 sessionStorage：避免上一个用例的报文串到「无缓存」场景。
+  sessionStorage.clear();
+});
 
 const CARD = '{"m":"m__4@0>测试曲目>歌手>x>000000>320","mc":"000000","i":"1"}';
 const PAYLOAD = `&1${JSON.stringify({
@@ -197,6 +202,7 @@ describe("单曲循环控制器", () => {
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
     expect(mode.mode).toBe("loop");
 
+    sessionStorage.clear();
     const second = setup();
     second.send.mockReturnValueOnce(false);
     second.light();
