@@ -31,7 +31,8 @@ export const LOOP_REASONS = {
 export const loopThreshold = endWindow;
 
 const SEEK_VERIFY_MS = 2000;
-const REPLAY_VERIFY_MS = 5000;
+// 自然播完后宿站要靠点播队列接上，实测有几秒延迟：窗口放宽到 10 秒再判失败。
+const REPLAY_VERIFY_MS = 10_000;
 const MANUAL_SEEK_GUARD_MS = 2000;
 const SHORT_TRACK_MAX_TRIGGERS = 2;
 const SHORT_TRACK_WINDOW_MS = 30_000;
