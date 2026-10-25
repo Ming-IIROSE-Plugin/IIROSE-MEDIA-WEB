@@ -161,6 +161,7 @@ describe("单曲循环控制器", () => {
     const { mode, io, push, light } = setup();
     push({ controlMode: "owner" });
     expect(mode.state.loop.enabled).toBe(true);
+    expect(mode.state.loop.reason).toBe(LOOP_REASONS.naturalEndHint);
     light();
     push({ controlMode: "owner", current: 277 });
     expect(io.sendPayload).not.toHaveBeenCalled();

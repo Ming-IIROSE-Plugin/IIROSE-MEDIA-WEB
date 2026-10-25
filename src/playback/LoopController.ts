@@ -25,6 +25,7 @@ export const LOOP_REASONS = {
   seekFailed: "循环失败：无法回到开头",
   replayFailed: "循环失败：无法重新点播当前曲目",
   tooShort: "曲目过短，已停止循环",
+  naturalEndHint: "拖到结尾不会循环；让它自然播完才会重播",
 } as const;
 
 /** 循环的触发窗口与单曲随机的发送窗口共用同一口径。 */
@@ -190,15 +191,20 @@ export class LoopController {
   }
 
   private publishAvailability(snapshot: MediaSnapshot): void {
+    const silentUsable =
+      snapshot.controlMode === "silent" && !snapshot.controlReason;
     const usable =
-      (snapshot.controlMode === "silent" && !snapshot.controlReason) ||
+      silentUsable ||
       !!this.memory.hit(snapshot.roomKey, snapshot.title) ||
       // 缓存丢失（如刷新后）但曲目仍是本人点播：允许用本地 seek 兜底，避免按钮变灰。
       snapshot.ownMedia;
-    this.mode.setAvailability("loop", {
-      enabled: usable,
-      reason: usable ? "" : LOOP_REASONS.unavailable,
-    });
+    // 无静默权限时，重播靠点播队列接上：手动拖到结尾属于本机操作，队列不会推进。
+    const reason = !usable
+      ? LOOP_REASONS.unavailable
+      : silentUsable
+        ? ""
+        : LOOP_REASONS.naturalEndHint;
+    this.mode.setAvailability("loop", { enabled: usable, reason });
   }
 
   // 短曲预算按房间+曲目隔离：换曲/换房不继承上一首的计数。
