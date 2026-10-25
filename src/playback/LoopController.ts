@@ -65,6 +65,8 @@ export class LoopController {
   private pending?: Pending;
   private recent: number[] = [];
   private recentKey = "";
+  // cut 之后宿站可能清空点播者，这里记住「结束前最后一次是否本人点播」。
+  private lastOwn = false;
 
   constructor(
     private mode: PlaybackMode,
@@ -94,6 +96,8 @@ export class LoopController {
     if (this.seekVersion !== null && snapshot.seekVersion !== this.seekVersion)
       this.seekNotBefore = this.now() + MANUAL_SEEK_GUARD_MS;
     this.seekVersion = snapshot.seekVersion;
+    if (snapshot.ownMedia) this.lastOwn = true;
+    if (!snapshot.ownMedia && snapshot.playing) this.lastOwn = false;
     this.publishAvailability(snapshot);
 
     const state = this.mode.state;
@@ -153,7 +157,7 @@ export class LoopController {
   // 自己喊 cut 导致的中途结束：只有本次操作是本端发出、且曲目仍是本人点播时才重播。
   private replayAfterSelfCut(snapshot: MediaSnapshot): boolean {
     if (!this.cut?.recent()) return false;
-    if (!snapshot.ownMedia) return false;
+    if (!snapshot.ownMedia && !this.lastOwn) return false;
     const hit = this.memory.last(snapshot.roomKey);
     if (!hit) return false;
     this.cut.consume();
@@ -229,8 +233,9 @@ export class LoopController {
     };
     if (!this.bridge.send(command, snapshot.instance, "silent")) {
       this.pending = undefined;
-      // 静默通道瞬时不可用：有报文就降级重播，否则熄灭。
+      // 静默通道不可用：优先重播，其次本地 seek，最后才报失败。
       if (hit) this.replay(snapshot, hit, threshold);
+      else if (snapshot.ownMedia) this.seekLocal(snapshot, threshold);
       else this.fail(LOOP_REASONS.seekFailed);
     }
   }
@@ -315,6 +320,7 @@ export class LoopController {
       this.pending = undefined;
       const hit = this.memory.hit(snapshot.roomKey, snapshot.title);
       if (hit) this.replay(snapshot, hit, pending.threshold);
+      else if (snapshot.ownMedia) this.seekLocal(snapshot, pending.threshold);
       else this.fail(LOOP_REASONS.seekFailed);
       return;
     }

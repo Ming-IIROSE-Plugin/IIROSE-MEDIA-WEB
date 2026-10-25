@@ -28,6 +28,7 @@ export interface PlaybackModeState {
 // 文案取自 sidebar-controls.md 的不可用原因表。
 const MEDIA_UNAVAILABLE = "直播或时间未知，无法使用";
 const DISCONNECTED = "连接未就绪或已断开，暂时无法调整";
+const NOT_PLAYING = "暂无播放内容，无法开启自动播放";
 const STANDBY_REASON = "当前曲目由他人点播，暂不自动续播";
 const ROOM_CHANGED_REASON = "已切换房间，播放模式已关闭";
 
@@ -46,6 +47,7 @@ export class PlaybackMode {
   private duration: number | null = null;
   // 归属与房间标识只来自快照，不缓存判定结果（快照本身就是每 250ms 重读）。
   private ownMedia = false;
+  private playing = false;
   private roomKey: string | null = null;
   private cleared: PlaybackModeClear | null = null;
   private clearedId = 0;
@@ -86,6 +88,9 @@ export class PlaybackMode {
     if (!this.connected) return { enabled: false, reason: DISCONNECTED };
     if (this.duration === null || this.duration <= 0)
       return { enabled: false, reason: MEDIA_UNAVAILABLE };
+    // 没在播时不允许再点亮；已经点亮的那一个保持（cut 后要靠它自动重播）。
+    if (!this.playing && this.current !== kind)
+      return { enabled: false, reason: NOT_PLAYING };
     return this.extras[kind];
   }
 
@@ -109,6 +114,7 @@ export class PlaybackMode {
     this.connected = snapshot.connected;
     this.duration = snapshot.duration;
     this.ownMedia = snapshot.ownMedia;
+    this.playing = snapshot.playing;
     // 无房间标识（null）视为未变化：换房瞬间宿站可能读不到 roomnFull，
     // 而桥接那边的 null 会参与 instance 失效（instance 只影响「同一播放实例」判定，
     // 这里若跟着熄灭就会把「标识短暂缺失」误判成换房）。两处刻意不一致。

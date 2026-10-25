@@ -91,7 +91,7 @@ describe("播放模式状态机", () => {
     });
   });
 
-  it("时长未知或为 0 按直播原因禁用，暂停不影响", () => {
+  it("时长未知或为 0 按直播原因禁用；暂停后不能再开启", () => {
     const mode = ready();
     mode.applySnapshot(snapshot({ duration: null }));
     expect(mode.state.loop).toEqual({
@@ -104,7 +104,10 @@ describe("播放模式状态机", () => {
       reason: "直播或时间未知，无法使用",
     });
     mode.applySnapshot(snapshot({ duration: 200, playing: false }));
-    expect(mode.state.shuffle.enabled).toBe(true);
+    expect(mode.state.shuffle).toEqual({
+      enabled: false,
+      reason: "暂无播放内容，无法开启自动播放",
+    });
   });
 
   it("可用性派生顺序：无媒体 → 断线 → 时长未知 → 单模式原因", () => {
@@ -330,5 +333,20 @@ describe("点播归属与生命周期守卫", () => {
       id: 1,
       reason: "循环失败：无法回到开头",
     });
+  });
+
+  it("停止播放后不能再开启，但已点亮的保持（cut 后要靠它重播）", () => {
+    const mode = ready();
+    mode.toggle("loop");
+    expect(mode.mode).toBe("loop");
+    mode.applySnapshot(snapshot({ playing: false }));
+    expect(mode.mode).toBe("loop");
+    expect(mode.state.loop.enabled).toBe(true);
+
+    const idle = ready();
+    idle.applySnapshot(snapshot({ playing: false }));
+    expect(idle.state.loop.enabled).toBe(false);
+    idle.toggle("loop");
+    expect(idle.mode).toBe("none");
   });
 });

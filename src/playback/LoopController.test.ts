@@ -117,7 +117,7 @@ describe("单曲循环控制器", () => {
     expect(mode.state.cleared).toBeNull();
   });
 
-  it("快退失败且无缓存时报文不补发，熄灭并给出原因", () => {
+  it("快退失败且无缓存时降级本地 seek，不熄灭也不报错", () => {
     const { mode, io, send, push, light, advance } = setup();
     light();
     push({ current: 196 });
@@ -126,8 +126,8 @@ describe("单曲循环控制器", () => {
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(io.sendPayload).not.toHaveBeenCalled();
-    expect(mode.mode).toBe("none");
-    expect(mode.state.cleared?.reason).toBe(LOOP_REASONS.seekFailed);
+    expect(io.localSeek).toHaveBeenCalledWith(0);
+    expect(mode.mode).toBe("loop");
   });
 
   it("无静默权限时在剩余 5 秒窗口内预发重播，5 秒内回读成功即保持点亮", () => {
@@ -226,7 +226,7 @@ describe("单曲循环控制器", () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it("静默通道返回 false 时降级重播；无缓存则熄灭", () => {
+  it("静默通道返回 false 时降级重播；无缓存则本地 seek", () => {
     const { mode, io, memory, send, push, light } = setup();
     memory.record(PAYLOAD);
     send.mockReturnValueOnce(false);
@@ -240,8 +240,8 @@ describe("单曲循环控制器", () => {
     second.send.mockReturnValueOnce(false);
     second.light();
     second.push({ current: 196 });
-    expect(second.mode.mode).toBe("none");
-    expect(second.mode.state.cleared?.reason).toBe(LOOP_REASONS.seekFailed);
+    expect(second.io.localSeek).toHaveBeenCalledWith(0);
+    expect(second.mode.mode).toBe("loop");
   });
 
   it("播报静默时没有卡片，只重发报文", () => {
