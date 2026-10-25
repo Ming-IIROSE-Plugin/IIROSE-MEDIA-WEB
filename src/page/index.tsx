@@ -115,6 +115,13 @@ function initMediaProgress() {
   loop = new LoopController(playback, bridge, memory, {
     sendCard: (card) => Announce.sendMediaCard(new Socket(), card),
     sendPayload: (payload) => new Socket().send(payload),
+    localSeek: (seconds) => {
+      const service = (window as unknown as { Utils?: { service?: { seekDemandMedia?: (time: number) => void } } })
+        .Utils?.service;
+      if (typeof service?.seekDemandMedia !== "function")
+        throw new Error("宿站本地定位不可用");
+      service.seekDemandMedia(seconds);
+    },
   });
   let visible = false;
   let lastPosition = readMediaProgressPosition();

@@ -37,7 +37,7 @@ function setup() {
     },
     send,
   };
-  const io = { sendCard: vi.fn(), sendPayload: vi.fn() };
+  const io = { sendCard: vi.fn(), sendPayload: vi.fn(), localSeek: vi.fn() };
   let clock = 1_000_000;
   const memory = new MediaPayloadMemory(() => "fixture-room");
   const controller = new LoopController(mode, bridge, memory, io, () => clock);
@@ -125,15 +125,27 @@ describe("单曲循环控制器", () => {
     expect(mode.mode).toBe("loop");
   });
 
-  it("无静默权限且无缓存时循环不可用并给出原因", () => {
+  it("无静默权限且非本人点播时循环不可用并给出原因", () => {
     const { mode, push } = setup();
-    push({ controlMode: "owner" });
+    push({ controlMode: "owner", ownMedia: false });
     expect(mode.state.loop).toEqual({
       enabled: false,
       reason: LOOP_REASONS.unavailable,
     });
     mode.toggle("loop");
     expect(mode.mode).toBe("none");
+  });
+
+  it("无缓存但仍是本人点播：允许点亮，用本地 seek 兜底", () => {
+    const { mode, io, push, light } = setup();
+    push({ controlMode: "owner" });
+    expect(mode.state.loop.enabled).toBe(true);
+    light();
+    push({ controlMode: "owner", current: 277 });
+    expect(io.sendPayload).not.toHaveBeenCalled();
+    expect(io.localSeek).toHaveBeenCalledExactlyOnceWith(0);
+    push({ controlMode: "owner", current: 1 });
+    expect(mode.mode).toBe("loop");
   });
 
   it("他人点播、暂停、直播都不触发任何发送", () => {

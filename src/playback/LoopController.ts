@@ -8,6 +8,8 @@ import { endWindow, finiteNumber } from "./endWindow";
 export interface LoopIo {
   sendCard(card: string): void;
   sendPayload(payload: string): void;
+  /** 本人点播但无报文缓存时的兜底：只改本端播放，不广播。 */
+  localSeek?: (seconds: number) => void;
 }
 
 /** 触发判定与动作所需的最小桥接面；真实实现是 HostMediaBridge。 */
@@ -133,11 +135,15 @@ export class LoopController {
       this.seek(snapshot, threshold, hit);
       return;
     }
-    if (!hit) return;
     // 与快退同一窗口：2 秒窗口会被 250ms 轮询整体跳过，实测导致重播从未发出。
     if (remaining > threshold) return;
     if (this.tooShort(snapshot, threshold)) return;
-    this.replay(snapshot, hit, threshold);
+    if (hit) {
+      this.replay(snapshot, hit, threshold);
+      return;
+    }
+    // 无缓存但仍是本人点播：本地回到开头（房间不跟随）。
+    if (snapshot.ownMedia) this.seekLocal(snapshot, threshold);
   }
 
   // 播放已停止且停在末尾（拖到底/自然结束）时，按缓存的报文重新点播一次。
@@ -148,15 +154,18 @@ export class LoopController {
     if (snapshot.duration <= 0) return;
     if (snapshot.current < snapshot.duration - 1) return;
     const hit = this.memory.hit(snapshot.roomKey, snapshot.title);
-    if (!hit) return;
     if (this.tooShort(snapshot, loopThreshold(snapshot.duration))) return;
-    this.replay(snapshot, hit, loopThreshold(snapshot.duration));
+    if (hit) this.replay(snapshot, hit, loopThreshold(snapshot.duration));
+    else if (snapshot.ownMedia)
+      this.seekLocal(snapshot, loopThreshold(snapshot.duration));
   }
 
   private publishAvailability(snapshot: MediaSnapshot): void {
     const usable =
       (snapshot.controlMode === "silent" && !snapshot.controlReason) ||
-      !!this.memory.hit(snapshot.roomKey, snapshot.title);
+      !!this.memory.hit(snapshot.roomKey, snapshot.title) ||
+      // 缓存丢失（如刷新后）但曲目仍是本人点播：允许用本地 seek 兜底，避免按钮变灰。
+      snapshot.ownMedia;
     this.mode.setAvailability("loop", {
       enabled: usable,
       reason: usable ? "" : LOOP_REASONS.unavailable,
@@ -208,6 +217,25 @@ export class LoopController {
       // 静默通道瞬时不可用：有报文就降级重播，否则熄灭。
       if (hit) this.replay(snapshot, hit, threshold);
       else this.fail(LOOP_REASONS.seekFailed);
+    }
+  }
+
+  // 本地兜底：不发送任何报文，只把本端进度拉回 0（宿站允许无权限调用）。
+  private seekLocal(snapshot: MediaSnapshot, threshold: number): void {
+    if (!this.io.localSeek) return;
+    this.armed = false;
+    this.pending = {
+      kind: "seek",
+      at: this.now(),
+      title: snapshot.title,
+      instance: snapshot.instance,
+      threshold,
+      duration: finiteNumber(snapshot.duration) ? snapshot.duration : 0,
+    };
+    try {
+      this.io.localSeek(0);
+    } catch {
+      this.fail(LOOP_REASONS.seekFailed);
     }
   }
 
