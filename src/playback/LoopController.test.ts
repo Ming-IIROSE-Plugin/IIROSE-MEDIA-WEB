@@ -86,9 +86,9 @@ describe("单曲循环控制器", () => {
     light();
     expect(mode.mode).toBe("loop");
 
-    push({ current: 196 });
+    push({ current: 198.5 });
     expect(send).toHaveBeenCalledExactlyOnceWith(
-      '!15["<","196s"]',
+      '!15["<","198s"]',
       1,
       "silent",
     );
@@ -96,7 +96,7 @@ describe("单曲循环控制器", () => {
 
     push({ current: 0.4 });
     expect(send).toHaveBeenCalledTimes(1);
-    push({ current: 196 });
+    push({ current: 198.5 });
     expect(send).toHaveBeenCalledTimes(2);
   });
 
@@ -106,9 +106,9 @@ describe("单曲循环控制器", () => {
     memory.record(CARD);
     light();
 
-    push({ current: 196 });
+    push({ current: 198.5 });
     advance(2100);
-    push({ current: 196 });
+    push({ current: 198.5 });
     expect(io.sendCard).toHaveBeenCalledExactlyOnceWith(CARD);
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
 
@@ -120,9 +120,9 @@ describe("单曲循环控制器", () => {
   it("快退失败且无缓存时降级本地 seek，不熄灭也不报错", () => {
     const { mode, io, send, push, light, advance } = setup();
     light();
-    push({ current: 196 });
+    push({ current: 198.5 });
     advance(2100);
-    push({ current: 196 });
+    push({ current: 198.5 });
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(io.sendPayload).not.toHaveBeenCalled();
@@ -138,7 +138,7 @@ describe("单曲循环控制器", () => {
     mode.toggle("loop");
     expect(mode.mode).toBe("loop");
 
-    push({ controlMode: "owner", current: 196.5 });
+    push({ controlMode: "owner", current: 198.5 });
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
     expect(io.sendCard).toHaveBeenCalledExactlyOnceWith(CARD);
 
@@ -173,11 +173,11 @@ describe("单曲循环控制器", () => {
   it("他人点播、暂停、直播都不触发任何发送", () => {
     const { mode, io, send, push, light } = setup();
     light();
-    push({ current: 196, ownMedia: false });
+    push({ current: 198.5, ownMedia: false });
     expect(mode.state.standby).toBe(true);
     expect(send).not.toHaveBeenCalled();
-    push({ current: 196, playing: false });
-    push({ current: 196, duration: null });
+    push({ current: 198.5, playing: false });
+    push({ current: 198.5, duration: null });
     expect(send).not.toHaveBeenCalled();
     expect(io.sendPayload).not.toHaveBeenCalled();
   });
@@ -209,14 +209,14 @@ describe("单曲循环控制器", () => {
   it("定位到结尾附近不受抑制，立即接管", () => {
     const { send, push, light } = setup();
     light();
-    push({ current: 196, seekVersion: 1 });
+    push({ current: 198.5, seekVersion: 1 });
     expect(send).toHaveBeenCalledTimes(1);
   });
 
   it("触发后曲目被换走视为失败，不补发", () => {
     const { mode, io, push, light } = setup();
     light();
-    push({ current: 196 });
+    push({ current: 198.5 });
     push({ title: "别的曲目" });
     expect(io.sendPayload).not.toHaveBeenCalled();
     expect(mode.mode).toBe("none");
@@ -226,11 +226,11 @@ describe("单曲循环控制器", () => {
     const { mode, send, push, light } = setup();
     light();
     mode.toggle("loop");
-    push({ current: 196 });
+    push({ current: 198.5 });
     expect(send).not.toHaveBeenCalled();
     light();
     push({ current: 0.4 });
-    push({ current: 196 });
+    push({ current: 198.5 });
     expect(send).toHaveBeenCalledTimes(1);
   });
 
@@ -239,7 +239,7 @@ describe("单曲循环控制器", () => {
     memory.record(PAYLOAD);
     send.mockReturnValueOnce(false);
     light();
-    push({ current: 196 });
+    push({ current: 198.5 });
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
     expect(mode.mode).toBe("loop");
 
@@ -247,7 +247,7 @@ describe("单曲循环控制器", () => {
     const second = setup();
     second.send.mockReturnValueOnce(false);
     second.light();
-    second.push({ current: 196 });
+    second.push({ current: 198.5 });
     expect(second.io.localSeek).toHaveBeenCalledWith(0);
     expect(second.mode.mode).toBe("loop");
   });
@@ -257,7 +257,7 @@ describe("单曲循环控制器", () => {
     memory.record(PAYLOAD);
     push({ controlMode: "owner" });
     light();
-    push({ current: 196.5, controlMode: "owner" });
+    push({ current: 198.5, controlMode: "owner" });
     expect(io.sendCard).not.toHaveBeenCalled();
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
   });
@@ -274,9 +274,9 @@ describe("单曲循环控制器", () => {
   it("待命期间不做失败判定，恢复后仍按成功处理", () => {
     const { mode, push, light, advance } = setup();
     light();
-    push({ current: 196 });
+    push({ current: 198.5 });
     advance(6000);
-    push({ current: 196, ownMedia: false });
+    push({ current: 198.5, ownMedia: false });
     expect(mode.mode).toBe("loop");
     push({ current: 0.4, ownMedia: true });
     expect(mode.mode).toBe("loop");
@@ -286,8 +286,8 @@ describe("单曲循环控制器", () => {
   it("切换曲目时宿站短暂给出占位标题不算换曲", () => {
     const { mode, push, light } = setup();
     light();
-    push({ current: 196 });
-    push({ current: 196, title: "未命名媒体" });
+    push({ current: 198.5 });
+    push({ current: 198.5, title: "未命名媒体" });
     expect(mode.mode).toBe("loop");
   });
 
@@ -304,7 +304,7 @@ describe("单曲循环控制器", () => {
     const { send, io, push, light } = setup();
     light();
     push({ current: Number.NaN });
-    push({ current: 196, duration: Number.POSITIVE_INFINITY });
+    push({ current: 198.5, duration: Number.POSITIVE_INFINITY });
     expect(send).not.toHaveBeenCalled();
     expect(io.sendPayload).not.toHaveBeenCalled();
   });
@@ -312,8 +312,8 @@ describe("单曲循环控制器", () => {
   it("快退期间实例变化（他人重新点播同曲）按失败处理", () => {
     const { mode, push, light } = setup();
     light();
-    push({ current: 196 });
-    push({ current: 196, instance: 2 });
+    push({ current: 198.5 });
+    push({ current: 198.5, instance: 2 });
     expect(mode.mode).toBe("none");
     expect(mode.state.cleared?.reason).toBe(LOOP_REASONS.replayFailed);
   });

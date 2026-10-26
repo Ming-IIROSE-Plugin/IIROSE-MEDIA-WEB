@@ -31,6 +31,8 @@ export const LOOP_REASONS = {
 /** 循环的触发窗口与单曲随机的发送窗口共用同一口径。 */
 export const loopThreshold = endWindow;
 
+/** 有静默权限时只在最后 2 秒回退，最接近「一次循环」的听感。 */
+const SEEK_WINDOW_SECONDS = 2;
 const SEEK_VERIFY_MS = 2000;
 // 自然播完后宿站要靠点播队列接上，实测有几秒延迟：窗口放宽到 10 秒再判失败。
 const REPLAY_VERIFY_MS = 10_000;
@@ -136,6 +138,8 @@ export class LoopController {
       return;
 
     const threshold = loopThreshold(snapshot.duration);
+    // 快退窗口更紧（2 秒）；队列重播仍用 5 秒，留出排队时间。
+    const seekWindow = Math.min(SEEK_WINDOW_SECONDS, threshold);
     const remaining = snapshot.duration - snapshot.current;
     this.resetShortTrack(snapshot);
     // 进度回到开头（快退或重播生效）后重新武装：同一实例可循环多次。
@@ -149,9 +153,9 @@ export class LoopController {
     const silentUsable =
       snapshot.controlMode === "silent" && !snapshot.controlReason;
     if (silentUsable) {
-      if (remaining > threshold || snapshot.current <= threshold) return;
+      if (remaining > seekWindow || snapshot.current <= seekWindow) return;
       if (this.tooShort(snapshot, threshold)) return;
-      this.seek(snapshot, threshold, hit);
+      this.seek(snapshot, seekWindow, hit);
       return;
     }
     // 与快退同一窗口：2 秒窗口会被 250ms 轮询整体跳过，实测导致重播从未发出。
