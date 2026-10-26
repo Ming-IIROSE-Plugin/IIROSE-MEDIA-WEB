@@ -108,12 +108,17 @@ function initMediaProgress() {
   // 只观察插件自己发出的报文：重播只对插件点播过的曲目可用。
   const observeSocket = (data: string) => memory?.record(data);
   Socket.observe = observeSocket;
-  shuffle = new ShuffleController(playback, bridge, {
-    query: (platform, includeCollections) =>
-      queryShuffleCandidates(platform, includeCollections),
-    prepare: (record) => prepareShuffleTarget(record),
-    now: () => Date.now(),
-  });
+  shuffle = new ShuffleController(
+    playback,
+    bridge,
+    {
+      query: (platform, includeCollections) =>
+        queryShuffleCandidates(platform, includeCollections),
+      prepare: (record) => prepareShuffleTarget(record),
+      now: () => Date.now(),
+    },
+    cutWatcher,
+  );
   loop = new LoopController(
     playback,
     bridge,

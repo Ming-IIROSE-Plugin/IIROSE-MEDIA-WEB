@@ -30,7 +30,24 @@ function record(
   };
 }
 
-function setup(records: FavoriteRecord[] = [record("甲"), record("乙")]) {
+function fakeCut(active = false) {
+  let recent = active;
+  return {
+    tick: vi.fn(),
+    recent: () => recent,
+    consume: vi.fn(() => {
+      recent = false;
+    }),
+    activate: () => {
+      recent = true;
+    },
+  };
+}
+
+function setup(
+  records: FavoriteRecord[] = [record("甲"), record("乙")],
+  cut = fakeCut(),
+) {
   let clock = 1_000_000;
   const play = vi.fn();
   const query = vi.fn(async () => records);
@@ -54,6 +71,7 @@ function setup(records: FavoriteRecord[] = [record("甲"), record("乙")]) {
       },
     },
     { query, prepare, now: () => clock },
+    cut as unknown as never,
   );
   controller.attach();
   const push = (patch: Partial<MediaSnapshot> = {}) => {
@@ -66,7 +84,7 @@ function setup(records: FavoriteRecord[] = [record("甲"), record("乙")]) {
   const advance = (ms: number) => {
     clock += ms;
   };
-  return { mode, play, query, prepare, push, light, advance, controller };
+  return { mode, play, query, prepare, push, light, advance, controller, cut };
 }
 
 beforeEach(() => {
@@ -270,5 +288,37 @@ describe("收藏随机控制器", () => {
     push({ playing: true, current: 3, duration: 200, title: "甲" });
     expect(mode.mode).toBe("shuffle");
     expect(mode.state.cleared).toBeNull();
+  });
+
+  it("自己 cut 后接着放下一首", async () => {
+    const { mode, play, push, light, cut } = setup();
+    push();
+    await settle();
+    push();
+    light();
+    cut.activate();
+    push({ playing: false, current: -1, duration: 200, title: "测试曲目" });
+    await settle();
+    expect(cut.consume).toHaveBeenCalled();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(mode.mode).toBe("shuffle");
+  });
+
+  it("他人点播被 cut 时不接管", async () => {
+    const { mode, play, push, cut } = setup();
+    push({ ownMedia: false });
+    await settle();
+    push({ ownMedia: false });
+    mode.toggle("shuffle");
+    cut.activate();
+    push({
+      playing: false,
+      current: -1,
+      duration: 200,
+      ownMedia: false,
+      title: "测试曲目",
+    });
+    await settle();
+    expect(play).not.toHaveBeenCalled();
   });
 });

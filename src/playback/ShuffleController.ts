@@ -4,6 +4,7 @@ import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import type { PlaybackMode } from "./PlaybackMode";
 import { platformOf, readPanelFocus } from "./PanelFocus";
 import type { FocusPlatform } from "./PanelFocus";
+import type { CutWatcher } from "./CutWatcher";
 import { endWindow, finiteNumber } from "./endWindow";
 
 /** 抽中的一个可播目标：标题用于回读校验，play 真正发起点播。 */
@@ -80,12 +81,14 @@ export class ShuffleController {
   private armed = true;
   private sending = false;
   private idleStarted = false;
+  private lastOwn = false;
   private includeCollections: boolean | null = null;
 
   constructor(
     private mode: PlaybackMode,
     private bridge: ShuffleBridge,
     private deps: ShuffleDeps,
+    private cut?: CutWatcher,
   ) {}
 
   attach(): void {
@@ -102,6 +105,9 @@ export class ShuffleController {
   }
 
   private onSnapshot(snapshot: MediaSnapshot): void {
+    this.cut?.tick();
+    if (snapshot.ownMedia) this.lastOwn = true;
+    if (!snapshot.ownMedia && snapshot.playing) this.lastOwn = false;
     this.trackPlatform();
     this.publishAvailability();
     const state = this.mode.state;
@@ -124,8 +130,16 @@ export class ShuffleController {
         finite(duration) &&
         finite(snapshot.current) &&
         snapshot.current >= duration - 1;
-      // 完全没媒体或已播完时可以立即起播；一次点亮只自动起播一次，避免空转。
-      if ((noMedia || ended) && this.platform !== null && !this.idleStarted) {
+      // 自己喊 cut：本人点播才接管，接着放下一首。
+      const selfCut =
+        !!this.cut?.recent() && (snapshot.ownMedia || this.lastOwn);
+      if (selfCut) this.cut?.consume();
+      // 完全没媒体、已播完或自己 cut 时可以立即起播；一次只自动起播一次，避免空转。
+      if (
+        (noMedia || ended || selfCut) &&
+        this.platform !== null &&
+        (selfCut || !this.idleStarted)
+      ) {
         this.idleStarted = true;
         void this.send(snapshot);
       }
