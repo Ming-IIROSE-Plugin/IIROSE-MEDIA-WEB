@@ -213,24 +213,6 @@ export class SettingsService {
         },
       },
       {
-        key: "shuffleIncludeCollections",
-        title: "随机包含专辑/歌单",
-        actionTitle: ps.shuffleIncludeCollections ? "已开启" : "已关闭",
-        icon: "mdi-album",
-        action: (doSomethings) => {
-          const enabled = PluginSettings.toggleShuffleIncludeCollections();
-          doSomethings?.(enabled ? "已开启" : "已关闭");
-          // 同其他开关：父级重渲染会用 props.actionTitle 覆盖卡片标题。
-          ctx.setState({
-            settingsData: data.map((item) =>
-              item.key === "shuffleIncludeCollections"
-                ? { ...item, actionTitle: enabled ? "已开启" : "已关闭" }
-                : item,
-            ),
-          });
-        },
-      },
-      {
         key: "proxyAtInput",
         title: "代理蔷薇@输入",
         actionTitle: isProxyAtInputInText,

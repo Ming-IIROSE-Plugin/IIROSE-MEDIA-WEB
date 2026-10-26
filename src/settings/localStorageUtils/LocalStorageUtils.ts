@@ -159,7 +159,6 @@ export class LocalStorageUtils {
       },
       defaultPage: 0, // 0 为音乐, 1 为视频
       searchViewMode: "card", // 搜索结果视图：card 卡片网格 / list 列表
-      shuffleIncludeCollections: true, // 收藏随机是否包含专辑/歌单（与 getPluginSetting 兜底一致）
       announceMode: "card", // 点播播报模式：card 发卡片 / silent 静默 / summary 批量总结（与 PluginSettings.getPluginSetting 两处一致）
       // 云同步默认值（与 PluginSettings.getPluginSetting 保持两处一致）
       sync: PluginSettings.defaultSyncSettings(),

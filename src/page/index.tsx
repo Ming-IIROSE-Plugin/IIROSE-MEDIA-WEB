@@ -12,6 +12,7 @@ import {
   prepareShuffleTarget,
   queryShuffleCandidates,
 } from "../playback/shuffleTargets";
+import { loadShuffleSelection } from "../playback/ShuffleSelection";
 import { MediaPayloadMemory } from "../playback/MediaPayloadMemory";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Socket } from "../iirose_func/Socket";
@@ -112,9 +113,9 @@ function initMediaProgress() {
     playback,
     bridge,
     {
-      query: (platform, includeCollections) =>
-        queryShuffleCandidates(platform, includeCollections),
-      prepare: (record) => prepareShuffleTarget(record),
+      query: (platform) => queryShuffleCandidates(platform),
+      prepare: (record, options) => prepareShuffleTarget(record, options),
+      loadSelection: (platform) => loadShuffleSelection(platform),
       now: () => Date.now(),
     },
     cutWatcher,

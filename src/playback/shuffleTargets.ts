@@ -5,36 +5,51 @@ import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { NetEasePlatform } from "../platforms/NetEasePlatform";
 import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
 import { NeteaseMusicAPI } from "../Api/NeteaseAPI/NeteaseMusic";
-import type { ShuffleTarget } from "./ShuffleController";
+import type { ShufflePrepareOptions, ShuffleTarget } from "./ShuffleController";
+import { songKey } from "./ShuffleSelection";
 
-/** 按平台读收藏；关闭「专辑/歌单参与随机」时只留单曲与视频。 */
+/** 按平台读收藏；范围由随机选择决定，这里不再过滤类型。 */
 export function queryShuffleCandidates(
   platform: "netease" | "bilibili",
-  includeCollections: boolean,
 ): Promise<FavoriteRecord[]> {
-  return FavoritesStorageService.query({ platform }).then((records) =>
-    includeCollections
-      ? records
-      : records.filter(
-          (record) => record.type === "song" || record.type === "video",
-        ),
-  );
+  return FavoritesStorageService.query({ platform });
 }
 
 function httpsCover(value: string): string {
   return (value || "").replace(/^http:\/\//, "https://");
 }
 
+/** 在歌单/专辑曲目里挑一首：限定勾选曲目，跳过本轮已播与当前曲目。 */
+function pickTrack<T>(
+  items: T[],
+  idOf: (item: T) => string,
+  options: ShufflePrepareOptions,
+  titleOf?: (item: T) => string,
+): T | "exhausted" {
+  const allowed = options.tracks ? new Set(options.tracks) : null;
+  const pool = items.filter((item) => {
+    const id = idOf(item);
+    if (allowed && !allowed.has(id)) return false;
+    if (options.exclude.has(songKey("netease", id))) return false;
+    return !titleOf || titleOf(item) !== options.currentTitle;
+  });
+  if (!pool.length) return "exhausted";
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 /**
- * 收藏记录 → 可播目标；专辑/歌单只取其中随机一首（与手动点播的整张播放区分）。
- * 解析失败返回 null，由控制器换下一个候选。
+ * 收藏记录 → 可播目标；专辑/歌单只取其中一首（与手动点播的整张播放区分）。
+ * 解析失败返回 null，由控制器换下一个候选；范围内曲目本轮都已播（或已不在歌单里）
+ * 返回 "exhausted"，不计失败。
  */
 export async function prepareShuffleTarget(
   record: FavoriteRecord,
-): Promise<ShuffleTarget | null> {
+  options: ShufflePrepareOptions,
+): Promise<ShuffleTarget | "exhausted" | null> {
   if (record.type === "song" || record.type === "video") {
     const data = FavoritesStorageService.restorePlatformData(record);
     return {
+      key: record.id,
       title: record.title,
       play: () =>
         record.platform === "bilibili"
@@ -45,7 +60,7 @@ export async function prepareShuffleTarget(
   }
   const id = record.platformData.neteaseMusic?.id;
   if (record.platform !== "netease" || !id) return null;
-  let trackId: number | null = null;
+  let trackId: number;
   let title = "";
   let cover = record.coverImg;
   let author = record.author;
@@ -53,7 +68,13 @@ export async function prepareShuffleTarget(
     const detail = await NeteaseMusicAPI.getAlbumDetail(id);
     const songs = detail?.songs ?? [];
     if (!songs.length) return null;
-    const pick = songs[Math.floor(Math.random() * songs.length)];
+    const pick = pickTrack(
+      songs,
+      (song) => String(song.id),
+      options,
+      (song) => song.name,
+    );
+    if (pick === "exhausted") return pick;
     trackId = pick.id;
     title = pick.name;
     cover = pick.al?.picUrl || cover;
@@ -62,7 +83,10 @@ export async function prepareShuffleTarget(
     const list = await NeteaseMusicAPI.getSongListDetail(id);
     const ids = list?.playlist.trackIds ?? [];
     if (!ids.length) return null;
-    trackId = ids[Math.floor(Math.random() * ids.length)].id;
+    // 歌单只有 id 列表、没有标题：当前曲目靠本轮已播身份排除。
+    const pick = pickTrack(ids, (item) => String(item.id), options);
+    if (pick === "exhausted") return pick;
+    trackId = pick.id;
     const detail = await NeteaseMusicAPI.getNeteaseSongDetail([trackId]);
     const song = detail?.[0];
     if (!song) return null;
@@ -77,5 +101,9 @@ export async function prepareShuffleTarget(
     websiteUrl: `https://music.163.com/#/song?id=${trackId}`,
     neteaseMusic: { id: trackId, fee: 0 },
   };
-  return { title, play: () => NetEasePlatform.MOD(data) };
+  return {
+    key: songKey("netease", String(trackId)),
+    title,
+    play: () => NetEasePlatform.MOD(data),
+  };
 }

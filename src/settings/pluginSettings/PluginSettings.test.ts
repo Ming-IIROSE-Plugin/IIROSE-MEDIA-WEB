@@ -142,7 +142,7 @@ describe("点播播报模式设置", () => {
     expect(PluginSettings.parseAnnounceMode("summary")).toBe("批量总结");
   });
 
-  it("老设置缺随机包含专辑/歌单字段时默认开启，切换后写回", () => {
+  it("已退役的随机包含专辑/歌单字段：读取时丢弃，不再出现在设置对象里", () => {
     localStorage.setItem(
       "imwPluginSetting",
       JSON.stringify({
@@ -150,16 +150,11 @@ describe("点播播报模式设置", () => {
         defaultPage: 0,
         searchViewMode: "card",
         announceMode: "card",
+        shuffleIncludeCollections: false,
       }),
     );
-    expect(PluginSettings.getPluginSetting().shuffleIncludeCollections).toBe(
-      true,
+    expect(PluginSettings.getPluginSetting()).not.toHaveProperty(
+      "shuffleIncludeCollections",
     );
-    expect(PluginSettings.toggleShuffleIncludeCollections()).toBe(false);
-    expect(
-      JSON.parse(localStorage.getItem("imwPluginSetting")!)
-        .shuffleIncludeCollections,
-    ).toBe(false);
-    expect(PluginSettings.toggleShuffleIncludeCollections()).toBe(true);
   });
 });
