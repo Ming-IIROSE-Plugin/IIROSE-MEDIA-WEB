@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Socket } from "../iirose_func/Socket";
+import { act } from "preact/test-utils";
 import { IMCInit } from "./index";
+import {
+  FavoritesStorageService,
+  type FavoriteRecord,
+} from "../storage/FavoritesStorageService";
+import { ShuffleController } from "../playback/ShuffleController";
+import { loadShuffleSelection } from "../playback/ShuffleSelection";
+import { resetPanelFocus, setPanelFocus } from "../playback/PanelFocus";
+import { releaseShufflePicker } from "./components/shuffle-picker/openShufflePicker";
 
 const sent = vi.fn();
 const payload = `&1${JSON.stringify({
@@ -136,5 +145,124 @@ describe("收藏随机选择面板接线", () => {
     );
     expect(pickerRoot()).toBeNull();
     expect(warn).toHaveBeenCalled();
+  });
+
+  describe("侧栏随机按钮", () => {
+    const favorite = {
+      id: "netease:song:1",
+      platform: "netease",
+      type: "song",
+      title: "晴天",
+      coverImg: "",
+      author: "周杰伦",
+      websiteUrl: "",
+      createdAt: 1,
+      updatedAt: 1,
+      platformData: {
+        title: "",
+        coverImg: "",
+        author: "",
+        websiteUrl: "",
+        neteaseMusic: { id: 1, fee: 0 },
+      },
+    } as unknown as FavoriteRecord;
+    const bilibiliFavorite = {
+      ...favorite,
+      id: "bilibili:video:BV1",
+      platform: "bilibili",
+      type: "video",
+      title: "某视频",
+    } as unknown as FavoriteRecord;
+    const shuffleButton = () =>
+      document.getElementById("imw-toggle-shuffle") as HTMLButtonElement;
+    const dialog = () => document.getElementById("imw-shuffle-picker");
+    const footerButton = (text: string) =>
+      [...dialog()!.querySelectorAll("button")].find(
+        (node) => node.textContent?.trim() === text,
+      )!;
+    async function settle() {
+      for (let index = 0; index < 5; index++)
+        await vi.advanceTimersByTimeAsync(50);
+    }
+
+    afterEach(() => {
+      // 假定时器下撤回不会自行落地：清掉面板、撤回记录与历史状态，避免串扰。
+      act(() => releaseShufflePicker());
+      delete (window as unknown as Record<string, unknown>)
+        .__imwShufflePickerRetract;
+      history.replaceState(null, "");
+      resetPanelFocus();
+      localStorage.clear();
+    });
+
+    beforeEach(async () => {
+      vi.spyOn(FavoritesStorageService, "query").mockImplementation(
+        async (filter) =>
+          filter?.platform === "bilibili" ? [bilibiliFavorite] : [favorite],
+      );
+      act(() => IMCInit.init(mainContainer()));
+      await settle();
+      shuffleButton().getClientRects = () =>
+        [{ width: 1, height: 1 }] as unknown as DOMRectList;
+    });
+
+    it("熄灭态点击开面板不点亮；再点只聚焦面板；取消后焦点回按钮", async () => {
+      expect(shuffleButton().getAttribute("aria-disabled")).toBe("false");
+      act(() => shuffleButton().click());
+      await settle();
+      expect(pickerRoot()).not.toBeNull();
+      expect(shuffleButton().getAttribute("aria-pressed")).toBe("false");
+      shuffleButton().focus();
+      act(() => shuffleButton().click());
+      await settle();
+      expect(
+        document.querySelectorAll("#imw-shuffle-picker-root"),
+      ).toHaveLength(1);
+      expect(document.activeElement).toBe(dialog());
+      act(() => footerButton("取消").click());
+      await settle();
+      expect(pickerRoot()).toBeNull();
+      expect(document.activeElement).toBe(shuffleButton());
+      expect(shuffleButton().getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("确认：先作废随机预取再点亮", async () => {
+      let pressedAtInvalidate: string | null = null;
+      const invalidate = vi
+        .spyOn(ShuffleController.prototype, "invalidate")
+        .mockImplementation(() => {
+          pressedAtInvalidate = shuffleButton().getAttribute("aria-pressed");
+        });
+      act(() => shuffleButton().click());
+      await settle();
+      expect(invalidate).not.toHaveBeenCalled();
+      act(() => footerButton("开始随机").click());
+      await settle();
+      expect(invalidate).toHaveBeenCalledOnce();
+      expect(pressedAtInvalidate).toBe("false");
+      expect(shuffleButton().getAttribute("aria-pressed")).toBe("true");
+      expect(document.activeElement).toBe(shuffleButton());
+      // 点亮态再点直接熄灭，不开面板。
+      act(() => shuffleButton().click());
+      await settle();
+      expect(pickerRoot()).toBeNull();
+      expect(shuffleButton().getAttribute("aria-pressed")).toBe("false");
+    });
+
+    it("面板焦点在 B 站：按 bilibili 读收藏，确认存到 bilibili", async () => {
+      setPanelFocus({ category: 1, platform: 0 });
+      const query = vi.mocked(FavoritesStorageService.query);
+      query.mockClear();
+      act(() => shuffleButton().click());
+      await settle();
+      expect(query).toHaveBeenCalledWith({ platform: "bilibili" });
+      expect(dialog()?.textContent).toContain("某视频");
+      act(() => footerButton("开始随机").click());
+      await settle();
+      expect(loadShuffleSelection("bilibili")?.items).toEqual([
+        { id: "bilibili:video:BV1" },
+      ]);
+      expect(loadShuffleSelection("netease")).toBeNull();
+    });
   });
 });

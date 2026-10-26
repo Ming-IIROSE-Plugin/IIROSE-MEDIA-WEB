@@ -350,3 +350,115 @@ describe("开关行的点播归属与生命周期", () => {
     expect(pressed("imw-toggle-loop")).toBe("false");
   });
 });
+
+describe("随机点亮前经选择面板（注入 pickShuffle）", () => {
+  const STANDBY = "当前曲目由他人点播，暂不自动续播";
+  function setupWithPicker() {
+    const mode = new PlaybackMode();
+    mode.setMediaPresent(true);
+    mode.applySnapshot(snapshot());
+    let pending: (() => void) | undefined;
+    const pickShuffle = vi.fn((done: () => void) => {
+      pending = done;
+    });
+    const row = new SidebarPlaybackRow(mode, document, { pickShuffle });
+    document.body.append(row.element);
+    return { mode, row, pickShuffle, confirm: () => pending?.() };
+  }
+
+  it("熄灭态点随机只开面板不改状态；确认后点亮并熄灭循环", () => {
+    const { mode, pickShuffle, confirm } = setupWithPicker();
+    button("imw-toggle-loop").click();
+    button("imw-toggle-shuffle").click();
+    expect(pickShuffle).toHaveBeenCalledOnce();
+    expect(mode.mode).toBe("loop");
+    expect(pressed("imw-toggle-shuffle")).toBe("false");
+    confirm();
+    expect(mode.mode).toBe("shuffle");
+    expect(pressed("imw-toggle-shuffle")).toBe("true");
+    expect(pressed("imw-toggle-loop")).toBe("false");
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it("取消（不回调）：两枚按钮保持原状，循环仍亮", () => {
+    const { mode } = setupWithPicker();
+    button("imw-toggle-loop").click();
+    button("imw-toggle-shuffle").click();
+    expect(mode.mode).toBe("loop");
+    expect(pressed("imw-toggle-loop")).toBe("true");
+    expect(pressed("imw-toggle-shuffle")).toBe("false");
+  });
+
+  it("不可用时只报原因，不开面板", () => {
+    const { mode, pickShuffle } = setupWithPicker();
+    mode.setAvailability("shuffle", {
+      enabled: false,
+      reason: "收藏为空，先去收藏一些内容",
+    });
+    button("imw-toggle-shuffle").click();
+    expect(pickShuffle).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledExactlyOnceWith("收藏为空，先去收藏一些内容");
+  });
+
+  it("确认时已不可用（断线）：报原因、不点亮", () => {
+    const { mode, confirm } = setupWithPicker();
+    button("imw-toggle-shuffle").click();
+    mode.applySnapshot(snapshot({ connected: false }));
+    confirm();
+    expect(mode.mode).toBe("none");
+    expect(pressed("imw-toggle-shuffle")).toBe("false");
+    expect(show).toHaveBeenCalledOnce();
+    expect(show.mock.calls[0][0]).toBe(mode.state.shuffle.reason);
+  });
+
+  it("确认即待命：当场提示一次，再点即熄灭且不开面板", () => {
+    const { mode, pickShuffle, confirm } = setupWithPicker();
+    mode.applySnapshot(snapshot({ ownMedia: false }));
+    button("imw-toggle-shuffle").click();
+    confirm();
+    expect(pressed("imw-toggle-shuffle")).toBe("true");
+    expect(show).toHaveBeenCalledExactlyOnceWith(STANDBY);
+    button("imw-toggle-shuffle").click();
+    expect(mode.mode).toBe("none");
+    expect(pickShuffle).toHaveBeenCalledOnce();
+    expect(show).toHaveBeenCalledOnce();
+  });
+
+  it("点亮态点击直接熄灭；自动转入待命的首次点按只说明", () => {
+    const { mode, pickShuffle, confirm } = setupWithPicker();
+    button("imw-toggle-shuffle").click();
+    confirm();
+    button("imw-toggle-shuffle").click();
+    expect(mode.mode).toBe("none");
+    expect(pickShuffle).toHaveBeenCalledOnce();
+    button("imw-toggle-shuffle").click();
+    confirm();
+    mode.applySnapshot(snapshot({ ownMedia: false }));
+    button("imw-toggle-shuffle").click();
+    expect(mode.mode).toBe("shuffle");
+    expect(show).toHaveBeenCalledExactlyOnceWith(STANDBY);
+    button("imw-toggle-shuffle").click();
+    expect(mode.mode).toBe("none");
+    expect(pickShuffle).toHaveBeenCalledTimes(2);
+  });
+
+  it("面板打开期间已被点亮时确认不会反向熄灭；卸载后确认无效", () => {
+    const { mode, row, confirm } = setupWithPicker();
+    button("imw-toggle-shuffle").click();
+    mode.toggle("shuffle");
+    confirm();
+    expect(mode.mode).toBe("shuffle");
+    mode.toggle("shuffle");
+    button("imw-toggle-shuffle").click();
+    row.dispose();
+    confirm();
+    expect(mode.mode).toBe("none");
+  });
+
+  it("循环按钮不受注入影响，直接切换", () => {
+    const { mode, pickShuffle } = setupWithPicker();
+    button("imw-toggle-loop").click();
+    expect(mode.mode).toBe("loop");
+    expect(pickShuffle).not.toHaveBeenCalled();
+  });
+});

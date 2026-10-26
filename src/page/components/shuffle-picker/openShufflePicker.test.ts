@@ -593,3 +593,213 @@ describe("openShufflePicker", () => {
     expect(dialog().className).toContain("bg-[#fafbfe]");
   });
 });
+
+describe("系统返回与历史条目", () => {
+  const marker = () =>
+    (history.state as Record<string, unknown> | null)?.__imwShufflePickerEntry;
+  const pendingRetract = () =>
+    (window as unknown as Record<string, unknown>).__imwShufflePickerRetract;
+  // 等 history.back() 引起的 popstate 落地（jsdom 异步派发）。
+  async function settleHistory() {
+    for (let index = 0; index < 300; index++) {
+      if (!pendingRetract()) break;
+      await flush(5);
+    }
+    await flush(5);
+  }
+  async function systemBack() {
+    await act(async () => {
+      const popped = new Promise((resolve) =>
+        window.addEventListener("popstate", resolve, { once: true }),
+      );
+      history.back();
+      await popped;
+    });
+    await flush();
+  }
+
+  beforeEach(async () => {
+    // 前面用例的撤回可能还没落地：等它结束，避免串扰。
+    await settleHistory();
+    history.replaceState(null, "");
+  });
+
+  it("打开时登记一条带插件标记的历史条目", async () => {
+    const before = history.length;
+    await open();
+    expect(history.length).toBe(before + 1);
+    expect(marker()).toBeTruthy();
+  });
+
+  it("系统返回等同取消：面板关闭、不保存、焦点回打开者，不再回退", async () => {
+    const back = vi.spyOn(history, "back");
+    const { onConfirm, onCancel } = await open();
+    await systemBack();
+    back.mockClear();
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(marker()).toBeUndefined();
+    expect(document.activeElement).toBe(opener);
+    await flush(150);
+    expect(root()).toBeNull();
+    // 条目已被返回弹出：不得再撤回一次（否则会退掉宿站的条目）。
+    expect(back).not.toHaveBeenCalled();
+    expect(loadShuffleSelection("netease")).toBeNull();
+    back.mockRestore();
+  });
+
+  it.each([
+    ["关闭钮", () => click(byLabel("关闭收藏随机"))],
+    ["取消", () => click(button("取消"))],
+    ["Esc", () => key(dialog(), "Escape")],
+    [
+      "遮罩",
+      async () => {
+        const backdrop = root()!.firstElementChild!;
+        await pointerDown(backdrop);
+        await click(backdrop);
+      },
+    ],
+  ])(
+    "%s 关闭时撤回本面板条目，随之而来的 popstate 不当作其他操作",
+    async (_label, action) => {
+      const back = vi.spyOn(history, "back");
+      const { onCancel } = await open();
+      await action();
+      expect(back).toHaveBeenCalledOnce();
+      await settleHistory();
+      expect(marker()).toBeUndefined();
+      expect(onCancel).toHaveBeenCalledOnce();
+      back.mockRestore();
+    },
+  );
+
+  it("确认关闭同样撤回条目", async () => {
+    const back = vi.spyOn(history, "back");
+    const { onConfirm } = await open();
+    await click(button("开始随机"));
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect(back).toHaveBeenCalledOnce();
+    await settleHistory();
+    expect(marker()).toBeUndefined();
+    back.mockRestore();
+  });
+
+  it("历史已被他人改动则不撤回", async () => {
+    const back = vi.spyOn(history, "back");
+    await open();
+    history.pushState({ host: 1 }, "");
+    await click(button("取消"));
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+
+  it("打开期间新增条目（宿站改 hash）不关闭面板，关闭时也不回退", async () => {
+    const { onCancel } = await open();
+    // 新条目 + 一次 popstate（jsdom 对 hash 变化未必派发，显式补一次）。
+    await act(async () => {
+      history.pushState({ host: 2 }, "", "#imw-test");
+      window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+    });
+    await flush();
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(root()).not.toBeNull();
+    const back = vi.spyOn(history, "back");
+    await click(button("取消"));
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+
+  it("联合历史变长（他人登记条目）后关闭：不回退", async () => {
+    const back = vi.spyOn(history, "back");
+    const { onCancel } = await open();
+    const token = marker();
+    history.pushState({ other: 1 }, "");
+    // 当前条目恢复为本面板标记，但会话历史已变长。
+    history.replaceState({ __imwShufflePickerEntry: token }, "");
+    await click(button("取消"));
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+
+  it("撤回超时后迟到的 popstate 仍被忽略，不取消期间新开的面板", async () => {
+    const back = vi.spyOn(history, "back").mockImplementation(() => {});
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        openShufflePicker({ platform: "netease" });
+      });
+      await act(async () => {
+        button("取消").click();
+      });
+      expect(back).toHaveBeenCalledOnce();
+      const onCancel = vi.fn();
+      const before = marker();
+      await act(async () => {
+        openShufflePicker({ platform: "netease", onCancel });
+      });
+      // 撤回未落地：新面板等待，尚未登记条目。
+      expect(marker()).toBe(before);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+      expect(marker()).toBeTruthy();
+      expect(marker()).not.toBe(before);
+      expect(pendingRetract()).toBeUndefined();
+      // 迟到的回退 popstate（当前条目已不是新面板的）：被标记忽略，新面板保持打开。
+      await act(async () => {
+        history.replaceState({ host: 1 }, "");
+        window.dispatchEvent(new PopStateEvent("popstate", { state: null }));
+      });
+      expect(onCancel).not.toHaveBeenCalled();
+      expect(root()).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+      back.mockRestore();
+    }
+  });
+
+  it("撤回未落地时立即重开：新面板不被那次 popstate 取消，落地后再登记条目", async () => {
+    await open();
+    await act(async () => {
+      button("取消").click();
+    });
+    const second = await open();
+    expect(root()).not.toBeNull();
+    await settleHistory();
+    expect(second.onCancel).not.toHaveBeenCalled();
+    expect(dialog()).toBeTruthy();
+    expect(marker()).toBeTruthy();
+    // 新条目照常响应系统返回；旧条目已撤回，返回后不残留任何面板条目。
+    await systemBack();
+    expect(second.onCancel).toHaveBeenCalledOnce();
+    expect(marker()).toBeUndefined();
+  });
+
+  it("确认对齐期间系统返回：按取消处理，结果作废不保存", async () => {
+    const { onConfirm, onCancel } = await open();
+    let resolve!: (records: FavoriteRecord[]) => void;
+    query.mockReturnValueOnce(
+      new Promise<FavoriteRecord[]>((done) => (resolve = done)),
+    );
+    await click(button("开始随机"));
+    await systemBack();
+    expect(onCancel).toHaveBeenCalledOnce();
+    await act(async () => resolve([A, P, B]));
+    await flush();
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(loadShuffleSelection("netease")).toBeNull();
+  });
+
+  it("重复注入接管只解绑监听、不动历史", async () => {
+    const back = vi.spyOn(history, "back");
+    const { onCancel } = await open();
+    act(() => releaseShufflePicker());
+    expect(back).not.toHaveBeenCalled();
+    expect(marker()).toBeTruthy();
+    back.mockRestore();
+    await systemBack();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+});

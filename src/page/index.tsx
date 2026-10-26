@@ -6,7 +6,11 @@ import { SidebarMediaEntry } from "../media-progress/SidebarMediaEntry";
 import { PlaybackMode } from "../playback/PlaybackMode";
 import { SidebarPlaybackRow } from "../playback/SidebarPlaybackRow";
 import { LoopController } from "../playback/LoopController";
-import { ShuffleController } from "../playback/ShuffleController";
+import {
+  SHUFFLE_REASONS,
+  ShuffleController,
+} from "../playback/ShuffleController";
+import { ShowMessage } from "../iirose_func/ShowMessage";
 import { CutWatcher } from "../playback/CutWatcher";
 import {
   prepareShuffleTarget,
@@ -111,7 +115,32 @@ function initMediaProgress() {
   disposeProgress = dispose;
   bridge = new HostMediaBridge();
   playback = new PlaybackMode();
-  playbackRow = new SidebarPlaybackRow(playback);
+  // 随机点亮前先经选择面板：确认才作废旧预取并点亮，取消什么都不改。
+  // shuffle 在行之后构造，回调运行时再读取。
+  playbackRow = new SidebarPlaybackRow(playback, document, {
+    pickShuffle: (done) => {
+      const platform = platformOf(
+        readPanelFocus(),
+        PluginSettings.getPluginSetting().defaultPage,
+      );
+      // 可用性已覆盖「当前页面没有收藏」；这里只防焦点与可用性求值之间的竞态。
+      if (!platform) {
+        ShowMessage.show(SHUFFLE_REASONS.noFavorites);
+        return;
+      }
+      openShufflePicker({
+        platform,
+        returnFocus: playbackRow.element.querySelector<HTMLElement>(
+          "#imw-toggle-shuffle",
+        ),
+        onConfirm: () => {
+          if (disposed) return;
+          shuffle?.invalidate();
+          done();
+        },
+      });
+    },
+  });
   memory = new MediaPayloadMemory();
   // 只观察插件自己发出的报文：重播只对插件点播过的曲目可用。
   const observeSocket = (data: string) => memory?.record(data);
@@ -215,7 +244,7 @@ function releaseMainPanel(page: PanelWindow) {
     (panel.parentElement ?? panel).remove();
 }
 
-// story 7 接线前的调试入口：真机控制台 `window.iirosemedia.openShufflePicker()`。
+// 调试入口（不经侧栏、不点亮）：真机控制台 `window.iirosemedia.openShufflePicker()`。
 function registerShufflePickerEntry() {
   const namespace = (window.iirosemedia ??= {});
   namespace.openShufflePicker = (platform) => {

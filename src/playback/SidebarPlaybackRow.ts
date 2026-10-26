@@ -41,6 +41,14 @@ function isPlaybackModeKind(
   return CONTROLS.some((control) => control.mode === value);
 }
 
+export interface SidebarPlaybackRowOptions {
+  /**
+   * 随机点亮前的选择步骤（面板）：熄灭态点随机时调用，确认后调 `done()` 才点亮；
+   * 取消则不调。未注入时随机按钮保持直接切换。行不直接依赖面板模块。
+   */
+  pickShuffle?: (done: () => void) => void;
+}
+
 // 纯 DOM 行：宿站侧栏布局不进 Preact，只把状态映射到 aria 属性。
 export class SidebarPlaybackRow {
   readonly element: HTMLDivElement;
@@ -60,6 +68,7 @@ export class SidebarPlaybackRow {
   constructor(
     private mode: PlaybackMode,
     private doc: Document = document,
+    private options: SidebarPlaybackRowOptions = {},
   ) {
     this.element = doc.createElement("div");
     this.element.id = "imw-playback-controls";
@@ -113,6 +122,29 @@ export class SidebarPlaybackRow {
       this.notice(state.standbyReason, false);
       return;
     }
+    // 熄灭态随机：先经选择面板，确认后才点亮；取消什么都不改。
+    const pick = this.options.pickShuffle;
+    if (kind === "shuffle" && state.mode !== kind && pick) {
+      pick(() => this.confirmShuffle());
+      return;
+    }
+    this.toggleAndExplain(kind);
+  }
+
+  // 面板确认：打开期间可能已换房、断线或收藏清空，复检后再点亮。
+  private confirmShuffle() {
+    if (this.disposed) return;
+    const availability = this.mode.state.shuffle;
+    if (!availability.enabled) {
+      this.notice(availability.reason || FALLBACK_NOTICE);
+      return;
+    }
+    // 已经亮着（极端时序）时再 toggle 会把它熄灭：保持现状即可。
+    if (this.mode.state.mode === "shuffle") return;
+    this.toggleAndExplain("shuffle");
+  }
+
+  private toggleAndExplain(kind: PlaybackModeKind) {
     this.mode.toggle(kind);
     // 亲手点亮即进入待命：当场说明，下一次点按直接熄灭。
     const next = this.mode.state;
