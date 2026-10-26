@@ -189,11 +189,35 @@ function initMediaProgress() {
   window.addEventListener("pagehide", onPageHide);
 }
 
+// 主面板同样按页面级单例键接管：卸载要用挂载它的那份 Preact，才能走到
+// componentWillUnmount 摘掉全局热键与手势监听。
+const PANEL_KEY = "__imwMainPanel";
+type PanelWindow = Window & { [PANEL_KEY]?: () => void };
+
+function releaseMainPanel(page: PanelWindow) {
+  const previous = page[PANEL_KEY];
+  delete page[PANEL_KEY];
+  try {
+    previous?.();
+  } catch {
+    /* 旧实例已不可用；残留容器由下面清除 */
+  }
+  // 没有单例键的旧版 bundle 只能清 DOM：至少不让同页出现两个主面板。
+  for (const panel of document.querySelectorAll("#IIROSE_MEDIA_CONTAINER"))
+    (panel.parentElement ?? panel).remove();
+}
+
 export class IMCInit {
   public static init(mc: HTMLDivElement) {
+    const page = window as PanelWindow;
+    releaseMainPanel(page);
     const container = document.createElement("div");
     mc.appendChild(container);
     render(<MainAppControlLayer />, container);
+    page[PANEL_KEY] = () => {
+      render(null, container);
+      container.remove();
+    };
     initMediaProgress();
   }
 }

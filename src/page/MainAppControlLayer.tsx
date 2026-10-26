@@ -81,7 +81,10 @@ export class MainAppControlLayer extends Component<
       Gesture.IMCActiveEventHandler,
     );
 
-    // 3. 引用清理
+    // 3. 面板开着时被卸载（重复注入接管）：归还宿站聊天区，否则会一直隐藏
+    this.mainHolder?.classList.remove("hidemainHolder");
+
+    // 4. 引用清理
     Gesture.ShowHideMainApp = undefined;
   }
 
