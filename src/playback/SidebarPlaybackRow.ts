@@ -51,6 +51,9 @@ export class SidebarPlaybackRow {
   private status: HTMLSpanElement;
   private standby = false;
   private standbyReason = "";
+  // 本次待命期间是否已当面说明过原因：触屏无 hover、title 长按也不弹，
+  // 亲手点亮即待命时当场说明；自动转入待命的，首次点按只说明不切换，再点才熄灭。
+  private standbyExplained = false;
   private clearedId = 0;
   private disposed = false;
 
@@ -104,7 +107,19 @@ export class SidebarPlaybackRow {
       this.notice(availability.reason || FALLBACK_NOTICE);
       return;
     }
+    const state = this.mode.state;
+    if (state.mode === kind && state.standby && !this.standbyExplained) {
+      this.standbyExplained = true;
+      this.notice(state.standbyReason, false);
+      return;
+    }
     this.mode.toggle(kind);
+    // 亲手点亮即进入待命：当场说明，下一次点按直接熄灭。
+    const next = this.mode.state;
+    if (next.mode === kind && next.standby) {
+      this.standbyExplained = true;
+      this.notice(next.standbyReason, false);
+    }
   }
 
   private create(control: PlaybackControl): HTMLButtonElement {
@@ -174,6 +189,7 @@ export class SidebarPlaybackRow {
   private renderStandby(state: PlaybackModeState) {
     if (state.standby === this.standby) return;
     this.standby = state.standby;
+    this.standbyExplained = false;
     if (state.standby) {
       this.standbyReason = state.standbyReason;
       this.status.textContent = state.standbyReason;

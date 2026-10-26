@@ -219,6 +219,65 @@ describe("开关行的点播归属与生命周期", () => {
     expect(show).not.toHaveBeenCalled();
   });
 
+  it("首次点按待命按钮只说明原因不熄灭，再点才熄灭（触屏/键盘可达）", () => {
+    const { mode } = setup();
+    button("imw-toggle-loop").click();
+    mode.applySnapshot(snapshot({ ownMedia: false }));
+    button("imw-toggle-loop").click();
+    expect(show).toHaveBeenCalledExactlyOnceWith(STANDBY);
+    expect(pressed("imw-toggle-loop")).toBe("true");
+    expect(mode.mode).toBe("loop");
+    button("imw-toggle-loop").click();
+    expect(pressed("imw-toggle-loop")).toBe("false");
+    expect(show).toHaveBeenCalledOnce();
+  });
+
+  it("他人点播时亲手点亮：当场说明一次，再点直接熄灭", () => {
+    const { mode } = setup();
+    mode.applySnapshot(snapshot({ ownMedia: false }));
+    button("imw-toggle-loop").click();
+    expect(pressed("imw-toggle-loop")).toBe("true");
+    expect(show).toHaveBeenCalledExactlyOnceWith(STANDBY);
+    button("imw-toggle-loop").click();
+    expect(pressed("imw-toggle-loop")).toBe("false");
+    expect(show).toHaveBeenCalledOnce();
+  });
+
+  it("键盘 Enter 与点按走同一说明路径", () => {
+    const { mode } = setup();
+    button("imw-toggle-loop").click();
+    mode.applySnapshot(snapshot({ ownMedia: false }));
+    const enter = () =>
+      button("imw-toggle-loop").dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    enter();
+    expect(show).toHaveBeenCalledExactlyOnceWith(STANDBY);
+    expect(pressed("imw-toggle-loop")).toBe("true");
+    enter();
+    expect(pressed("imw-toggle-loop")).toBe("false");
+  });
+
+  it("每次重新进入待命都会再说明一次；未点亮的按钮照常切换", () => {
+    const { mode } = setup();
+    button("imw-toggle-loop").click();
+    mode.applySnapshot(snapshot({ ownMedia: false }));
+    button("imw-toggle-loop").click();
+    mode.applySnapshot(snapshot({ ownMedia: true }));
+    mode.applySnapshot(snapshot({ ownMedia: false }));
+    button("imw-toggle-loop").click();
+    expect(show).toHaveBeenCalledTimes(2);
+    expect(pressed("imw-toggle-loop")).toBe("true");
+    // 待命语义只属于点亮的那枚：点另一枚直接切换模式，亲手点亮即待命再说明一次。
+    button("imw-toggle-shuffle").click();
+    expect(mode.mode).toBe("shuffle");
+    expect(show).toHaveBeenCalledTimes(3);
+  });
+
   it("换房熄灭并只提示一次原因，按钮不灰化", () => {
     const { mode } = setup();
     button("imw-toggle-loop").click();
@@ -246,6 +305,9 @@ describe("开关行的点播归属与生命周期", () => {
     button("imw-toggle-loop").click();
     mode.applySnapshot(snapshot({ ownMedia: false }));
     expect(status()).toBe(STANDBY);
+    // 首次点按只说明待命原因，第二次才熄灭。
+    button("imw-toggle-loop").click();
+    show.mockClear();
     button("imw-toggle-loop").click();
     expect(status()).toBe("");
     expect(button("imw-toggle-loop").title).toBe("单曲循环");
@@ -269,7 +331,7 @@ describe("开关行的点播归属与生命周期", () => {
     expect(status()).toBe("当前页面没有收藏");
     expect(show).toHaveBeenCalledExactlyOnceWith("当前页面没有收藏");
     // 此时退出待命（关闭循环）只清待命文案，不覆盖已经写入的原因提示。
-    button("imw-toggle-loop").click();
+    mode.toggle("loop");
     expect(pressed("imw-toggle-loop")).toBe("false");
     expect(status()).toBe("当前页面没有收藏");
     expect(show).toHaveBeenCalledOnce();

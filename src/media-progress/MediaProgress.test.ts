@@ -913,7 +913,11 @@ describe("浮窗原生交互与页面生命周期", () => {
     expect(
       document.getElementById("functionHolderExtBox")!.lastElementChild,
     ).toBe(row);
-    expect(alert.mock.calls).toEqual([["直播或时间未知，无法使用"]]);
+    // 夹具里的曲目不是本人点播：亲手点亮即进入待命，当场说明一次。
+    expect(alert.mock.calls).toEqual([
+      ["当前曲目由他人点播，暂不自动续播"],
+      ["直播或时间未知，无法使用"],
+    ]);
     // 媒体回来后重新可用，可继续验证 bridge.subscribe 这根线。
     document.getElementById("functionHolderExtBox")!.append(card);
     for (let index = 0; index < 5; index++) await Promise.resolve();
