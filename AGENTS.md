@@ -14,7 +14,7 @@
 ## Where things are
 
 - 入口：`src/main.ts`，**运行在 `messages.html` iframe 上下文**（`#mainContainer` 在 iframe 内，顶层文档只有 `#mainFrame`）；油猴调试 `@match https://iirose.com/messages.html` + `@require file://` 指向本地 `dist/bundle.js`。
-- 运行时验证流程已固化为本机 skill：`.opencode/skills/iirose-plugin-verify/`（agent 工具链不入库；登录、进房、注入、验证的完整步骤）。
+- 运行时验证流程已固化为 skill：`.opencode/skills/iirose-plugin-verify/`（SKILL.md 入库，其余 agent 工具链不入库；登录、进房、注入、验证的完整步骤）。Claude Code 经本机软链 `.claude/skills/iirose-plugin-verify` 共用同一份；注入方法按工具链区分，见其 `scripts/inject.md`。
 - UI：`src/page/`（Preact 组件树）。
 - 新增音乐平台需同步三处：`src/platforms/`（平台类）、`src/Api/`（API 客户端）、`src/settings/`（平台设置），类型放 `src/types/`。
 - 宿站交互（WebSocket 媒体、消息）：`src/iirose_func/`。

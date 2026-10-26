@@ -24,7 +24,7 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
    - 填用户名、密码 → 点「登录」→ 等待进入空间站（大厅）
    - 刷新页面后站点会自动登录（localStorage 记忆），无需重走登录流程
 3. **进房间**：热推列表点任一房间卡片 → 房间信息弹窗点「进入」→ 关闭房间公告。部分房间不支持艾特音乐，功能异常时先换房间排除差异。**点播必须进房间后才有意义**（大厅里发不出媒体卡）。
-4. **注入 bundle**：插件运行在 **`messages.html` iframe 上下文**（`#mainContainer` 在那里面；顶层文档只有 `#mainFrame`）。注入方法见 `scripts/inject.md`——用 `browser_run_code_unsafe` + filename 执行生成的嵌入文件，等价于油猴 `@match messages.html`，绕过 CSP，无需装油猴。
+4. **注入 bundle**：插件运行在 **`messages.html` iframe 上下文**（`#mainContainer` 在那里面；顶层文档只有 `#mainFrame`）。注入方法见 `scripts/inject.md`，按工具链二选一：有 Playwright MCP 的 agent（opencode、Claude Code 均已配置）用 `browser_run_code_unsafe` + filename；没有的用独立 node Playwright 脚本（Bash 执行）。两者都是 `frame.evaluate(new Function(src))`，等价于油猴 `@match messages.html`，绕过 CSP，无需装油猴。
 5. **验证加载**：
    - 控制台出现 `[Ming's IIROSE-MEDIA-WEB] - LOADED`
    - iframe 内存在 `.IIROSE_MEDIA_CONTAINER`，`window.iirosemedia.cors` 已选代理（ipinfo 判 CN/Global）
@@ -32,13 +32,13 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
 6. **坑：首启双弹窗**——每次注入都可能连弹**两个**站内弹窗：用户协议 → 隐私政策（都在 `#syncAlertHolder`，各一个「确定」），全屏遮罩挡住一切交互，**循环点到没有为止**。
 7. **坑：宿站弹窗残留遮罩**——`IIROSEUtils.sync` 往 `#syncHolder` 加的 `#syncHolderOutside` 关闭后不清理，连同 `#syncHolder`（fullBoxFixed）会**拦截 Playwright 真实点击**（报 "subtree intercepts pointer events"）。点击页内元素前先执行：`document.getElementById('syncHolderOutside')?.remove(); document.getElementById('syncHolder').style.display='none'`（下次要用站内弹窗时去掉 display:none）。
 8. **搜索验证**：
-   - 点击 `.inputWrapper`（onClick 在 wrapper 上，不在 `.inputIcon`）打开宿站 `#syncPromptHolder` 输入框
+   - 点击 `.inputIcon` 的父级 div（onClick 在父级上；`.inputWrapper` 已不存在，见第 11 条）打开宿站 `#syncPromptHolder` 输入框
    - 站点输入框是 jQuery 体系：**合成 DOM 事件无效**，必须用 Playwright 真实键盘（`locator.type()` / `press('Enter')`；Enter=确定）
    - 成功标准：搜索栏显示关键词、分页 `1/N`、结果卡片渲染
 9. **点播验证**：
    - 平台标签用精确文本匹配点击（如 `JOOX`，用 `childElementCount<=3` 过滤掉外层容器）
    - 播放按钮点 `.MediaCardButtonContainer`（真实点击）
-   - **判定是否发出**：控制台出现 `m__4@0>...`（@0=网易云）或 `m__4@2>...`（@2=JOOX）的 socket 日志，以及 `&1{"s":...,"d":...}` 事件——`d` 是时长（秒），`s:""` 或 `d:0` 即异常
+   - **判定是否发出**：以聊天区消息流 DOM 为准（`div.msgholderBox`，取 children 最多的容器看末尾子块）。控制台的 `m__4@0>...`（@0=网易云）/ `m__4@2>...`（@2=JOOX）与 `&1{"s":...,"d":...}` 是宿站自身日志，**只能辅助看报文内容**（`d` 是时长秒数，`s:""` 或 `d:0` 即异常），不能单凭它判定「已发送」；`Socket.sendMessage` 的公聊文本完全没有控制台日志（见 AGENTS.md「宿站控制台日志陷阱」）
    - 插件的用户提示走 `window._alert`（站内提示条）；hook 它（包一层记录调用）可捕获错误提示
 9b. **multiPage 条目在列表视图**（专辑 / 歌单 / B 站分 P）：搜索结果切到**列表视图**再验证 —— 未解析期播放按钮应为置灰不可点（`multiPage` 尚未 resolve），解析完成后按钮恢复，点播/选集表现与卡片视图一致。只测卡片视图会漏掉列表行对异步 `multiPage` 的处理。
 10. **坑：GD Studio API 限流**——`music-api.gdstudio.xyz` 按 **IP** 限流（types=url 端点全源共享），连续几次请求即触发，恢复窗口长（>10 分钟）。**限流时返回 HTTP 200 + `{"url":"","br":-1}`**——判失败必须看 `data.url` 是否为空，不能只看 HTTP 状态。要验证限流处理逻辑，先 curl 连发烧掉配额再测。
