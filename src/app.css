@@ -31,11 +31,15 @@
    其余全部样式已迁移到各组件的 Tailwind 类。
    ============================================================ */
 
-/* 独立进度浮窗不在主面板内，需要自己的盒模型。 */
+/* 独立进度浮窗与随机选择面板不在主面板内，需要自己的盒模型。 */
 #imw-media-progress-root,
 #imw-media-progress-root *,
 #imw-media-progress-root *::before,
-#imw-media-progress-root *::after {
+#imw-media-progress-root *::after,
+#imw-shuffle-picker-root,
+#imw-shuffle-picker-root *,
+#imw-shuffle-picker-root *::before,
+#imw-shuffle-picker-root *::after {
   box-sizing: border-box;
 }
 

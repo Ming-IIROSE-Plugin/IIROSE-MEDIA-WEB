@@ -7,6 +7,8 @@ declare global {
     ClientLocation?: "CN" | "Global";
     iirosemedia?: {
       cors?: string;
+      /** 调试入口：打开收藏随机选择面板；缺省取当前 focus 平台。 */
+      openShufflePicker?: (platform?: "netease" | "bilibili") => void;
       // 其他属性...
     };
   }

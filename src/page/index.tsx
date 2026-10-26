@@ -13,6 +13,12 @@ import {
   queryShuffleCandidates,
 } from "../playback/shuffleTargets";
 import { loadShuffleSelection } from "../playback/ShuffleSelection";
+import { platformOf, readPanelFocus } from "../playback/PanelFocus";
+import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
+import {
+  openShufflePicker,
+  releaseShufflePicker,
+} from "./components/shuffle-picker/openShufflePicker";
 import { MediaPayloadMemory } from "../playback/MediaPayloadMemory";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Socket } from "../iirose_func/Socket";
@@ -82,6 +88,7 @@ function initMediaProgress() {
       // 释放顺序：先断订阅，再让状态机与适配器、行、桥接依次停摆。
       // 行元素由 SidebarPlaybackRow 自己移除，SidebarMediaEntry 只解除适配。
       safely(() => close(false));
+      safely(() => releaseShufflePicker());
       safely(() => unsubscribePlayback?.());
       safely(() => loop?.dispose());
       safely(() => shuffle?.dispose());
@@ -208,10 +215,41 @@ function releaseMainPanel(page: PanelWindow) {
     (panel.parentElement ?? panel).remove();
 }
 
+// story 7 接线前的调试入口：真机控制台 `window.iirosemedia.openShufflePicker()`。
+function registerShufflePickerEntry() {
+  const namespace = (window.iirosemedia ??= {});
+  namespace.openShufflePicker = (platform) => {
+    // 控制台调用不受类型约束：只认两个收藏平台。
+    if (
+      platform !== undefined &&
+      platform !== "netease" &&
+      platform !== "bilibili"
+    ) {
+      console.warn(
+        `[IIROSE-MEDIA-WEB] 未知的收藏平台 ${String(platform)}，只支持 netease / bilibili`,
+      );
+      return;
+    }
+    const target =
+      platform ??
+      platformOf(
+        readPanelFocus(),
+        PluginSettings.getPluginSetting().defaultPage,
+      );
+    if (!target) {
+      console.warn("[IIROSE-MEDIA-WEB] 当前面板平台没有收藏，无法打开收藏随机");
+      return;
+    }
+    openShufflePicker({ platform: target });
+  };
+}
+
 export class IMCInit {
   public static init(mc: HTMLDivElement) {
     const page = window as PanelWindow;
     releaseMainPanel(page);
+    releaseShufflePicker();
+    registerShufflePickerEntry();
     const container = document.createElement("div");
     mc.appendChild(container);
     render(<MainAppControlLayer />, container);

@@ -114,3 +114,27 @@ describe("主面板单实例", () => {
     expect(holder.classList.contains("hidemainHolder")).toBe(false);
   });
 });
+
+describe("收藏随机选择面板接线", () => {
+  const mainContainer = () =>
+    document.getElementById("mainContainer") as HTMLDivElement;
+  const pickerRoot = () => document.getElementById("imw-shuffle-picker-root");
+
+  it("重新初始化会关掉已打开的选择面板", () => {
+    IMCInit.init(mainContainer());
+    window.iirosemedia?.openShufflePicker?.("netease");
+    expect(pickerRoot()).not.toBeNull();
+    IMCInit.init(mainContainer());
+    expect(pickerRoot()).toBeNull();
+  });
+
+  it("调试入口忽略未知平台", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    IMCInit.init(mainContainer());
+    (window.iirosemedia?.openShufflePicker as unknown as (p: string) => void)(
+      "foo",
+    );
+    expect(pickerRoot()).toBeNull();
+    expect(warn).toHaveBeenCalled();
+  });
+});
