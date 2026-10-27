@@ -1,4 +1,4 @@
-// 收藏随机的选择面板（CAP-8/9/10）：桌面居中卡片、移动底部抽屉。
+// 收藏随机的选择面板（CAP-8/9/10/14）：非模态浮动工具窗，桌面居中、移动端停在上半部。
 // 状态规则在 pickerModel，这里只渲染与转发交互；视觉沿用「播放进度」浮窗。
 import {
   useEffect,
@@ -282,9 +282,6 @@ const tabId = (platform: ShufflePlatform) =>
   `imw-shuffle-picker-tab-${platform}`;
 const LIST_ID = "imw-shuffle-picker-list";
 
-const FOCUSABLE =
-  'button:not([disabled]), input:not([disabled]), [tabindex="0"]';
-
 /** 拖动手柄里按下这些元素不触发拖动（关闭钮等照常工作）。 */
 const NO_DRAG = 'button, input, select, textarea, a, [role="tab"], [tabindex]';
 
@@ -319,8 +316,6 @@ export function ShufflePicker({
   const dialog = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const alive = useRef(true);
-  // 遮罩关闭要求按下与松开都在遮罩上：从面板内拖选文字松手到遮罩不算点遮罩。
-  const pressedBackdrop = useRef(false);
   // 已发起读取的平台：每个标签打开期间只读一次，切回来沿用本次的改动。
   const requested = useRef(new Set<ShufflePlatform>());
   // 读取失败的平台：显示「读取收藏失败」与重试，不当成空收藏。
@@ -333,7 +328,8 @@ export function ShufflePicker({
   );
   const positionRef = useRef(position);
   const [dragging, setDragging] = useState(false);
-  const backdrop = useRef<HTMLDivElement>(null);
+  // 定位层：铺满视口但不拦截指针（非模态），也不带 transform，用于实测宿站缩放。
+  const layer = useRef<HTMLDivElement>(null);
   const move = useRef<{
     pointer: number;
     x: number;
@@ -524,11 +520,11 @@ export function ShufflePicker({
     setPosition(next);
   };
 
-  // 缩放比例取遮罩（无 transform）：面板入场的 scale 会让面板自身的实测比例失真。
+  // 缩放比例取定位层（无 transform）：面板入场的 scale 会让面板自身的实测比例失真。
   const clampToViewport = (x: number, y: number) => {
     const element = dialog.current!;
     const { metrics, offsetLeft, offsetTop } = currentViewportPosition(
-      backdrop.current!,
+      layer.current!,
     );
     return constrainPosition(
       x,
@@ -563,7 +559,7 @@ export function ShufflePicker({
     if (!floating) return;
     const constrain = () => {
       const current = positionRef.current;
-      if (!current || !dialog.current || !backdrop.current) return;
+      if (!current || !dialog.current || !layer.current) return;
       place(clampToViewport(current.x, current.y));
     };
     // 拖动起点切换成浮动卡片时不立即收回：卡片停在原视觉位置，首次移动再约束。
@@ -604,19 +600,19 @@ export function ShufflePicker({
       const blocker = (event.target as Element | null)?.closest?.(NO_DRAG);
       if (blocker && event.currentTarget.contains(blocker)) return;
       const element = dialog.current;
-      if (!element || !backdrop.current) return;
+      if (!element || !layer.current) return;
       const pointer = pointerPosition(
-        backdrop.current,
+        layer.current,
         event.clientX,
         event.clientY,
       );
       const fromDefault = !positionRef.current;
-      // 默认摆放时取面板当前的视觉位置（含抽屉入场位移），按遮罩实测缩放换算，
+      // 默认摆放时取面板当前的视觉位置（含入场缩放），按定位层实测缩放换算，
       // 并立即切成浮动卡片，让布局变化发生在移动之前，手指下不跳。
       let start = positionRef.current;
       if (!start) {
         const rect = element.getBoundingClientRect();
-        start = pointerPosition(backdrop.current, rect.left, rect.top);
+        start = pointerPosition(layer.current, rect.left, rect.top);
         positionRef.current = start;
         setPosition(start);
       }
@@ -635,9 +631,9 @@ export function ShufflePicker({
     onPointerMove: (event: JSX.TargetedPointerEvent<HTMLDivElement>) => {
       const start = move.current;
       if (!start || start.pointer !== event.pointerId || exiting) return;
-      if (!dialog.current || !backdrop.current) return;
+      if (!dialog.current || !layer.current) return;
       const pointer = pointerPosition(
-        backdrop.current,
+        layer.current,
         event.clientX,
         event.clientY,
       );
@@ -658,41 +654,32 @@ export function ShufflePicker({
   };
   const handleClass = `touch-none select-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`;
 
+  // 面板上的触摸不冒泡到 window：主面板的双指下滑手势不被误触发（不 preventDefault，指针拖动照常）。
+  const stopTouch = (event: JSX.TargetedTouchEvent<HTMLDivElement>) =>
+    event.stopPropagation();
+
+  // 面板内的按键不冒泡到 window：插件主面板的全局热键（Esc 关主面板、Alt+S）不被误触发。
+  // 非模态：Tab 不锁在面板内，可移到宿站；面板外的 Esc 根本到不了这里，不关面板。
   const onKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape") {
-      if (event.isComposing || event.defaultPrevented) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (!event.repeat && !exiting) onCancel();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    // Tab 在面板内循环。
-    const nodes = Array.from(
-      dialog.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [],
-    );
-    if (!nodes.length) return;
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    const active = document.activeElement;
-    if (event.shiftKey && (active === first || active === dialog.current)) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
+    event.stopPropagation();
+    if (event.key !== "Escape") return;
+    if (event.isComposing || event.defaultPrevented) return;
+    event.preventDefault();
+    if (!event.repeat && !exiting) onCancel();
   };
 
   const visibleNow = shown && !exiting;
   const theme = dark
     ? "border-white/15 bg-[#242a34] text-[#f4f6fa]"
     : "border-black/10 bg-[#fafbfe] text-[#253047]";
-  const cardBase = `flex max-h-[70%] w-[400px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded-2xl border border-solid shadow-[0_12px_40px_rgba(0,0,0,0.25)] outline-none ease-out max-[768px]:max-h-[85%] ${theme}`;
+  // 面板自身接收指针（定位层不拦截）；退场中不再接收。
+  const cardBase = `flex max-h-[70%] w-[400px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded-2xl border border-solid shadow-[0_12px_40px_rgba(0,0,0,0.25)] outline-none ease-out ${exiting ? "pointer-events-none" : "pointer-events-auto"} ${theme}`;
+  const motion = `transition-[opacity,scale] motion-reduce:transition-opacity ${visibleNow ? "scale-100 opacity-100 duration-[180ms]" : "scale-95 opacity-0 duration-[90ms] motion-reduce:scale-100"}`;
   // 有已存位置：桌面与移动端都是浮动卡片，入场淡入 + scale-95→100（减弱动效只淡入）。
+  // 无已存位置：桌面居中；移动端浮动卡片停在视口上半部（距顶 12px），不挡底部聊天输入栏。
   const dialogClass = floating
-    ? `fixed ${cardBase} transition-[opacity,scale] motion-reduce:transition-opacity max-[768px]:pb-[env(safe-area-inset-bottom)] ${visibleNow ? "scale-100 opacity-100 duration-[180ms]" : "scale-95 opacity-0 duration-[90ms] motion-reduce:scale-100"}`
-    : `${cardBase} transition-[opacity,scale,translate] motion-reduce:transition-opacity max-[768px]:w-full max-[768px]:max-w-full max-[768px]:rounded-none max-[768px]:rounded-t-2xl max-[768px]:border-b-0 max-[768px]:pb-[env(safe-area-inset-bottom)] ${visibleNow ? "translate-y-0 scale-100 opacity-100 duration-[180ms] max-[768px]:duration-[220ms]" : "scale-95 opacity-0 duration-[90ms] max-[768px]:translate-y-full max-[768px]:scale-100 max-[768px]:duration-[110ms] motion-reduce:translate-y-0 motion-reduce:scale-100 max-[768px]:motion-reduce:translate-y-0"}`;
+    ? `fixed ${cardBase} ${motion} max-[768px]:max-h-[85%] max-[768px]:pb-[env(safe-area-inset-bottom)]`
+    : `${cardBase} ${motion} max-[768px]:mt-[max(12px,env(safe-area-inset-top))] max-[768px]:w-[calc(100%-24px)] max-[768px]:max-h-[60%] max-[768px]:origin-top`;
 
   const renderTracks = (
     record: FavoriteRecord,
@@ -771,28 +758,21 @@ export function ShufflePicker({
 
   return (
     <div
-      ref={backdrop}
-      className={`fixed inset-0 z-[90010] flex items-center justify-center font-sans text-[14px] leading-normal transition-opacity ease-out max-[768px]:items-end ${dark ? "bg-black/55" : "bg-black/40"} ${visibleNow ? "opacity-100 duration-150" : "opacity-0 duration-75"} ${exiting ? "pointer-events-none" : ""}`}
-      onPointerDown={(event) => {
-        pressedBackdrop.current = event.target === event.currentTarget;
-      }}
-      onClick={(event) => {
-        const pressed = pressedBackdrop.current;
-        pressedBackdrop.current = false;
-        if (pressed && event.target === event.currentTarget && !exiting)
-          onCancel();
-      }}
+      ref={layer}
+      className="pointer-events-none fixed inset-0 z-[90010] flex items-center justify-center font-sans text-[14px] leading-normal max-[768px]:items-start"
     >
       <div
         ref={dialog}
         id="imw-shuffle-picker"
         role="dialog"
-        aria-modal="true"
         aria-labelledby="imw-shuffle-picker-title"
         tabIndex={-1}
         className={dialogClass}
         style={position ? { left: position.x, top: position.y } : undefined}
         onKeyDown={onKeyDown}
+        onTouchStart={stopTouch}
+        onTouchMove={stopTouch}
+        onTouchEnd={stopTouch}
       >
         <div
           className={`hidden shrink-0 justify-center pt-2 max-[768px]:flex ${handleClass}`}

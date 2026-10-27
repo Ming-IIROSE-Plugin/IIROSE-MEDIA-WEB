@@ -182,7 +182,11 @@ describe("openShufflePicker", () => {
     await open();
     expect(root()?.parentElement).toBe(document.body);
     expect(dialog().getAttribute("role")).toBe("dialog");
-    expect(dialog().getAttribute("aria-modal")).toBe("true");
+    expect(dialog().getAttribute("aria-labelledby")).toBe(
+      "imw-shuffle-picker-title",
+    );
+    // 非模态：不设 aria-modal。
+    expect(dialog().hasAttribute("aria-modal")).toBe(false);
     for (const label of ["晴天", "通勤歌单", "后来"])
       expect(checkbox(label).getAttribute("aria-checked")).toBe("true");
     expect(
@@ -319,14 +323,6 @@ describe("openShufflePicker", () => {
     ["关闭钮", () => click(byLabel("关闭收藏随机"))],
     ["取消按钮", () => click(button("取消"))],
     ["Esc", () => key(dialog().querySelector("input")!, "Escape")],
-    [
-      "遮罩",
-      async () => {
-        const backdrop = root()!.firstElementChild!;
-        await pointerDown(backdrop);
-        await click(backdrop);
-      },
-    ],
   ])("取消（%s）：不保存、关闭、onCancel、焦点还给打开者", async (_, run) => {
     const { onConfirm, onCancel } = await open();
     await click(button("全不选"));
@@ -474,14 +470,6 @@ describe("openShufflePicker", () => {
     expect(button("开始随机").disabled).toBe(false);
   });
 
-  it("从面板内拖到遮罩松手不关闭", async () => {
-    const { onCancel } = await open();
-    await pointerDown(dialog());
-    await click(root()!.firstElementChild!);
-    expect(onCancel).not.toHaveBeenCalled();
-    expect(root()).not.toBeNull();
-  });
-
   it("搜索防抖期间点全选/全不选按输入框当前内容生效", async () => {
     await open();
     await type("周");
@@ -492,22 +480,6 @@ describe("openShufflePicker", () => {
     expect(checkbox("晴天").getAttribute("aria-checked")).toBe("false");
     expect(checkbox("后来").getAttribute("aria-checked")).toBe("true");
     expect(checkbox("通勤歌单").getAttribute("aria-checked")).toBe("true");
-  });
-
-  it("Tab 在面板内循环，Shift+Tab 反向", async () => {
-    await open();
-    const nodes = Array.from(
-      dialog().querySelectorAll<HTMLElement>(
-        'button:not([disabled]), input:not([disabled]), [tabindex="0"]',
-      ),
-    );
-    const first = nodes[0];
-    const last = nodes[nodes.length - 1];
-    last.focus();
-    await key(last, "Tab");
-    expect(document.activeElement).toBe(first);
-    await key(first, "Tab", true);
-    expect(document.activeElement).toBe(last);
   });
 
   it("权重分段：方向键切换选中与焦点", async () => {
@@ -621,6 +593,174 @@ describe("openShufflePicker", () => {
     (window as unknown as { theme: unknown }).theme = 1;
     await open();
     expect(dialog().className).toContain("bg-[#fafbfe]");
+  });
+});
+
+describe("非模态", () => {
+  let hostInput: HTMLInputElement;
+  const layer = () => root()!.firstElementChild as HTMLElement;
+
+  async function keyEvent(element: Element, value: string, shiftKey = false) {
+    const event = new KeyboardEvent("keydown", {
+      key: value,
+      shiftKey,
+      bubbles: true,
+      cancelable: true,
+    });
+    await act(async () => {
+      element.dispatchEvent(event);
+    });
+    await flush();
+    return event;
+  }
+
+  beforeEach(() => {
+    hostInput = document.createElement("input");
+    hostInput.id = "moveinput";
+    hostInput.getClientRects = () =>
+      [{ width: 1, height: 1 }] as unknown as DOMRectList;
+    document.body.appendChild(hostInput);
+  });
+  afterEach(() => hostInput.remove());
+
+  it("无遮罩：定位层不拦截指针、无底色，面板自身接收指针", async () => {
+    await open();
+    expect(layer().className).toMatch(/(^|\s)pointer-events-none(\s|$)/);
+    expect(layer().className).not.toMatch(/bg-black/);
+    expect(dialog().className).toMatch(/(^|\s)pointer-events-auto(\s|$)/);
+  });
+
+  it("点外部（聊天区、定位层）：面板保持打开，宿站照常收到点击", async () => {
+    const { onCancel } = await open();
+    const host = vi.fn();
+    document.body.addEventListener("click", host);
+    await pointerDown(document.body);
+    await click(document.body);
+    await pointerDown(layer());
+    await click(layer());
+    document.body.removeEventListener("click", host);
+    expect(host).toHaveBeenCalledTimes(2);
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(root()).not.toBeNull();
+  });
+
+  it("面板内按键不冒泡到 window：Esc 只关面板，不触发主面板热键", async () => {
+    const { onCancel } = await open();
+    const hotkey = vi.fn();
+    window.addEventListener("keydown", hotkey);
+    await keyEvent(dialog().querySelector("input")!, "a");
+    await keyEvent(dialog().querySelector("input")!, "Escape");
+    window.removeEventListener("keydown", hotkey);
+    expect(hotkey).not.toHaveBeenCalled();
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("面板上的触摸不冒泡到 window：不触发主面板双指手势", async () => {
+    await open();
+    const gesture = vi.fn();
+    const names = ["touchstart", "touchmove", "touchend"];
+    for (const name of names) window.addEventListener(name, gesture);
+    const events = names.map((name) => {
+      const event = new Event(name, { bubbles: true, cancelable: true });
+      act(() => {
+        dialog().querySelector("input")!.dispatchEvent(event);
+      });
+      return event;
+    });
+    for (const name of names) window.removeEventListener(name, gesture);
+    expect(gesture).not.toHaveBeenCalled();
+    expect(events.some((event) => event.defaultPrevented)).toBe(false);
+  });
+
+  it("Tab 不锁在面板内：最后一个元素按 Tab 不拦截、焦点不跳回开头", async () => {
+    await open();
+    const nodes = Array.from(
+      dialog().querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [tabindex="0"]',
+      ),
+    );
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    last.focus();
+    const forward = await keyEvent(last, "Tab");
+    expect(forward.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(last);
+    first.focus();
+    const backward = await keyEvent(first, "Tab", true);
+    expect(backward.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(first);
+  });
+
+  describe("焦点归还", () => {
+    const host = window as unknown as {
+      Utils?: { backward?: (...args: unknown[]) => unknown };
+    };
+    async function systemBack() {
+      await act(async () => {
+        host.Utils?.backward?.();
+      });
+      await flush();
+    }
+    beforeEach(() => {
+      host.Utils = { backward: vi.fn() };
+    });
+    afterEach(() => {
+      delete host.Utils;
+      delete (window as unknown as Record<string, unknown>)
+        .__imwShufflePickerBack;
+    });
+
+    it("焦点在宿站输入框时系统返回：关闭不抢回", async () => {
+      const { onCancel } = await open();
+      hostInput.focus();
+      await systemBack();
+      expect(onCancel).toHaveBeenCalledOnce();
+      expect(document.activeElement).toBe(hostInput);
+      await flush(150);
+      expect(root()).toBeNull();
+      expect(document.activeElement).toBe(hostInput);
+    });
+
+    it("焦点在面板内后点了面板外（焦点落 body）再系统返回：不还给侧栏按钮", async () => {
+      const { onCancel } = await open();
+      dialog().querySelector("input")!.focus();
+      await pointerDown(document.body);
+      await systemBack();
+      expect(onCancel).toHaveBeenCalledOnce();
+      expect(document.activeElement).not.toBe(opener);
+    });
+
+    it("焦点在面板内点 ✕：还给打开者", async () => {
+      await open();
+      byLabel("关闭收藏随机").focus();
+      await click(byLabel("关闭收藏随机"));
+      expect(document.activeElement).toBe(opener);
+    });
+  });
+
+  it("焦点归还：焦点落到 body 时关闭仍还给打开者", async () => {
+    await open();
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    await click(button("取消"));
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("手机首开（无已存位置）：浮动卡片停在上半部，距顶 12px、宽 ≤ 视口 − 24px", async () => {
+    await open();
+    expect(layer().className).toContain("max-[768px]:items-start");
+    expect(layer().className).not.toContain("max-[768px]:items-end");
+    const classes = dialog().className;
+    expect(classes).toContain(
+      "max-[768px]:mt-[max(12px,env(safe-area-inset-top))]",
+    );
+    expect(classes).toContain("max-[768px]:w-[calc(100%-24px)]");
+    expect(classes).toContain("max-w-[calc(100%-24px)]");
+    expect(classes).toContain("max-[768px]:max-h-[60%]");
+    expect(classes).toContain("rounded-2xl");
+    expect(classes).not.toContain("rounded-t-2xl");
+    expect(classes).not.toContain("translate-y-full");
+    expect(classes).not.toMatch(/(^|\s)fixed(\s|$)/);
   });
 });
 
@@ -1122,14 +1262,6 @@ describe("系统返回（接管宿站 Utils.backward）", () => {
     ["关闭钮", () => click(byLabel("关闭收藏随机"))],
     ["取消", () => click(button("取消"))],
     ["Esc", () => key(dialog(), "Escape")],
-    [
-      "遮罩",
-      async () => {
-        const backdrop = root()!.firstElementChild!;
-        await pointerDown(backdrop);
-        await click(backdrop);
-      },
-    ],
     ["确认", () => click(button("开始随机"))],
   ])("%s 关闭后，系统返回交还宿站照常执行", async (_label, action) => {
     await open();
@@ -1180,7 +1312,7 @@ describe("系统返回（接管宿站 Utils.backward）", () => {
 describe("拖动与位置记忆", () => {
   const KEY = "imwShufflePickerPosition";
   let viewport: EventTarget & { width: number; height: number };
-  /** 宿站对 iframe 的缩放比例（遮罩实测 rect 宽 / offset 宽）。 */
+  /** 宿站对 iframe 的缩放比例（定位层实测 rect 宽 / offset 宽）。 */
   let scale = 1;
   /** 默认摆放时面板的视觉位置（client 坐标）。 */
   let defaultRect = { left: 300, top: 100 };
@@ -1190,7 +1322,8 @@ describe("拖动与位置记忆", () => {
     document.getElementById("imw-shuffle-picker-title")!.parentElement!;
   const place = () => [dialog().style.left, dialog().style.top];
   const isDialog = (node: HTMLElement) => node.id === "imw-shuffle-picker";
-  const isBackdrop = (node: HTMLElement) =>
+  /** 定位层（面板的父节点，无 transform）：缩放从它测量。 */
+  const isLayer = (node: HTMLElement) =>
     node.firstElementChild?.id === "imw-shuffle-picker";
 
   function pointer(
@@ -1219,10 +1352,10 @@ describe("拖动与位置记忆", () => {
     dialogHeight = 500;
     viewport = Object.assign(new EventTarget(), { width: 1000, height: 700 });
     vi.stubGlobal("visualViewport", viewport);
-    // jsdom 无布局：面板 400×dialogHeight，默认摆放时视觉位置 defaultRect；遮罩宽 1000。
+    // jsdom 无布局：面板 400×dialogHeight，默认摆放时视觉位置 defaultRect；定位层宽 1000。
     vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
       function (this: HTMLElement) {
-        return isDialog(this) ? 400 : isBackdrop(this) ? 1000 : 0;
+        return isDialog(this) ? 400 : isLayer(this) ? 1000 : 0;
       },
     );
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
@@ -1232,7 +1365,7 @@ describe("拖动与位置记忆", () => {
     );
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
       function (this: HTMLElement) {
-        if (isBackdrop(this)) return new DOMRect(0, 0, 1000 * scale, 0);
+        if (isLayer(this)) return new DOMRect(0, 0, 1000 * scale, 0);
         if (!isDialog(this)) return new DOMRect();
         const left = this.style.left
           ? parseFloat(this.style.left) * scale
@@ -1255,7 +1388,9 @@ describe("拖动与位置记忆", () => {
     await open();
     expect(dialog().style.left).toBe("");
     expect(dialog().className).not.toMatch(/(^|\s)fixed(\s|$)/);
-    expect(dialog().className).toContain("max-[768px]:rounded-t-2xl");
+    expect(dialog().className).toContain(
+      "max-[768px]:mt-[max(12px,env(safe-area-inset-top))]",
+    );
   });
 
   it("按住头部拖动：跟随指针，松手保存；手柄 cursor-grab / 拖动中 grabbing", async () => {
@@ -1270,8 +1405,8 @@ describe("拖动与位置记忆", () => {
     expect(dialog().className).toMatch(/(^|\s)fixed(\s|$)/);
     pointer(header(), "pointermove", 400, 150);
     expect(place()).toEqual(["350px", "130px"]);
-    // 浮动卡片：保留圆角与底边框，不再贴底；移动端保留安全区内边距。
-    expect(dialog().className).not.toContain("max-[768px]:rounded-t-2xl");
+    // 浮动卡片：不再用默认摆放的上半部边距；移动端保留安全区内边距。
+    expect(dialog().className).not.toContain("max-[768px]:mt-[");
     expect(dialog().className).toContain(
       "max-[768px]:pb-[env(safe-area-inset-bottom)]",
     );
@@ -1294,17 +1429,17 @@ describe("拖动与位置记忆", () => {
     expect(place()).toEqual(["280px", "110px"]);
   });
 
-  it("移动端从贴底抽屉起拖：首次移动的 top = 起点视觉 top + 位移，不跳", async () => {
+  it("移动端从上半部默认卡片起拖：首次移动的 top = 起点视觉 top + 位移，不跳", async () => {
     viewport.width = 400;
     viewport.height = 800;
-    defaultRect = { left: 0, top: 300 };
+    defaultRect = { left: 12, top: 12 };
     await open();
-    pointer(header(), "pointerdown", 200, 320);
-    expect(place()).toEqual(["0px", "300px"]);
-    pointer(header(), "pointermove", 200, 220);
-    expect(place()).toEqual(["12px", "200px"]);
-    pointer(header(), "pointerup", 200, 220);
-    expect(localStorage.getItem(KEY)).toBe('{"x":12,"y":200}');
+    pointer(header(), "pointerdown", 200, 30);
+    expect(place()).toEqual(["12px", "12px"]);
+    pointer(header(), "pointermove", 200, 130);
+    expect(place()).toEqual(["12px", "112px"]);
+    pointer(header(), "pointerup", 200, 130);
+    expect(localStorage.getItem(KEY)).toBe('{"x":12,"y":112}');
   });
 
   it("点按头部不移动：存储不变；从默认摆放点按退回默认摆放", async () => {

@@ -22,7 +22,7 @@ import {
 } from "./ShufflePicker";
 
 export const SHUFFLE_PICKER_ROOT_ID = "imw-shuffle-picker-root";
-/** 退场动效最长时长（移动抽屉 220ms 的一半）。 */
+/** 退场动效时长上限（退场 90ms，留余量后卸载）。 */
 const EXIT_MS = 110;
 /** 打开时每个平台读收藏的时限：超时按读取失败（可见、可重试）。 */
 export const PREPARE_TIMEOUT_MS = 5000;
@@ -228,6 +228,29 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
   root.id = SHUFFLE_PICKER_ROOT_ID;
   document.body.appendChild(root);
 
+  // 非模态：记录焦点最后是否在面板内。打开时面板自取焦点，记为在内；
+  // 焦点移到面板外元素、或在面板外按下指针（点聊天区空白焦点落到 body）记为在外。
+  let focusInside = true;
+  const onFocusIn = () => {
+    focusInside = true;
+  };
+  const onFocusOut = (event: FocusEvent) => {
+    const next = event.relatedTarget;
+    if (next instanceof Node && !root.contains(next)) focusInside = false;
+  };
+  const onOutsidePointer = (event: Event) => {
+    if (!(event.target instanceof Node) || !root.contains(event.target))
+      focusInside = false;
+  };
+  root.addEventListener("focusin", onFocusIn);
+  root.addEventListener("focusout", onFocusOut);
+  document.addEventListener("pointerdown", onOutsidePointer, true);
+  const releaseFocusTracking = () => {
+    root.removeEventListener("focusin", onFocusIn);
+    root.removeEventListener("focusout", onFocusOut);
+    document.removeEventListener("pointerdown", onOutsidePointer, true);
+  };
+
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   let finished = false;
 
@@ -240,6 +263,7 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
   const unmount = () => {
     clearTimeout(exitTimer);
     releaseBack();
+    releaseFocusTracking();
     if (finished) return;
     finished = true;
     render(null, root);
@@ -291,14 +315,15 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
     if (!finished && !handle.closing) render(view(), root);
   };
 
-  // 关闭：先标记（再次打开不再聚焦它），播退场动效后卸载，焦点还给打开者。
+  // 关闭：先标记（再次打开不再聚焦它），播退场动效后卸载，焦点还给打开者（仅当焦点最后在面板内）。
   const close = () => {
     if (handle.closing) return false;
     handle.closing = true;
     releaseBack();
     render(view(true), root);
     exitTimer = setTimeout(unmount, EXIT_MS);
-    if (canRestoreFocus(returnFocus))
+    // 非模态：焦点最后在面板内才归还；已移到宿站（输入框、点过聊天区）则不抢回。
+    if (focusInside && canRestoreFocus(returnFocus))
       returnFocus!.focus({ preventScroll: true });
     return true;
   };
