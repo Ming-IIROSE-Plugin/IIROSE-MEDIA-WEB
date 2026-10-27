@@ -3,7 +3,10 @@
 import { render } from "preact";
 import { FavoritesStorageService } from "../../../storage/FavoritesStorageService";
 import {
+  defaultShufflePlatform,
+  loadShufflePlatform,
   loadShuffleSelection,
+  resolvePickerPlatforms,
   saveShufflePlatform,
   saveShuffleSelection,
   shufflePlatformKey,
@@ -21,10 +24,17 @@ import {
 export const SHUFFLE_PICKER_ROOT_ID = "imw-shuffle-picker-root";
 /** 退场动效最长时长（移动抽屉 220ms 的一半）。 */
 const EXIT_MS = 110;
+/** 打开时每个平台读收藏的时限：超时按读取失败（可见、可重试）。 */
+export const PREPARE_TIMEOUT_MS = 5000;
 
 export interface OpenShufflePickerOptions {
-  /** 打开时停在的平台标签（面板内可切换）。 */
-  platform: ShufflePlatform;
+  /**
+   * 强制停在该平台标签（调试入口；该平台必定可见）。缺省按 CAP-12 规则：
+   * 已存随机平台 → defaultPage 对应平台（有收藏才用）→ 第一个有收藏的平台。
+   */
+  platform?: ShufflePlatform;
+  /** 「插件启动默认页面」设置，无已存随机平台时决定初始标签。 */
+  defaultPage?: unknown;
   /** 确认后回调：platform 为新的随机平台，selections 为已保存的各平台选择。 */
   onConfirm?: (result: ShufflePickerResult) => void;
   onCancel?: () => void;
@@ -135,6 +145,61 @@ function hostDark(): boolean {
 async function loadSource(platform: ShufflePlatform): Promise<PickerSource> {
   const records = await FavoritesStorageService.query({ platform });
   return { records, saved: loadShuffleSelection(platform) };
+}
+
+type Preloaded = Map<ShufflePlatform, Promise<PickerSource>>;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (reason) => {
+        clearTimeout(timer);
+        reject(reason);
+      },
+    );
+  });
+}
+
+/**
+ * 打开时对每个平台各读一次收藏（各限时），算出可见平台与初始标签。
+ * 读取失败或超时的平台无法排除有收藏，按可见处理。留作首次读取复用的只有：
+ * 初始标签的结果（首屏不重复查询），以及各平台的失败（切到该标签即显示失败与重试）；
+ * 其他标签首次切到时重新查询，看到打开后新增的收藏。
+ */
+async function preparePlatforms(options: OpenShufflePickerOptions): Promise<{
+  platforms: ShufflePlatform[];
+  initial: ShufflePlatform;
+  preloaded: Preloaded;
+}> {
+  const preloaded: Preloaded = new Map();
+  const hasFavorites: Partial<Record<ShufflePlatform, boolean>> = {};
+  const failed = new Set<ShufflePlatform>();
+  await Promise.all(
+    SHUFFLE_PLATFORMS.map(async (platform) => {
+      const source = withTimeout(loadSource(platform), PREPARE_TIMEOUT_MS);
+      preloaded.set(platform, source);
+      try {
+        hasFavorites[platform] = (await source).records.length > 0;
+      } catch {
+        hasFavorites[platform] = true;
+        failed.add(platform);
+      }
+    }),
+  );
+  const { platforms, initial } = resolvePickerPlatforms(hasFavorites, {
+    stored: loadShufflePlatform(),
+    fallback: defaultShufflePlatform(options.defaultPage),
+    forced: options.platform,
+  });
+  for (const platform of SHUFFLE_PLATFORMS)
+    if (platform !== initial && !failed.has(platform))
+      preloaded.delete(platform);
+  return { platforms, initial, preloaded };
 }
 
 /** 确认时与当前收藏对齐：打开期间已删除的收藏丢弃（逐平台）。 */
@@ -250,13 +315,26 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
   page[PICKER_KEY] = handle;
 
   const dark = hostDark();
-  const load = (platform: ShufflePlatform) => loadSource(platform);
+  // 可见平台在打开时算一次，打开期间不随收藏增减；算好之前面板显示读取中、无标签行。
+  let prepared: Awaited<ReturnType<typeof preparePlatforms>> | null = null;
+  const pendingPlatform =
+    options.platform ??
+    loadShufflePlatform() ??
+    defaultShufflePlatform(options.defaultPage);
+  // 留存的打开时结果只用于该平台首次读取，之后（重试）重新查询。
+  const load = (platform: ShufflePlatform) => {
+    const first = prepared?.preloaded.get(platform);
+    if (!first) return loadSource(platform);
+    prepared!.preloaded.delete(platform);
+    return first;
+  };
   // 确认对齐收藏的短暂异步期间不再接受取消或二次确认；主按钮显示忙碌。
   let confirming = false;
   let error = "";
   const view = (exiting = false) => (
     <ShufflePicker
-      initialPlatform={options.platform}
+      platforms={prepared?.platforms ?? null}
+      initialPlatform={prepared?.initial ?? pendingPlatform}
       dark={dark}
       load={load}
       exiting={exiting}
@@ -360,6 +438,12 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
   }
 
   render(view(false), root);
+  void preparePlatforms(options).then((result) => {
+    // 计算期间被取消、系统返回或接管：不再渲染。
+    if (finished || handle.closing) return;
+    prepared = result;
+    update();
+  });
   window.addEventListener("popstate", onPopState);
   const pending = (window as HistoryWindow)[RETRACT_KEY];
   if (pending) pending.waiters.add(pushEntry);

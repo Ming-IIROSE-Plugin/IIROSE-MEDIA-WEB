@@ -146,6 +146,42 @@ export function resolveShufflePlatform(defaultPage: unknown): ShufflePlatform {
   return loadShufflePlatform() ?? defaultShufflePlatform(defaultPage);
 }
 
+export interface PickerPlatforms {
+  /** 面板显示的平台标签（`SHUFFLE_PLATFORMS` 顺序，至少一个）。 */
+  platforms: ShufflePlatform[];
+  /** 打开时停在的标签（必在 platforms 内）。 */
+  initial: ShufflePlatform;
+}
+
+/**
+ * 选择面板的可见平台与初始标签（CAP-12）。
+ * 可见 = 有收藏的平台 ∪ 已存随机平台（∪ 调用方指定的平台）；全空时只剩默认平台。
+ * 初始 = 指定平台 → 已存随机平台 → 默认平台（须可见）→ 可见集第一个。
+ */
+export function resolvePickerPlatforms(
+  hasFavorites: Partial<Record<ShufflePlatform, boolean>>,
+  {
+    stored,
+    fallback,
+    forced,
+  }: {
+    stored: ShufflePlatform | null;
+    fallback: ShufflePlatform;
+    forced?: ShufflePlatform;
+  },
+): PickerPlatforms {
+  const platforms = SHUFFLE_PLATFORMS.filter(
+    (platform) =>
+      hasFavorites[platform] || platform === stored || platform === forced,
+  );
+  if (platforms.length === 0) platforms.push(fallback);
+  const initial =
+    forced ??
+    stored ??
+    (platforms.includes(fallback) ? fallback : platforms[0]);
+  return { platforms, initial };
+}
+
 function trackCountOf(record: FavoriteRecord): number {
   const count = Number.parseInt(record.trackCount ?? "", 10);
   return Number.isFinite(count) && count > 0 ? count : 1;

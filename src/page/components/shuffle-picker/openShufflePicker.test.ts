@@ -6,9 +6,12 @@ import { NeteaseMusicAPI } from "../../../Api/NeteaseAPI/NeteaseMusic";
 import {
   loadShufflePlatform,
   loadShuffleSelection,
+  saveShufflePlatform,
   saveShuffleSelection,
+  SHUFFLE_PLATFORMS,
 } from "../../../playback/ShuffleSelection";
 import {
+  PREPARE_TIMEOUT_MS,
   SHUFFLE_PICKER_ROOT_ID,
   openShufflePicker,
   releaseShufflePicker,
@@ -78,6 +81,10 @@ const confirmed = (selection: unknown) => ({
   platform: "netease",
   selections: { netease: selection },
 });
+
+/** 某平台被读取收藏的次数。 */
+const calls = (platform: string) =>
+  query.mock.calls.filter(([filter]) => filter?.platform === platform).length;
 
 const root = () => document.getElementById(SHUFFLE_PICKER_ROOT_ID);
 const dialog = () => document.getElementById("imw-shuffle-picker")!;
@@ -253,7 +260,8 @@ describe("openShufflePicker", () => {
     await click(button("全选"));
     expect(checkbox("晴天").getAttribute("aria-checked")).toBe("true");
     expect(text()).toContain("已选 2 条");
-    expect(query).toHaveBeenCalledTimes(1);
+    // 初始标签复用打开时的读取，之后不再读。
+    expect(calls("netease")).toBe(1);
     expect(songList).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -461,7 +469,7 @@ describe("openShufflePicker", () => {
     expect(text()).not.toContain("该平台还没有收藏");
     expect(button("开始随机").disabled).toBe(true);
     await click(button("重试"));
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(calls("netease")).toBe(2);
     expect(checkbox("晴天").getAttribute("aria-checked")).toBe("true");
     expect(button("开始随机").disabled).toBe(false);
   });
@@ -587,7 +595,7 @@ describe("openShufflePicker", () => {
       document.querySelectorAll(`#${SHUFFLE_PICKER_ROOT_ID}`),
     ).toHaveLength(1);
     expect(document.activeElement).toBe(dialog());
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(SHUFFLE_PLATFORMS.length);
   });
 
   it("重复注入：释放后由新实例接管，残留旧根被清除", async () => {
@@ -635,19 +643,211 @@ describe("平台标签", () => {
     );
   });
 
-  it("两个标签固定显示，停在传入的初始平台并读该平台收藏", async () => {
+  const labels = () =>
+    Array.from(dialog().querySelectorAll('[role="tablist"] [role="tab"]')).map(
+      (node) => node.textContent?.trim(),
+    );
+  const listPlatform = () =>
+    dialog()
+      .querySelector("#imw-shuffle-picker-list")!
+      .getAttribute("data-platform");
+  /** 不指定平台，按 CAP-12 规则计算（侧栏入口的用法）。 */
+  const openByRule = (defaultPage: unknown = 0) =>
+    open({ platform: undefined, defaultPage });
+
+  it("指定初始平台：停在该标签；打开时每个平台各读一次，首屏复用，其他标签首次切到时重读", async () => {
     await open({ platform: "bilibili" });
-    const labels = Array.from(
-      dialog().querySelectorAll('[role="tablist"] [role="tab"]'),
-    ).map((node) => node.textContent?.trim());
-    expect(labels).toEqual(["网易云", "B站"]);
+    expect(labels()).toEqual(["网易云", "B站"]);
     expect(selectedTab()).toBe("B站");
     expect(text()).toContain("某视频");
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(query).toHaveBeenCalledWith({ platform: "bilibili" });
+    expect(query).toHaveBeenCalledTimes(SHUFFLE_PLATFORMS.length);
+    for (const platform of SHUFFLE_PLATFORMS) expect(calls(platform)).toBe(1);
+    // 打开后新增的收藏：切到该标签时看得到。
+    const C = record("song", "9", { title: "新收藏" });
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [V] : [A, C],
+    );
+    await click(tab("网易云"));
+    expect(text()).toContain("新收藏");
+    expect(calls("netease")).toBe(2);
+    expect(calls("bilibili")).toBe(1);
   });
 
-  it("切换保留各标签改动，搜索词清空；每个平台只读一次", async () => {
+  it("只有一个平台有收藏：不显示标签行，直接是该平台列表", async () => {
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [] : [A, P, B],
+    );
+    await openByRule();
+    expect(dialog().querySelector('[role="tablist"]')).toBeNull();
+    expect(dialog().querySelector('[role="tab"]')).toBeNull();
+    expect(listPlatform()).toBe("netease");
+    expect(text()).toContain("晴天");
+    expect(
+      dialog()
+        .querySelector("#imw-shuffle-picker-list")!
+        .getAttribute("aria-labelledby"),
+    ).toBe("imw-shuffle-picker-title");
+  });
+
+  it("两个都有收藏：两段等宽分段，首尾圆角；无记录按 defaultPage", async () => {
+    await openByRule(1);
+    expect(labels()).toEqual(["网易云", "B站"]);
+    expect(selectedTab()).toBe("B站");
+    const list = dialog().querySelector('[role="tablist"]')!;
+    expect(list.getAttribute("data-layout")).toBe("segmented");
+    const segments = Array.from(list.querySelectorAll('[role="tab"] > span'));
+    expect(segments[0].className).toContain("rounded-l-lg");
+    expect(segments[0].className).not.toContain("rounded-r-lg");
+    expect(segments[1].className).toContain("rounded-r-lg");
+    expect(segments[1].className).not.toContain("rounded-l-lg");
+  });
+
+  it("已存平台收藏删光：仍显示该标签，初始停在它（空态）", async () => {
+    saveShufflePlatform("bilibili");
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [] : [A],
+    );
+    await openByRule(0);
+    expect(labels()).toEqual(["网易云", "B站"]);
+    expect(selectedTab()).toBe("B站");
+    expect(text()).toContain("该平台还没有收藏");
+    expect(button("开始随机").disabled).toBe(true);
+  });
+
+  it("无记录、默认页对应平台无收藏：停在网易云", async () => {
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [] : [A],
+    );
+    await openByRule(1);
+    expect(listPlatform()).toBe("netease");
+    expect(text()).toContain("晴天");
+    expect(dialog().querySelector('[role="tab"]')).toBeNull();
+  });
+
+  it("全无收藏：只显示默认平台空态，无标签行", async () => {
+    query.mockResolvedValue([]);
+    await openByRule(1);
+    expect(dialog().querySelector('[role="tablist"]')).toBeNull();
+    expect(listPlatform()).toBe("bilibili");
+    expect(text()).toContain("该平台还没有收藏");
+    expect(button("开始随机").disabled).toBe(true);
+  });
+
+  it("打开期间收藏增减不改变标签：切到另一标签重读时仍保留已删光的标签", async () => {
+    await openByRule();
+    expect(labels()).toEqual(["网易云", "B站"]);
+    // 打开后网易云收藏删光、B站照旧。
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [V] : [],
+    );
+    await click(tab("B站"));
+    expect(calls("bilibili")).toBe(2);
+    expect(labels()).toEqual(["网易云", "B站"]);
+  });
+
+  it("打开期间收藏增减不改变标签：重试重读后不新增标签", async () => {
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [] : [A],
+    );
+    query.mockRejectedValueOnce(new Error("idb"));
+    await openByRule();
+    expect(text()).toContain("读取收藏失败");
+    expect(dialog().querySelector('[role="tab"]')).toBeNull();
+    // 打开后 B站新增收藏：重试只重读当前平台，不出现标签行。
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [V] : [A],
+    );
+    await click(button("重试"));
+    expect(calls("netease")).toBe(2);
+    expect(text()).toContain("晴天");
+    expect(dialog().querySelector('[role="tab"]')).toBeNull();
+  });
+
+  it("读取尚未完成：面板已显示读取中、无标签行，可取消；释放后不再渲染", async () => {
+    const pending: Array<(records: FavoriteRecord[]) => void> = [];
+    query.mockImplementation(
+      () => new Promise<FavoriteRecord[]>((done) => pending.push(done)),
+    );
+    const { onCancel } = await open({ platform: undefined });
+    expect(dialog()).not.toBeNull();
+    expect(text()).toContain("正在读取收藏");
+    expect(dialog().querySelector('[role="tablist"]')).toBeNull();
+    act(() => releaseShufflePicker());
+    expect(root()).toBeNull();
+    await act(async () => pending.forEach((done) => done([A])));
+    await flush(150);
+    expect(root()).toBeNull();
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("读取一直不返回：面板可见可取消；超时后显示标签与读取失败、重试", async () => {
+    vi.useFakeTimers();
+    try {
+      query.mockImplementation(() => new Promise<FavoriteRecord[]>(() => {}));
+      const onCancel = vi.fn();
+      await act(async () => {
+        openShufflePicker({ onCancel });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(text()).toContain("正在读取收藏");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(PREPARE_TIMEOUT_MS);
+      });
+      // 面板读取的 effect 在下一帧后才跑。
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(150);
+      });
+      expect(labels()).toEqual(["网易云", "B站"]);
+      expect(selectedTab()).toBe("网易云");
+      expect(text()).toContain("读取收藏失败");
+      // 另一标签同样超时：切过去也是失败与重试，而不是一直转圈。
+      await act(async () => {
+        tab("B站").click();
+      });
+      // 读取 effect 在 act 结束时才跑，结果再下一轮才渲染。
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(text()).toContain("读取收藏失败");
+      query.mockResolvedValue([V]);
+      await act(async () => {
+        button("重试").click();
+      });
+      // 读取 effect 在 act 结束时才跑，结果再下一轮才渲染。
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(text()).toContain("某视频");
+      await act(async () => {
+        button("取消").click();
+        await vi.advanceTimersByTimeAsync(150);
+      });
+      expect(onCancel).toHaveBeenCalledOnce();
+      expect(root()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("读取一直不返回时 Esc 照样取消", async () => {
+    query.mockImplementation(() => new Promise<FavoriteRecord[]>(() => {}));
+    const { onCancel } = await open({ platform: undefined });
+    await key(dialog(), "Escape");
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("读取失败的平台无法排除有收藏：照常显示标签，切到它提示失败可重试", async () => {
+    query.mockImplementation(async (filter: { platform: string }) => {
+      if (filter.platform === "bilibili") throw new Error("idb");
+      return [A];
+    });
+    await openByRule();
+    expect(labels()).toEqual(["网易云", "B站"]);
+    await click(tab("B站"));
+    expect(text()).toContain("读取收藏失败");
+  });
+
+  it("切换保留各标签改动，搜索词清空；切回不再重读", async () => {
     await open();
     await click(checkbox("晴天"));
     await click(button("按歌曲"));
@@ -662,7 +862,9 @@ describe("平台标签", () => {
     expect(checkbox("晴天").getAttribute("aria-checked")).toBe("false");
     expect(checkbox("后来").getAttribute("aria-checked")).toBe("true");
     expect(button("按歌曲").getAttribute("aria-checked")).toBe("true");
-    expect(query).toHaveBeenCalledTimes(2);
+    // 初始标签复用打开时的读取；另一标签首次切到时读一次，切回不再读。
+    expect(calls("netease")).toBe(1);
+    expect(calls("bilibili")).toBe(2);
   });
 
   it("确认：保存两个改动过的平台，随机平台 = 当前标签", async () => {
@@ -753,7 +955,7 @@ describe("平台标签", () => {
     await type("周");
     await click(tab("网易云"));
     expect(dialog().querySelector("input")!.value).toBe("周");
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(SHUFFLE_PLATFORMS.length);
   });
 
   it("其他标签选成空的不保存，保留原有选择", async () => {
@@ -889,6 +1091,21 @@ describe("系统返回与历史条目", () => {
     await open();
     expect(history.length).toBe(before + 1);
     expect(marker()).toBeTruthy();
+  });
+
+  it("读取未完成时系统返回：取消，读取返回后也不渲染", async () => {
+    const pending: Array<(records: FavoriteRecord[]) => void> = [];
+    query.mockImplementation(
+      () => new Promise<FavoriteRecord[]>((done) => pending.push(done)),
+    );
+    const { onCancel } = await open({ platform: undefined });
+    await systemBack();
+    await act(async () => pending.forEach((done) => done([A])));
+    await flush(150);
+    expect(root()).toBeNull();
+    expect(document.getElementById("imw-shuffle-picker")).toBeNull();
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(opener);
   });
 
   it("系统返回等同取消：面板关闭、不保存、焦点回打开者，不再回退", async () => {

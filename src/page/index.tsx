@@ -12,10 +12,7 @@ import {
   prepareShuffleTarget,
   queryShuffleCandidates,
 } from "../playback/shuffleTargets";
-import {
-  loadShuffleSelection,
-  resolveShufflePlatform,
-} from "../playback/ShuffleSelection";
+import { loadShuffleSelection } from "../playback/ShuffleSelection";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import {
   openShufflePicker,
@@ -118,11 +115,9 @@ function initMediaProgress() {
   // shuffle 在行之后构造，回调运行时再读取。
   playbackRow = new SidebarPlaybackRow(playback, document, {
     pickShuffle: (done) => {
-      // 面板初始标签：上次确认的随机平台，无记录按「插件启动默认页面」；与主面板焦点无关。
+      // 可见平台与初始标签由面板按收藏与已存随机平台计算（无记录按「插件启动默认页面」）；与主面板焦点无关。
       openShufflePicker({
-        platform: resolveShufflePlatform(
-          PluginSettings.getPluginSetting().defaultPage,
-        ),
+        defaultPage: PluginSettings.getPluginSetting().defaultPage,
         returnFocus: playbackRow.element.querySelector<HTMLElement>(
           "#imw-toggle-shuffle",
         ),
@@ -261,10 +256,10 @@ function registerShufflePickerEntry() {
       );
       return;
     }
+    // 指定平台则强制停在它；缺省与侧栏同一规则。
     openShufflePicker({
-      platform:
-        platform ??
-        resolveShufflePlatform(PluginSettings.getPluginSetting().defaultPage),
+      platform,
+      defaultPage: PluginSettings.getPluginSetting().defaultPage,
     });
   };
 }

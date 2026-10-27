@@ -31,6 +31,7 @@ import {
   type RowCheck,
 } from "./pickerModel";
 import { cachedTracks, canExpand, loadTracks } from "./trackLoader";
+import { PlatformTabs } from "./PlatformTabs";
 
 export interface PickerSource {
   records: FavoriteRecord[];
@@ -44,6 +45,11 @@ export interface ShufflePickerResult {
 }
 
 export interface ShufflePickerProps {
+  /**
+   * 显示的平台标签（打开时算好，期间不变）；只有一个时不显示标签行。
+   * null = 尚在计算：不显示标签行，列表区显示读取中，不读取任何平台。
+   */
+  platforms: readonly ShufflePlatform[] | null;
   /** 打开时停在的平台标签。 */
   initialPlatform: ShufflePlatform;
   dark: boolean;
@@ -262,6 +268,7 @@ const FOCUSABLE =
   'button:not([disabled]), input:not([disabled]), [tabindex="0"]';
 
 export function ShufflePicker({
+  platforms,
   initialPlatform,
   dark,
   load,
@@ -272,7 +279,10 @@ export function ShufflePicker({
   onCancel,
   onTabChange,
 }: ShufflePickerProps) {
-  const [platform, setPlatform] = useState<ShufflePlatform>(initialPlatform);
+  // 用户切过标签前跟随 initialPlatform（可见平台算好后才确定）。
+  const [chosen, setPlatform] = useState<ShufflePlatform | null>(null);
+  const platform = chosen ?? initialPlatform;
+  const ready = platforms !== null;
   const [tabs, setTabs] = useState<Partial<Record<ShufflePlatform, TabData>>>(
     {},
   );
@@ -363,8 +373,8 @@ export function ShufflePicker({
   };
 
   useEffect(() => {
-    if (!loadFailed.has(platform)) loadTab(platform);
-  }, [platform, load]);
+    if (ready && !loadFailed.has(platform)) loadTab(platform);
+  }, [ready, platform, load]);
 
   useEffect(() => {
     alive.current = true;
@@ -458,17 +468,14 @@ export function ShufflePicker({
   };
 
   // 切换标签：搜索词清空；各标签的勾选、展开与权重保留到面板关闭。
-  const switchTab = (next: ShufflePlatform, focus = false) => {
+  const switchTab = (next: ShufflePlatform) => {
     if (next === platform || exiting || busy) return;
     setPlatform(next);
     setInput("");
     setQuery("");
     onTabChange?.(next);
-    if (focus)
-      dialog.current
-        ?.querySelector<HTMLElement>(`#${tabId(next)}`)
-        ?.focus({ preventScroll: true });
   };
+  const showTabs = !!platforms && platforms.length > 1;
 
   const onKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape") {
@@ -623,56 +630,23 @@ export function ShufflePicker({
           </button>
         </div>
 
-        <div className="shrink-0 px-3 pb-1">
-          <div
-            role="tablist"
-            aria-label="随机平台"
-            aria-orientation="horizontal"
-            className="flex"
-          >
-            {SHUFFLE_PLATFORMS.map((target, index) => {
-              const selected = target === platform;
-              const count = SHUFFLE_PLATFORMS.length;
-              const border = selected
-                ? "border-sky-500"
-                : dark
-                  ? "border-white/15"
-                  : "border-black/10";
-              return (
-                <button
-                  key={target}
-                  id={tabId(target)}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected ? "true" : "false"}
-                  aria-controls={LIST_ID}
-                  tabIndex={selected ? 0 : -1}
-                  className={`${resetButton} flex min-h-[44px] min-w-0 flex-1 items-center rounded-lg border-0 bg-transparent text-inherit`}
-                  onClick={() => switchTab(target)}
-                  onKeyDown={(event) => {
-                    let next: number;
-                    if (event.key === "ArrowLeft")
-                      next = (index - 1 + count) % count;
-                    else if (event.key === "ArrowRight")
-                      next = (index + 1) % count;
-                    else if (event.key === "Home") next = 0;
-                    else if (event.key === "End") next = count - 1;
-                    else return;
-                    event.preventDefault();
-                    switchTab(SHUFFLE_PLATFORMS[next], true);
-                  }}
-                >
-                  {/* 视觉 36px 分段，外层按钮保证 44px 点击区。 */}
-                  <span
-                    className={`flex h-9 w-full items-center justify-center border border-solid text-[13px] ${border} ${index === 0 ? "rounded-l-lg" : ""} ${index === count - 1 ? "rounded-r-lg" : ""} ${index > 0 ? "border-l-0" : ""} ${selected ? "bg-sky-500 font-semibold text-white" : "hov:hover:bg-sky-500/8 active:bg-sky-500/15"}`}
-                  >
-                    {PLATFORM_LABEL[target]}
-                  </span>
-                </button>
-              );
-            })}
+        {showTabs && (
+          <div className="shrink-0 px-3 pb-1">
+            <PlatformTabs
+              items={platforms!.map((target) => ({
+                id: target,
+                label: PLATFORM_LABEL[target],
+              }))}
+              selected={platform}
+              onSelect={switchTab}
+              dark={dark}
+              disabled={exiting || busy}
+              tabId={tabId}
+              controls={LIST_ID}
+              ariaLabel="随机平台"
+            />
           </div>
-        </div>
+        )}
 
         <div className="shrink-0 px-3">
           <div
@@ -773,8 +747,11 @@ export function ShufflePicker({
 
         <div
           id={LIST_ID}
-          role="tabpanel"
-          aria-labelledby={tabId(platform)}
+          role={showTabs ? "tabpanel" : undefined}
+          data-platform={platform}
+          aria-labelledby={
+            showTabs ? tabId(platform) : "imw-shuffle-picker-title"
+          }
           className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain border-0 border-y border-solid ${dark ? "border-white/15" : "border-black/10"}`}
         >
           {!records && loadFailed.has(platform) ? (

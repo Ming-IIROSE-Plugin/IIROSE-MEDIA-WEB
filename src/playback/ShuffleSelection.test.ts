@@ -4,6 +4,7 @@ import {
   createShuffleRound,
   defaultShufflePlatform,
   loadShufflePlatform,
+  resolvePickerPlatforms,
   resolveShufflePlatform,
   saveShufflePlatform,
   loadShuffleSelection,
@@ -256,5 +257,54 @@ describe("随机平台的存取", () => {
     localStorage.setItem(key, "radio");
     expect(loadShufflePlatform()).toBeNull();
     expect(resolveShufflePlatform(0)).toBe("netease");
+  });
+});
+
+describe("选择面板的可见平台与初始标签", () => {
+  const both = { netease: true, bilibili: true };
+
+  it("只显示有收藏的平台，按固定顺序", () => {
+    expect(
+      resolvePickerPlatforms(
+        { netease: false, bilibili: true },
+        { stored: null, fallback: "netease" },
+      ),
+    ).toEqual({ platforms: ["bilibili"], initial: "bilibili" });
+    expect(
+      resolvePickerPlatforms(both, { stored: null, fallback: "bilibili" }),
+    ).toEqual({ platforms: ["netease", "bilibili"], initial: "bilibili" });
+  });
+
+  it("已存平台收藏删光仍显示，并作为初始标签", () => {
+    expect(
+      resolvePickerPlatforms(
+        { netease: true, bilibili: false },
+        { stored: "bilibili", fallback: "netease" },
+      ),
+    ).toEqual({ platforms: ["netease", "bilibili"], initial: "bilibili" });
+  });
+
+  it("无记录且默认平台无收藏：停在可见集第一个", () => {
+    expect(
+      resolvePickerPlatforms(
+        { netease: true, bilibili: false },
+        { stored: null, fallback: "bilibili" },
+      ),
+    ).toEqual({ platforms: ["netease"], initial: "netease" });
+  });
+
+  it("全无收藏且无记录：只剩默认平台", () => {
+    expect(
+      resolvePickerPlatforms({}, { stored: null, fallback: "bilibili" }),
+    ).toEqual({ platforms: ["bilibili"], initial: "bilibili" });
+  });
+
+  it("指定平台必定可见且为初始标签", () => {
+    expect(
+      resolvePickerPlatforms(
+        { netease: true },
+        { stored: "netease", fallback: "netease", forced: "bilibili" },
+      ),
+    ).toEqual({ platforms: ["netease", "bilibili"], initial: "bilibili" });
   });
 });
