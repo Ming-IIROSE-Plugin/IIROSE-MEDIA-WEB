@@ -10,26 +10,13 @@ import {
   unavailableReason,
   type MediaProgressPosition,
 } from "../../../media-progress/model";
+import {
+  currentViewportPosition,
+  pointerPosition,
+} from "../../../media-progress/viewport";
 
 const controlClass =
   "min-h-[44px] min-w-[44px] cursor-pointer rounded-xl border-0 bg-black/5 px-2 font-[inherit] text-[13px] text-inherit hov:bg-black/10 focus-visible:outline-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-35";
-
-type ViewportMetrics = {
-  scale: number;
-  width: number;
-  height: number;
-};
-
-function viewportMetrics(element: HTMLElement): ViewportMetrics {
-  const rect = element.getBoundingClientRect();
-  const scale = rect.width / element.offsetWidth || 1;
-  const viewport = window.visualViewport;
-  return {
-    scale,
-    width: (viewport?.width || window.innerWidth) / scale,
-    height: (viewport?.height || window.innerHeight) / scale,
-  };
-}
 
 function samePosition(
   first: MediaProgressPosition,
@@ -101,19 +88,6 @@ export function MediaProgress({
     positionRef.current = next;
     setPosition(next);
     onPositionChangeRef.current(next);
-  };
-
-  const currentViewportPosition = (element: HTMLElement) => {
-    const metrics = viewportMetrics(element);
-    return {
-      metrics,
-      offsetLeft:
-        (window.scrollX + (window.visualViewport?.offsetLeft || 0)) /
-        metrics.scale,
-      offsetTop:
-        (window.scrollY + (window.visualViewport?.offsetTop || 0)) /
-        metrics.scale,
-    };
   };
 
   useEffect(() => {
@@ -192,22 +166,6 @@ export function MediaProgress({
     session.current?.preview(
       ((clientX - rect.left) / rect.width) * (media.duration || 0),
     );
-  };
-
-  const pointerPosition = (
-    element: HTMLElement,
-    clientX: number,
-    clientY: number,
-  ) => {
-    const { metrics } = currentViewportPosition(element);
-    return {
-      x:
-        (clientX + window.scrollX + (window.visualViewport?.offsetLeft || 0)) /
-        metrics.scale,
-      y:
-        (clientY + window.scrollY + (window.visualViewport?.offsetTop || 0)) /
-        metrics.scale,
-    };
   };
 
   return (

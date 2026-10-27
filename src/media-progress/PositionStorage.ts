@@ -16,9 +16,10 @@ function isPosition(value: unknown): value is MediaProgressPosition {
   );
 }
 
-export function readMediaProgressPosition(): MediaProgressPosition | undefined {
+/** 按键读取 `{x,y}`；非法值或 localStorage 抛错都按无记录。 */
+export function readPosition(key: string): MediaProgressPosition | undefined {
   try {
-    const raw = localStorage.getItem(MEDIA_PROGRESS_POSITION_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return undefined;
     const value: unknown = JSON.parse(raw);
     return isPosition(value) ? { x: value.x, y: value.y } : undefined;
@@ -27,16 +28,25 @@ export function readMediaProgressPosition(): MediaProgressPosition | undefined {
   }
 }
 
-export function saveMediaProgressPosition(
+/** 按键保存 `{x,y}`；写入失败静默忽略。 */
+export function savePosition(
+  key: string,
   position: MediaProgressPosition | undefined,
 ): void {
   if (!position) return;
   try {
-    localStorage.setItem(
-      MEDIA_PROGRESS_POSITION_KEY,
-      JSON.stringify({ x: position.x, y: position.y }),
-    );
+    localStorage.setItem(key, JSON.stringify({ x: position.x, y: position.y }));
   } catch {
     // localStorage 受限或配额耗尽时，位置仍由当前页面内存状态保留。
   }
+}
+
+export function readMediaProgressPosition(): MediaProgressPosition | undefined {
+  return readPosition(MEDIA_PROGRESS_POSITION_KEY);
+}
+
+export function saveMediaProgressPosition(
+  position: MediaProgressPosition | undefined,
+): void {
+  savePosition(MEDIA_PROGRESS_POSITION_KEY, position);
 }

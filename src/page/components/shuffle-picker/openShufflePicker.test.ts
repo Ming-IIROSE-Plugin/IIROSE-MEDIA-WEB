@@ -1280,3 +1280,344 @@ describe("系统返回与历史条目", () => {
     expect(onCancel).not.toHaveBeenCalled();
   });
 });
+
+describe("拖动与位置记忆", () => {
+  const KEY = "imwShufflePickerPosition";
+  let viewport: EventTarget & { width: number; height: number };
+  /** 宿站对 iframe 的缩放比例（遮罩实测 rect 宽 / offset 宽）。 */
+  let scale = 1;
+  /** 默认摆放时面板的视觉位置（client 坐标）。 */
+  let defaultRect = { left: 300, top: 100 };
+  let dialogHeight = 500;
+
+  const header = () =>
+    document.getElementById("imw-shuffle-picker-title")!.parentElement!;
+  const place = () => [dialog().style.left, dialog().style.top];
+  const isDialog = (node: HTMLElement) => node.id === "imw-shuffle-picker";
+  const isBackdrop = (node: HTMLElement) =>
+    node.firstElementChild?.id === "imw-shuffle-picker";
+
+  function pointer(
+    element: Element,
+    type: string,
+    x = 0,
+    y = 0,
+    pointerId = 5,
+  ) {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.assign(event, {
+      pointerId,
+      isPrimary: true,
+      button: 0,
+      clientX: x,
+      clientY: y,
+    });
+    act(() => {
+      element.dispatchEvent(event);
+    });
+  }
+
+  beforeEach(() => {
+    scale = 1;
+    defaultRect = { left: 300, top: 100 };
+    dialogHeight = 500;
+    viewport = Object.assign(new EventTarget(), { width: 1000, height: 700 });
+    vi.stubGlobal("visualViewport", viewport);
+    // jsdom 无布局：面板 400×dialogHeight，默认摆放时视觉位置 defaultRect；遮罩宽 1000。
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(
+      function (this: HTMLElement) {
+        return isDialog(this) ? 400 : isBackdrop(this) ? 1000 : 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(
+      function (this: HTMLElement) {
+        return isDialog(this) ? dialogHeight : 0;
+      },
+    );
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        if (isBackdrop(this)) return new DOMRect(0, 0, 1000 * scale, 0);
+        if (!isDialog(this)) return new DOMRect();
+        const left = this.style.left
+          ? parseFloat(this.style.left) * scale
+          : defaultRect.left;
+        const top = this.style.top
+          ? parseFloat(this.style.top) * scale
+          : defaultRect.top;
+        return new DOMRect(left, top, 400 * scale, dialogHeight * scale);
+      },
+    );
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete (HTMLElement.prototype as Partial<HTMLElement>).setPointerCapture;
+  });
+
+  it("首次打开无已存位置：保持默认摆放（不 fixed、无 left/top）", async () => {
+    await open();
+    expect(dialog().style.left).toBe("");
+    expect(dialog().className).not.toMatch(/(^|\s)fixed(\s|$)/);
+    expect(dialog().className).toContain("max-[768px]:rounded-t-2xl");
+  });
+
+  it("按住头部拖动：跟随指针，松手保存；手柄 cursor-grab / 拖动中 grabbing", async () => {
+    await open();
+    expect(header().className).toContain("cursor-grab");
+    expect(header().className).toContain("touch-none");
+    pointer(header(), "pointerdown", 350, 120);
+    expect(HTMLElement.prototype.setPointerCapture).toHaveBeenCalledWith(5);
+    expect(header().className).toContain("cursor-grabbing");
+    // 按下即切成浮动卡片，停在原视觉位置。
+    expect(place()).toEqual(["300px", "100px"]);
+    expect(dialog().className).toMatch(/(^|\s)fixed(\s|$)/);
+    pointer(header(), "pointermove", 400, 150);
+    expect(place()).toEqual(["350px", "130px"]);
+    // 浮动卡片：保留圆角与底边框，不再贴底；移动端保留安全区内边距。
+    expect(dialog().className).not.toContain("max-[768px]:rounded-t-2xl");
+    expect(dialog().className).toContain(
+      "max-[768px]:pb-[env(safe-area-inset-bottom)]",
+    );
+    expect(localStorage.getItem(KEY)).toBeNull();
+    pointer(header(), "pointerup", 400, 150);
+    expect(localStorage.getItem(KEY)).toBe('{"x":350,"y":130}');
+    expect(header().className).not.toContain("cursor-grabbing");
+    // 松手后移动不再跟随。
+    pointer(header(), "pointermove", 500, 300);
+    expect(place()).toEqual(["350px", "130px"]);
+  });
+
+  it("移动端拖拽条也是手柄", async () => {
+    await open();
+    const bar = dialog().firstElementChild as HTMLElement;
+    expect(bar.className).toContain("touch-none");
+    pointer(bar, "pointerdown", 0, 0);
+    pointer(bar, "pointermove", -20, 10);
+    pointer(bar, "pointerup", -20, 10);
+    expect(place()).toEqual(["280px", "110px"]);
+  });
+
+  it("移动端从贴底抽屉起拖：首次移动的 top = 起点视觉 top + 位移，不跳", async () => {
+    viewport.width = 400;
+    viewport.height = 800;
+    defaultRect = { left: 0, top: 300 };
+    await open();
+    pointer(header(), "pointerdown", 200, 320);
+    expect(place()).toEqual(["0px", "300px"]);
+    pointer(header(), "pointermove", 200, 220);
+    expect(place()).toEqual(["12px", "200px"]);
+    pointer(header(), "pointerup", 200, 220);
+    expect(localStorage.getItem(KEY)).toBe('{"x":12,"y":200}');
+  });
+
+  it("点按头部不移动：存储不变；从默认摆放点按退回默认摆放", async () => {
+    localStorage.setItem(KEY, '{"x":3000,"y":2000}');
+    await open();
+    expect(place()).toEqual(["588px", "188px"]);
+    pointer(header(), "pointerdown", 700, 200);
+    pointer(header(), "pointerup", 700, 200);
+    expect(localStorage.getItem(KEY)).toBe('{"x":3000,"y":2000}');
+    expect(place()).toEqual(["588px", "188px"]);
+    act(() => releaseShufflePicker());
+
+    localStorage.clear();
+    await open();
+    pointer(header(), "pointerdown", 350, 120);
+    pointer(header(), "pointerup", 350, 120);
+    expect(localStorage.getItem(KEY)).toBeNull();
+    expect(dialog().style.left).toBe("");
+    expect(dialog().className).not.toMatch(/(^|\s)fixed(\s|$)/);
+  });
+
+  it("刷新恢复：已存位置再打开出现在原处", async () => {
+    localStorage.setItem(KEY, '{"x":120,"y":40}');
+    await open();
+    expect(place()).toEqual(["120px", "40px"]);
+    expect(dialog().className).toMatch(/(^|\s)fixed(\s|$)/);
+  });
+
+  it("越界约束：拖向视口外停在距边 12px；已存位置超出视口时收回", async () => {
+    await open();
+    pointer(header(), "pointerdown", 350, 120);
+    pointer(header(), "pointermove", 5000, 5000);
+    expect(place()).toEqual(["588px", "188px"]);
+    pointer(header(), "pointermove", -5000, -5000);
+    expect(place()).toEqual(["12px", "12px"]);
+    pointer(header(), "pointerup", -5000, -5000);
+    act(() => releaseShufflePicker());
+
+    localStorage.setItem(KEY, '{"x":3000,"y":2000}');
+    await open();
+    expect(place()).toEqual(["588px", "188px"]);
+    // 打开时的约束只改显示，不覆盖存储。
+    expect(localStorage.getItem(KEY)).toBe('{"x":3000,"y":2000}');
+  });
+
+  it("视口变化：打开期间缩小窗口，面板收回视口内", async () => {
+    localStorage.setItem(KEY, '{"x":500,"y":150}');
+    await open();
+    expect(place()).toEqual(["500px", "150px"]);
+    viewport.width = 600;
+    viewport.height = 600;
+    act(() => {
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    expect(place()).toEqual(["188px", "88px"]);
+    viewport.width = 450;
+    act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(place()).toEqual(["38px", "88px"]);
+    viewport.width = 420;
+    act(() => {
+      viewport.dispatchEvent(new Event("scroll"));
+    });
+    expect(place()).toEqual(["12px", "88px"]);
+  });
+
+  it("拖动中视口变化：收回视口内但不打断拖动", async () => {
+    await open();
+    pointer(header(), "pointerdown", 350, 120);
+    pointer(header(), "pointermove", 360, 130);
+    viewport.width = 600;
+    act(() => {
+      viewport.dispatchEvent(new Event("resize"));
+    });
+    expect(place()).toEqual(["188px", "110px"]);
+    expect(header().className).toContain("cursor-grabbing");
+    pointer(header(), "pointermove", 300, 140);
+    expect(place()).toEqual(["188px", "120px"]);
+    pointer(header(), "pointerup", 300, 140);
+    expect(localStorage.getItem(KEY)).toBe('{"x":188,"y":120}');
+  });
+
+  it("宿站缩放 1.15：位移与 12px 约束按缩放后的单位换算", async () => {
+    scale = 1.15;
+    viewport.width = 1150;
+    viewport.height = 805;
+    defaultRect = { left: 345, top: 115 };
+    await open();
+    pointer(header(), "pointerdown", 402.5, 138);
+    expect(parseFloat(dialog().style.left)).toBeCloseTo(300);
+    expect(parseFloat(dialog().style.top)).toBeCloseTo(100);
+    pointer(header(), "pointermove", 460, 172.5);
+    expect(parseFloat(dialog().style.left)).toBeCloseTo(350);
+    expect(parseFloat(dialog().style.top)).toBeCloseTo(130);
+    pointer(header(), "pointermove", 5000, 5000);
+    // 视口 1150×805 / 1.15 = 1000×700：右下约束 1000-400-12、700-500-12。
+    expect(parseFloat(dialog().style.left)).toBeCloseTo(588);
+    expect(parseFloat(dialog().style.top)).toBeCloseTo(188);
+    pointer(header(), "pointermove", -5000, -5000);
+    expect(parseFloat(dialog().style.left)).toBeCloseTo(12);
+    expect(parseFloat(dialog().style.top)).toBeCloseTo(12);
+  });
+
+  it("面板尺寸变化（ResizeObserver）：已存位置靠底时重新收回", async () => {
+    let notify!: () => void;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          notify = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    dialogHeight = 200;
+    localStorage.setItem(KEY, '{"x":100,"y":480}');
+    await open();
+    expect(place()).toEqual(["100px", "480px"]);
+    dialogHeight = 500;
+    act(() => notify());
+    expect(place()).toEqual(["100px", "188px"]);
+    expect(localStorage.getItem(KEY)).toBe('{"x":100,"y":480}');
+  });
+
+  it("按钮不拖：关闭钮上按下拖动不移动，点击照常关闭", async () => {
+    const { onCancel } = await open();
+    const close = byLabel("关闭收藏随机");
+    pointer(close, "pointerdown", 350, 120);
+    pointer(close, "pointermove", 500, 300);
+    pointer(close, "pointerup", 500, 300);
+    expect(dialog().style.left).toBe("");
+    expect(HTMLElement.prototype.setPointerCapture).not.toHaveBeenCalled();
+    await click(close);
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  it("搜索框、标签、列表不是手柄：不拖动，touch-none 不落在列表上", async () => {
+    await open();
+    const input = dialog().querySelector("input")!;
+    pointer(input, "pointerdown", 350, 120);
+    pointer(input, "pointermove", 500, 300);
+    const list = document.getElementById("imw-shuffle-picker-list")!;
+    pointer(list, "pointerdown", 350, 120);
+    pointer(list, "pointermove", 500, 300);
+    expect(dialog().style.left).toBe("");
+    expect(list.closest(".touch-none")).toBeNull();
+    expect(input.closest(".touch-none")).toBeNull();
+  });
+
+  it("存储异常：已存值非法按无记录；写入抛错时拖动照常、不抛错", async () => {
+    localStorage.setItem(KEY, '{"x":"a","y":1}');
+    await open();
+    expect(dialog().style.left).toBe("");
+    act(() => releaseShufflePicker());
+
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
+    await open();
+    expect(dialog().style.left).toBe("");
+    pointer(header(), "pointerdown", 350, 120);
+    pointer(header(), "pointermove", 360, 130);
+    expect(() => pointer(header(), "pointerup", 360, 130)).not.toThrow();
+    expect(place()).toEqual(["310px", "110px"]);
+  });
+
+  it("中断：pointercancel 或窗口失焦结束拖动，停在当前位置并保存", async () => {
+    await open();
+    pointer(header(), "pointerdown", 350, 120);
+    pointer(header(), "pointermove", 360, 130);
+    pointer(header(), "pointercancel", 360, 130);
+    expect(localStorage.getItem(KEY)).toBe('{"x":310,"y":110}');
+    pointer(header(), "pointermove", 500, 300);
+    expect(place()).toEqual(["310px", "110px"]);
+    expect(header().className).not.toContain("cursor-grabbing");
+
+    pointer(header(), "pointerdown", 360, 130);
+    pointer(header(), "pointermove", 370, 140);
+    act(() => {
+      window.dispatchEvent(new Event("blur"));
+    });
+    expect(localStorage.getItem(KEY)).toBe('{"x":320,"y":120}');
+    pointer(header(), "pointermove", 500, 300);
+    expect(place()).toEqual(["320px", "120px"]);
+    expect(header().className).not.toContain("cursor-grabbing");
+  });
+
+  it("拖动中退场（Esc）：结束拖动并保存，之后的指针事件忽略", async () => {
+    await open();
+    pointer(header(), "pointerdown", 350, 120);
+    pointer(header(), "pointermove", 360, 130);
+    act(() => {
+      dialog().dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(localStorage.getItem(KEY)).toBe('{"x":310,"y":110}');
+    pointer(header(), "pointermove", 500, 300);
+    pointer(header(), "pointerup", 500, 300);
+    expect(place()).toEqual(["310px", "110px"]);
+    expect(localStorage.getItem(KEY)).toBe('{"x":310,"y":110}');
+  });
+});
