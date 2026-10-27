@@ -8,7 +8,10 @@ import type {
   ShuffleSelection,
   ShuffleWeight,
 } from "../../../playback/ShuffleSelection";
-import { isSingle } from "../../../playback/ShuffleSelection";
+import {
+  isSingle,
+  SHUFFLE_PLATFORMS,
+} from "../../../playback/ShuffleSelection";
 import {
   exportSelection,
   filterRows,
@@ -34,20 +37,37 @@ export interface PickerSource {
   saved: ShuffleSelection | null;
 }
 
-export interface ShufflePickerProps {
+/** 确认结果：当前标签为随机平台；selections 含当前标签与本次改动过的平台。 */
+export interface ShufflePickerResult {
   platform: ShufflePlatform;
+  selections: Partial<Record<ShufflePlatform, ShuffleSelection>>;
+}
+
+export interface ShufflePickerProps {
+  /** 打开时停在的平台标签。 */
+  initialPlatform: ShufflePlatform;
   dark: boolean;
-  /** 读收藏与已存选择；失败按空收藏显示。 */
-  load: () => Promise<PickerSource>;
+  /** 读某平台的收藏与已存选择；失败按空收藏显示。切到该标签时才读，每平台只读一次。 */
+  load: (platform: ShufflePlatform) => Promise<PickerSource>;
   /** 正在关闭：播放退场动效，不再接受交互。 */
   exiting?: boolean;
   /** 确认中（对齐收藏、保存）：主按钮置为忙碌不可点。 */
   busy?: boolean;
   /** 底栏错误提示（保存失败、所选收藏已删除等）。 */
   error?: string;
-  onConfirm: (selection: ShuffleSelection) => void;
+  onConfirm: (result: ShufflePickerResult) => void;
   onCancel: () => void;
+  /** 切换了平台标签（openShufflePicker 借此清掉底栏错误）。 */
+  onTabChange?: (platform: ShufflePlatform) => void;
 }
+
+/** 一个平台标签本次打开期间的数据：收藏与未保存的勾选/权重。 */
+interface TabData {
+  records: FavoriteRecord[];
+  state: PickerState;
+}
+
+const EMPTY_STATE: PickerState = { weight: "entry", rows: {} };
 
 const PLATFORM_LABEL: Record<ShufflePlatform, string> = {
   netease: "网易云",
@@ -234,11 +254,15 @@ function tracksRegionId(id: string): string {
   return `imw-shuffle-picker-tracks-${id.replace(/[^\w-]/g, "_")}`;
 }
 
+const tabId = (platform: ShufflePlatform) =>
+  `imw-shuffle-picker-tab-${platform}`;
+const LIST_ID = "imw-shuffle-picker-list";
+
 const FOCUSABLE =
   'button:not([disabled]), input:not([disabled]), [tabindex="0"]';
 
 export function ShufflePicker({
-  platform,
+  initialPlatform,
   dark,
   load,
   exiting = false,
@@ -246,12 +270,14 @@ export function ShufflePicker({
   error = "",
   onConfirm,
   onCancel,
+  onTabChange,
 }: ShufflePickerProps) {
-  const [records, setRecords] = useState<FavoriteRecord[] | null>(null);
-  const [state, setState] = useState<PickerState>({
-    weight: "entry",
-    rows: {},
-  });
+  const [platform, setPlatform] = useState<ShufflePlatform>(initialPlatform);
+  const [tabs, setTabs] = useState<Partial<Record<ShufflePlatform, TabData>>>(
+    {},
+  );
+  // 本次打开期间用户改动过选择或权重的平台：确认时一并保存。
+  const [dirty, setDirty] = useState<ReadonlySet<ShufflePlatform>>(new Set());
   const [loaded, setLoaded] = useState<LoadedTracks>(new Map());
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [loading, setLoading] = useState<ReadonlySet<string>>(new Set());
@@ -264,14 +290,57 @@ export function ShufflePicker({
   const alive = useRef(true);
   // 遮罩关闭要求按下与松开都在遮罩上：从面板内拖选文字松手到遮罩不算点遮罩。
   const pressedBackdrop = useRef(false);
+  // 已发起读取的平台：每个标签打开期间只读一次，切回来沿用本次的改动。
+  const requested = useRef(new Set<ShufflePlatform>());
+  // 读取失败的平台：显示「读取收藏失败」与重试，不当成空收藏。
+  const [loadFailed, setLoadFailed] = useState<ReadonlySet<ShufflePlatform>>(
+    new Set(),
+  );
 
-  useEffect(() => {
-    alive.current = true;
-    let cancelled = false;
-    load()
-      .catch((): PickerSource => ({ records: [], saved: null }))
-      .then(({ records: list, saved }) => {
-        if (cancelled) return;
+  const tab = tabs[platform];
+  const records = tab?.records ?? null;
+  const state = tab?.state ?? EMPTY_STATE;
+
+  /** 改某个平台标签的勾选状态；user 为真时记为本次改动过（确认时保存）。 */
+  const updateTab = (
+    target: ShufflePlatform,
+    update: (prev: PickerState) => PickerState,
+    user = true,
+  ) => {
+    setTabs((prev) => {
+      const current = prev[target];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [target]: { ...current, state: update(current.state) },
+      };
+    });
+    if (user)
+      setDirty((prev) => (prev.has(target) ? prev : new Set(prev).add(target)));
+  };
+  const setState = (update: (prev: PickerState) => PickerState) =>
+    updateTab(platform, update);
+
+  const loadTab = (target: ShufflePlatform) => {
+    if (requested.current.has(target)) return;
+    requested.current.add(target);
+    setLoadFailed((prev) => {
+      if (!prev.has(target)) return prev;
+      const next = new Set(prev);
+      next.delete(target);
+      return next;
+    });
+    load(target)
+      .catch((): null => null)
+      .then((source) => {
+        if (!alive.current) return;
+        if (!source) {
+          // 允许重试：下次重试（或切回该标签）重新读取。
+          requested.current.delete(target);
+          setLoadFailed((prev) => new Set(prev).add(target));
+          return;
+        }
+        const { records: list, saved } = source;
         const cached: LoadedTracks = new Map();
         let initial = initialPickerState(list, saved);
         for (const record of list) {
@@ -280,21 +349,35 @@ export function ShufflePicker({
           cached.set(record.id, tracks);
           initial = applyLoadedTracks(initial, record.id, tracks);
         }
-        setLoaded(cached);
-        setState(initial);
-        setRecords(list);
+        setLoaded((prev) => {
+          if (cached.size === 0) return prev;
+          const next = new Map(prev);
+          for (const [id, tracks] of cached) next.set(id, tracks);
+          return next;
+        });
+        setTabs((prev) => ({
+          ...prev,
+          [target]: { records: list, state: initial },
+        }));
       });
+  };
+
+  useEffect(() => {
+    if (!loadFailed.has(platform)) loadTab(platform);
+  }, [platform, load]);
+
+  useEffect(() => {
+    alive.current = true;
     // 下一帧再切到可见态，让入场过渡生效。
     const frame = requestAnimationFrame(() => setShown(true));
     // 移动端不自动聚焦搜索框，避免弹出键盘遮挡列表。
     if (isMobileViewport()) dialog.current?.focus({ preventScroll: true });
     else search.current?.focus({ preventScroll: true });
     return () => {
-      cancelled = true;
       alive.current = false;
       cancelAnimationFrame(frame);
     };
-  }, [load]);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(input), 150);
@@ -335,7 +418,12 @@ export function ShufflePicker({
       });
       if (tracks) {
         setLoaded((prev) => new Map(prev).set(record.id, tracks));
-        setState((prev) => applyLoadedTracks(prev, record.id, tracks));
+        // 曲目归一不算用户改动；按收藏所属平台写回（期间可能已切到别的标签）。
+        updateTab(
+          record.platform,
+          (prev) => applyLoadedTracks(prev, record.id, tracks),
+          false,
+        );
       } else setFailed((prev) => new Set(prev).add(record.id));
     });
   };
@@ -354,7 +442,32 @@ export function ShufflePicker({
 
   const confirm = () => {
     if (!canConfirm) return;
-    onConfirm(exportSelection(state, list, loaded));
+    // 当前标签必存；其他标签只存本次改动过且有收藏的。
+    const selections: ShufflePickerResult["selections"] = {};
+    for (const target of SHUFFLE_PLATFORMS) {
+      const data = tabs[target];
+      if (!data) continue;
+      if (target !== platform && (!dirty.has(target) || !data.records.length))
+        continue;
+      const selection = exportSelection(data.state, data.records, loaded);
+      // 其他标签选成空的不保存：保留该平台原有的选择。
+      if (target !== platform && selection.items.length === 0) continue;
+      selections[target] = selection;
+    }
+    onConfirm({ platform, selections });
+  };
+
+  // 切换标签：搜索词清空；各标签的勾选、展开与权重保留到面板关闭。
+  const switchTab = (next: ShufflePlatform, focus = false) => {
+    if (next === platform || exiting || busy) return;
+    setPlatform(next);
+    setInput("");
+    setQuery("");
+    onTabChange?.(next);
+    if (focus)
+      dialog.current
+        ?.querySelector<HTMLElement>(`#${tabId(next)}`)
+        ?.focus({ preventScroll: true });
   };
 
   const onKeyDown = (event: JSX.TargetedKeyboardEvent<HTMLDivElement>) => {
@@ -500,9 +613,6 @@ export function ShufflePicker({
           >
             收藏随机
           </span>
-          <span className="rounded-full bg-sky-500/15 px-2 py-0.5 text-[12px] text-sky-500">
-            {PLATFORM_LABEL[platform]}
-          </span>
           <button
             type="button"
             className={`${iconButton} ml-auto`}
@@ -511,6 +621,57 @@ export function ShufflePicker({
           >
             <CloseIcon />
           </button>
+        </div>
+
+        <div className="shrink-0 px-3 pb-1">
+          <div
+            role="tablist"
+            aria-label="随机平台"
+            aria-orientation="horizontal"
+            className="flex"
+          >
+            {SHUFFLE_PLATFORMS.map((target, index) => {
+              const selected = target === platform;
+              const count = SHUFFLE_PLATFORMS.length;
+              const border = selected
+                ? "border-sky-500"
+                : dark
+                  ? "border-white/15"
+                  : "border-black/10";
+              return (
+                <button
+                  key={target}
+                  id={tabId(target)}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected ? "true" : "false"}
+                  aria-controls={LIST_ID}
+                  tabIndex={selected ? 0 : -1}
+                  className={`${resetButton} flex min-h-[44px] min-w-0 flex-1 items-center rounded-lg border-0 bg-transparent text-inherit`}
+                  onClick={() => switchTab(target)}
+                  onKeyDown={(event) => {
+                    let next: number;
+                    if (event.key === "ArrowLeft")
+                      next = (index - 1 + count) % count;
+                    else if (event.key === "ArrowRight")
+                      next = (index + 1) % count;
+                    else if (event.key === "Home") next = 0;
+                    else if (event.key === "End") next = count - 1;
+                    else return;
+                    event.preventDefault();
+                    switchTab(SHUFFLE_PLATFORMS[next], true);
+                  }}
+                >
+                  {/* 视觉 36px 分段，外层按钮保证 44px 点击区。 */}
+                  <span
+                    className={`flex h-9 w-full items-center justify-center border border-solid text-[13px] ${border} ${index === 0 ? "rounded-l-lg" : ""} ${index === count - 1 ? "rounded-r-lg" : ""} ${index > 0 ? "border-l-0" : ""} ${selected ? "bg-sky-500 font-semibold text-white" : "hov:hover:bg-sky-500/8 active:bg-sky-500/15"}`}
+                  >
+                    {PLATFORM_LABEL[target]}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <div className="shrink-0 px-3">
@@ -611,16 +772,34 @@ export function ShufflePicker({
         </div>
 
         <div
+          id={LIST_ID}
+          role="tabpanel"
+          aria-labelledby={tabId(platform)}
           className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain border-0 border-y border-solid ${dark ? "border-white/15" : "border-black/10"}`}
         >
-          {!records ? (
+          {!records && loadFailed.has(platform) ? (
+            <div className="flex h-28 flex-col items-center justify-center gap-1">
+              <span className="text-[13px] opacity-65">读取收藏失败</span>
+              <button
+                type="button"
+                className={textButton}
+                onClick={() => {
+                  loadTab(platform);
+                  // 「重试」随即被加载态替换：焦点交给面板。
+                  dialog.current?.focus({ preventScroll: true });
+                }}
+              >
+                重试
+              </button>
+            </div>
+          ) : !records ? (
             <div className="flex h-24 items-center justify-center gap-2 opacity-65">
               <Spinner />
               <span className="text-[13px]">正在读取收藏…</span>
             </div>
           ) : list.length === 0 ? (
             <div className="flex h-24 items-center justify-center text-[13px] opacity-65">
-              当前平台还没有收藏
+              该平台还没有收藏
             </div>
           ) : visible.length === 0 ? (
             <div className="flex h-28 flex-col items-center justify-center gap-1">
@@ -733,7 +912,7 @@ export function ShufflePicker({
                 disabled={!canConfirm}
                 aria-busy={busy ? "true" : undefined}
                 aria-describedby={
-                  records && summary.entries === 0
+                  list.length > 0 && summary.entries === 0
                     ? "imw-shuffle-picker-hint"
                     : undefined
                 }
@@ -750,7 +929,7 @@ export function ShufflePicker({
                 {error}
               </div>
             )}
-            {records && summary.entries === 0 && (
+            {list.length > 0 && summary.entries === 0 && (
               <div
                 id="imw-shuffle-picker-hint"
                 role="status"

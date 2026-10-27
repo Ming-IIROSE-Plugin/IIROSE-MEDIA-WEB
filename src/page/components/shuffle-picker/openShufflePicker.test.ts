@@ -4,6 +4,7 @@ import type { FavoriteRecord } from "../../../storage/FavoritesStorageService";
 import { FavoritesStorageService } from "../../../storage/FavoritesStorageService";
 import { NeteaseMusicAPI } from "../../../Api/NeteaseAPI/NeteaseMusic";
 import {
+  loadShufflePlatform,
   loadShuffleSelection,
   saveShuffleSelection,
 } from "../../../playback/ShuffleSelection";
@@ -71,6 +72,12 @@ const tracks = [
   { id: 12, name: "夜曲", ar: [{ name: "周杰伦" }] },
   { id: 13, name: "红豆", ar: [{ name: "王菲" }] },
 ];
+
+/** 只确认网易云标签时的回调参数。 */
+const confirmed = (selection: unknown) => ({
+  platform: "netease",
+  selections: { netease: selection },
+});
 
 const root = () => document.getElementById(SHUFFLE_PICKER_ROOT_ID);
 const dialog = () => document.getElementById("imw-shuffle-picker")!;
@@ -224,10 +231,12 @@ describe("openShufflePicker", () => {
     await click(checkbox("红豆"));
     expect(checkbox("通勤歌单").getAttribute("aria-checked")).toBe("true");
     await click(button("开始随机"));
-    expect(onConfirm).toHaveBeenCalledWith({
-      weight: "entry",
-      items: [{ id: P.id }],
-    });
+    expect(onConfirm).toHaveBeenCalledWith(
+      confirmed({
+        weight: "entry",
+        items: [{ id: P.id }],
+      }),
+    );
     expect(loadShuffleSelection("netease")?.items).toEqual([{ id: P.id }]);
   });
 
@@ -279,7 +288,7 @@ describe("openShufflePicker", () => {
       items: [{ id: A.id }, { id: P.id }],
     };
     expect(loadShuffleSelection("netease")).toEqual(expected);
-    expect(onConfirm).toHaveBeenCalledWith(expected);
+    expect(onConfirm).toHaveBeenCalledWith(confirmed(expected));
     expect(onCancel).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(opener);
     await flush(150);
@@ -290,10 +299,12 @@ describe("openShufflePicker", () => {
     const { onConfirm } = await open();
     query.mockResolvedValue([A, P]);
     await click(button("开始随机"));
-    expect(onConfirm).toHaveBeenCalledWith({
-      weight: "entry",
-      items: [{ id: A.id }, { id: P.id }],
-    });
+    expect(onConfirm).toHaveBeenCalledWith(
+      confirmed({
+        weight: "entry",
+        items: [{ id: A.id }, { id: P.id }],
+      }),
+    );
   });
 
   it.each([
@@ -411,10 +422,12 @@ describe("openShufflePicker", () => {
     await click(checkbox("红豆"));
     expect(checkbox("通勤歌单").getAttribute("aria-checked")).toBe("true");
     await click(button("开始随机"));
-    expect(onConfirm).toHaveBeenCalledWith({
-      weight: "entry",
-      items: [{ id: P.id }],
-    });
+    expect(onConfirm).toHaveBeenCalledWith(
+      confirmed({
+        weight: "entry",
+        items: [{ id: P.id }],
+      }),
+    );
   });
 
   it("专辑展开取 songs；空专辑提示且转未勾", async () => {
@@ -434,14 +447,23 @@ describe("openShufflePicker", () => {
     expect(album).toHaveBeenCalledWith(4);
   });
 
-  it.each([
-    ["读取失败", () => query.mockRejectedValue(new Error("idb"))],
-    ["没有收藏", () => query.mockResolvedValue([])],
-  ])("收藏为空（%s）：提示且开始随机不可点", async (_, arrange) => {
-    arrange();
+  it("没有收藏：提示且开始随机不可点", async () => {
+    query.mockResolvedValue([]);
     await open();
-    expect(text()).toContain("当前平台还没有收藏");
+    expect(text()).toContain("该平台还没有收藏");
     expect(button("开始随机").disabled).toBe(true);
+  });
+
+  it("读取失败：提示「读取收藏失败」，不可确认；重试重新读取", async () => {
+    query.mockRejectedValueOnce(new Error("idb"));
+    await open();
+    expect(text()).toContain("读取收藏失败");
+    expect(text()).not.toContain("该平台还没有收藏");
+    expect(button("开始随机").disabled).toBe(true);
+    await click(button("重试"));
+    expect(query).toHaveBeenCalledTimes(2);
+    expect(checkbox("晴天").getAttribute("aria-checked")).toBe("true");
+    expect(button("开始随机").disabled).toBe(false);
   });
 
   it("从面板内拖到遮罩松手不关闭", async () => {
@@ -591,6 +613,244 @@ describe("openShufflePicker", () => {
     (window as unknown as { theme: unknown }).theme = 1;
     await open();
     expect(dialog().className).toContain("bg-[#fafbfe]");
+  });
+});
+
+describe("平台标签", () => {
+  const V = {
+    ...record("video", "BV1", { title: "某视频" }),
+    id: "bilibili:video:BV1",
+    platform: "bilibili",
+  } as FavoriteRecord;
+  const tab = (label: string) =>
+    Array.from(dialog().querySelectorAll<HTMLElement>('[role="tab"]')).find(
+      (node) => node.textContent?.trim() === label,
+    )!;
+  const selectedTab = () =>
+    dialog().querySelector('[role="tab"][aria-selected="true"]')?.textContent;
+
+  beforeEach(() => {
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [V] : [A, P, B],
+    );
+  });
+
+  it("两个标签固定显示，停在传入的初始平台并读该平台收藏", async () => {
+    await open({ platform: "bilibili" });
+    const labels = Array.from(
+      dialog().querySelectorAll('[role="tablist"] [role="tab"]'),
+    ).map((node) => node.textContent?.trim());
+    expect(labels).toEqual(["网易云", "B站"]);
+    expect(selectedTab()).toBe("B站");
+    expect(text()).toContain("某视频");
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith({ platform: "bilibili" });
+  });
+
+  it("切换保留各标签改动，搜索词清空；每个平台只读一次", async () => {
+    await open();
+    await click(checkbox("晴天"));
+    await click(button("按歌曲"));
+    await type("周");
+    await flush(200);
+    await click(tab("B站"));
+    expect(selectedTab()).toBe("B站");
+    expect(dialog().querySelector("input")!.value).toBe("");
+    expect(text()).toContain("某视频");
+    expect(button("按条目").getAttribute("aria-checked")).toBe("true");
+    await click(tab("网易云"));
+    expect(checkbox("晴天").getAttribute("aria-checked")).toBe("false");
+    expect(checkbox("后来").getAttribute("aria-checked")).toBe("true");
+    expect(button("按歌曲").getAttribute("aria-checked")).toBe("true");
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it("确认：保存两个改动过的平台，随机平台 = 当前标签", async () => {
+    const { onConfirm } = await open();
+    await click(checkbox("晴天"));
+    await click(tab("B站"));
+    await click(button("按歌曲"));
+    await click(button("开始随机"));
+    const netease = { weight: "entry", items: [{ id: P.id }, { id: B.id }] };
+    const bilibili = { weight: "song", items: [{ id: V.id }] };
+    expect(loadShuffleSelection("netease")).toEqual(netease);
+    expect(loadShuffleSelection("bilibili")).toEqual(bilibili);
+    expect(loadShufflePlatform()).toBe("bilibili");
+    expect(onConfirm).toHaveBeenCalledWith({
+      platform: "bilibili",
+      selections: { netease, bilibili },
+    });
+  });
+
+  it("只看过没改的标签不保存", async () => {
+    const { onConfirm } = await open();
+    await click(tab("B站"));
+    await click(tab("网易云"));
+    await click(button("开始随机"));
+    expect(loadShuffleSelection("bilibili")).toBeNull();
+    expect(loadShufflePlatform()).toBe("netease");
+    expect(onConfirm.mock.lastCall?.[0].selections).not.toHaveProperty(
+      "bilibili",
+    );
+  });
+
+  it("取消：改过两个平台也不保存任何平台、不改随机平台", async () => {
+    const { onCancel } = await open();
+    await click(checkbox("晴天"));
+    await click(tab("B站"));
+    await click(button("全不选"));
+    await click(button("取消"));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(loadShuffleSelection("netease")).toBeNull();
+    expect(loadShuffleSelection("bilibili")).toBeNull();
+    expect(loadShufflePlatform()).toBeNull();
+  });
+
+  it("当前标签无收藏：空态、不可确认；切到另一标签可确认", async () => {
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [] : [A],
+    );
+    await open({ platform: "bilibili" });
+    expect(text()).toContain("该平台还没有收藏");
+    expect(text()).not.toContain("至少选择一首");
+    expect(button("开始随机").disabled).toBe(true);
+    await click(tab("网易云"));
+    expect(button("开始随机").disabled).toBe(false);
+  });
+
+  it("摘要只统计当前标签", async () => {
+    await open();
+    expect(text()).toContain("已选 3 条");
+    await click(tab("B站"));
+    expect(text()).toContain("已选 1 条");
+  });
+
+  it("方向键与 Home/End 切换标签并移动焦点；上下键不切换", async () => {
+    await open();
+    expect(
+      dialog()
+        .querySelector('[role="tablist"]')!
+        .getAttribute("aria-orientation"),
+    ).toBe("horizontal");
+    const first = tab("网易云");
+    first.focus();
+    await key(first, "ArrowRight");
+    expect(selectedTab()).toBe("B站");
+    expect(document.activeElement).toBe(tab("B站"));
+    await key(tab("B站"), "ArrowRight");
+    expect(selectedTab()).toBe("网易云");
+    await key(tab("网易云"), "ArrowDown");
+    expect(selectedTab()).toBe("网易云");
+    await key(tab("网易云"), "End");
+    expect(selectedTab()).toBe("B站");
+    await key(tab("B站"), "Home");
+    expect(selectedTab()).toBe("网易云");
+    expect(document.activeElement).toBe(tab("网易云"));
+  });
+
+  it("点已选中的标签不做任何事", async () => {
+    await open();
+    await type("周");
+    await click(tab("网易云"));
+    expect(dialog().querySelector("input")!.value).toBe("周");
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("其他标签选成空的不保存，保留原有选择", async () => {
+    saveShuffleSelection("bilibili", {
+      weight: "song",
+      items: [{ id: V.id }],
+    });
+    await open();
+    await click(tab("B站"));
+    await click(button("全不选"));
+    await click(tab("网易云"));
+    await click(button("开始随机"));
+    expect(loadShuffleSelection("bilibili")).toEqual({
+      weight: "song",
+      items: [{ id: V.id }],
+    });
+    expect(loadShufflePlatform()).toBe("netease");
+  });
+
+  it("只在网易云展开过、未改动：确认 B站 时不保存网易云", async () => {
+    songList.mockResolvedValue({ playlist: { tracks } });
+    const { onConfirm } = await open();
+    await click(byLabel("展开通勤歌单"));
+    await click(tab("B站"));
+    await click(button("开始随机"));
+    expect(loadShuffleSelection("netease")).toBeNull();
+    expect(onConfirm.mock.lastCall?.[0].selections).not.toHaveProperty(
+      "netease",
+    );
+    expect(loadShufflePlatform()).toBe("bilibili");
+  });
+
+  it("切走后才返回的展开结果写回原标签", async () => {
+    const E = record("album", "5", { title: "空专辑" });
+    query.mockImplementation(async (filter: { platform: string }) =>
+      filter.platform === "bilibili" ? [V] : [A, E],
+    );
+    let resolve!: (value: unknown) => void;
+    album.mockReturnValueOnce(new Promise((done) => (resolve = done)));
+    await open();
+    expect(checkbox("空专辑").getAttribute("aria-checked")).toBe("true");
+    await click(byLabel("展开空专辑"));
+    await click(tab("B站"));
+    await act(async () => resolve({ songs: [] }));
+    await flush();
+    expect(checkbox("某视频").getAttribute("aria-checked")).toBe("true");
+    await click(tab("网易云"));
+    expect(checkbox("空专辑").getAttribute("aria-checked")).toBe("false");
+    expect(text()).toContain("专辑里没有可播放的曲目");
+  });
+
+  it("确认中切换标签被忽略；保存失败的提示在切换标签后清除", async () => {
+    let release!: (records: FavoriteRecord[]) => void;
+    await open();
+    query.mockReturnValueOnce(
+      new Promise<FavoriteRecord[]>((done) => (release = done)),
+    );
+    await click(button("开始随机"));
+    await click(tab("B站"));
+    expect(selectedTab()).toBe("网易云");
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("QuotaExceededError");
+      });
+    await act(async () => release([A, P, B]));
+    await flush();
+    setItem.mockRestore();
+    expect(text()).toContain("保存失败，请重试");
+    await click(tab("B站"));
+    expect(selectedTab()).toBe("B站");
+    expect(text()).not.toContain("保存失败");
+  });
+
+  it("第二次写入失败：回滚已写的键，提示失败、不回调", async () => {
+    saveShuffleSelection("netease", { weight: "song", items: [{ id: A.id }] });
+    const before = { ...localStorage };
+    const { onConfirm } = await open();
+    await click(checkbox("后来"));
+    await click(tab("B站"));
+    await click(button("全不选"));
+    await click(checkbox("某视频"));
+    await click(button("按歌曲"));
+    const real = Storage.prototype.setItem;
+    let writes = 0;
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(function (this: Storage, name, value) {
+        writes += 1;
+        if (writes === 2) throw new Error("QuotaExceededError");
+        real.call(this, name, value);
+      });
+    await click(button("开始随机"));
+    setItem.mockRestore();
+    expect({ ...localStorage }).toEqual(before);
+    expect(text()).toContain("保存失败，请重试");
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 });
 

@@ -7,7 +7,11 @@ import {
   type FavoriteRecord,
 } from "../storage/FavoritesStorageService";
 import { ShuffleController } from "../playback/ShuffleController";
-import { loadShuffleSelection } from "../playback/ShuffleSelection";
+import {
+  loadShufflePlatform,
+  loadShuffleSelection,
+  saveShufflePlatform,
+} from "../playback/ShuffleSelection";
 import { resetPanelFocus, setPanelFocus } from "../playback/PanelFocus";
 import { releaseShufflePicker } from "./components/shuffle-picker/openShufflePicker";
 
@@ -249,12 +253,30 @@ describe("收藏随机选择面板接线", () => {
       expect(shuffleButton().getAttribute("aria-pressed")).toBe("false");
     });
 
-    it("面板焦点在 B 站：按 bilibili 读收藏，确认存到 bilibili", async () => {
-      setPanelFocus({ category: 1, platform: 0 });
+    const selectedTab = () =>
+      dialog()?.querySelector('[role="tab"][aria-selected="true"]')
+        ?.textContent;
+    const setDefaultPage = (defaultPage: number) =>
+      localStorage.setItem(
+        "imwPluginSetting",
+        JSON.stringify({
+          chatBox: { isProxyAtInput: true },
+          defaultPage,
+          searchViewMode: "card",
+          announceMode: "card",
+          sync: {},
+        }),
+      );
+
+    it("首次打开按「插件启动默认页面」：视频 → B站，确认存到 bilibili 并记下平台", async () => {
+      setDefaultPage(1);
+      // 主面板焦点不参与：即使焦点在网易云。
+      setPanelFocus({ category: 0, platform: 0 });
       const query = vi.mocked(FavoritesStorageService.query);
       query.mockClear();
       act(() => shuffleButton().click());
       await settle();
+      expect(selectedTab()).toBe("B站");
       expect(query).toHaveBeenCalledWith({ platform: "bilibili" });
       expect(dialog()?.textContent).toContain("某视频");
       act(() => footerButton("开始随机").click());
@@ -263,6 +285,43 @@ describe("收藏随机选择面板接线", () => {
         { id: "bilibili:video:BV1" },
       ]);
       expect(loadShuffleSelection("netease")).toBeNull();
+      expect(loadShufflePlatform()).toBe("bilibili");
+    });
+
+    it("默认页面非音乐/视频 → 网易云", async () => {
+      setDefaultPage(2);
+      act(() => shuffleButton().click());
+      await settle();
+      expect(selectedTab()).toBe("网易云");
+    });
+
+    it("记住平台：已存 B站 时停在 B站", async () => {
+      setDefaultPage(0);
+      saveShufflePlatform("bilibili");
+      act(() => shuffleButton().click());
+      await settle();
+      expect(selectedTab()).toBe("B站");
+    });
+
+    it("与焦点无关：主面板停在无线电页，随机按钮可用、面板照常打开", async () => {
+      setPanelFocus({ category: 2, platform: 0 });
+      await settle();
+      expect(shuffleButton().getAttribute("aria-disabled")).toBe("false");
+      act(() => shuffleButton().click());
+      await settle();
+      expect(pickerRoot()).not.toBeNull();
+      expect(selectedTab()).toBe("网易云");
+    });
+
+    it("全部平台都没有收藏：侧栏按钮灰化并说明原因", async () => {
+      vi.mocked(FavoritesStorageService.query).mockResolvedValue([]);
+      act(() => IMCInit.init(mainContainer()));
+      await settle();
+      expect(shuffleButton().getAttribute("aria-disabled")).toBe("true");
+      expect(shuffleButton().title).toBe("收藏为空，先去收藏一些内容");
+      act(() => shuffleButton().click());
+      await settle();
+      expect(pickerRoot()).toBeNull();
     });
   });
 });

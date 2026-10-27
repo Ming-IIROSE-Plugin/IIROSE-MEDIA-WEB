@@ -102,20 +102,30 @@ export class FavoritesStorageService {
   /**
    * 注册收藏变更监听（add / remove 后触发，供云同步做防抖上传）
    */
-  public static onChange(listener: () => void): void {
+  public static onChange(listener: () => void): () => void {
     if (!this.changeListeners.includes(listener)) {
       this.changeListeners.push(listener);
     }
+    return () => {
+      this.changeListeners = this.changeListeners.filter(
+        (item) => item !== listener,
+      );
+    };
   }
 
   /**
    * 注册「外部变更」监听：云端拉取落地后触发，供已渲染的收藏列表刷新。
    * 刻意与 `onChange` 分开——外部变更绝不能反过来触发上传（会形成循环）。
    */
-  public static onExternalChange(listener: () => void): void {
+  public static onExternalChange(listener: () => void): () => void {
     if (!this.externalChangeListeners.includes(listener)) {
       this.externalChangeListeners.push(listener);
     }
+    return () => {
+      this.externalChangeListeners = this.externalChangeListeners.filter(
+        (item) => item !== listener,
+      );
+    };
   }
 
   private static emitChange(): void {

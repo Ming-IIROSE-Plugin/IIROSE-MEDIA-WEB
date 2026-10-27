@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { FavoriteRecord } from "../storage/FavoritesStorageService";
 import {
   createShuffleRound,
+  defaultShufflePlatform,
+  loadShufflePlatform,
+  resolveShufflePlatform,
+  saveShufflePlatform,
   loadShuffleSelection,
   pickShuffleEntry,
   remainingShare,
@@ -216,5 +220,41 @@ describe("加权抽取", () => {
         (entry) => entry.record.title === "A",
       ),
     ).toBeNull();
+  });
+});
+
+describe("随机平台的存取", () => {
+  it("defaultPage 规则：0 → 网易云，1 → B站，其他 → 网易云", () => {
+    expect(defaultShufflePlatform(0)).toBe("netease");
+    expect(defaultShufflePlatform(1)).toBe("bilibili");
+    expect(defaultShufflePlatform(2)).toBe("netease");
+    expect(defaultShufflePlatform(undefined)).toBe("netease");
+  });
+
+  it("没有记录按 defaultPage；保存后以记录为准", () => {
+    expect(loadShufflePlatform()).toBeNull();
+    expect(resolveShufflePlatform(1)).toBe("bilibili");
+    saveShufflePlatform("netease");
+    expect(loadShufflePlatform()).toBe("netease");
+    expect(resolveShufflePlatform(1)).toBe("netease");
+  });
+
+  it("按账号隔离", () => {
+    (window as { uid?: string }).uid = "aaaaaaaa";
+    saveShufflePlatform("bilibili");
+    (window as { uid?: string }).uid = "bbbbbbbb";
+    expect(loadShufflePlatform()).toBeNull();
+    (window as { uid?: string }).uid = "aaaaaaaa";
+    expect(loadShufflePlatform()).toBe("bilibili");
+  });
+
+  it("记录非法按无记录处理，不抛错", () => {
+    saveShufflePlatform("bilibili");
+    const key = Object.keys(localStorage).find((name) =>
+      name.startsWith("imwShufflePlatform:"),
+    )!;
+    localStorage.setItem(key, "radio");
+    expect(loadShufflePlatform()).toBeNull();
+    expect(resolveShufflePlatform(0)).toBe("netease");
   });
 });

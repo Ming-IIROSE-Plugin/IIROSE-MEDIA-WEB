@@ -6,23 +6,22 @@ import { SidebarMediaEntry } from "../media-progress/SidebarMediaEntry";
 import { PlaybackMode } from "../playback/PlaybackMode";
 import { SidebarPlaybackRow } from "../playback/SidebarPlaybackRow";
 import { LoopController } from "../playback/LoopController";
-import {
-  SHUFFLE_REASONS,
-  ShuffleController,
-} from "../playback/ShuffleController";
-import { ShowMessage } from "../iirose_func/ShowMessage";
+import { ShuffleController } from "../playback/ShuffleController";
 import { CutWatcher } from "../playback/CutWatcher";
 import {
   prepareShuffleTarget,
   queryShuffleCandidates,
 } from "../playback/shuffleTargets";
-import { loadShuffleSelection } from "../playback/ShuffleSelection";
-import { platformOf, readPanelFocus } from "../playback/PanelFocus";
+import {
+  loadShuffleSelection,
+  resolveShufflePlatform,
+} from "../playback/ShuffleSelection";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import {
   openShufflePicker,
   releaseShufflePicker,
 } from "./components/shuffle-picker/openShufflePicker";
+import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { MediaPayloadMemory } from "../playback/MediaPayloadMemory";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Socket } from "../iirose_func/Socket";
@@ -119,17 +118,11 @@ function initMediaProgress() {
   // shuffle 在行之后构造，回调运行时再读取。
   playbackRow = new SidebarPlaybackRow(playback, document, {
     pickShuffle: (done) => {
-      const platform = platformOf(
-        readPanelFocus(),
-        PluginSettings.getPluginSetting().defaultPage,
-      );
-      // 可用性已覆盖「当前页面没有收藏」；这里只防焦点与可用性求值之间的竞态。
-      if (!platform) {
-        ShowMessage.show(SHUFFLE_REASONS.noFavorites);
-        return;
-      }
+      // 面板初始标签：上次确认的随机平台，无记录按「插件启动默认页面」；与主面板焦点无关。
       openShufflePicker({
-        platform,
+        platform: resolveShufflePlatform(
+          PluginSettings.getPluginSetting().defaultPage,
+        ),
         returnFocus: playbackRow.element.querySelector<HTMLElement>(
           "#imw-toggle-shuffle",
         ),
@@ -152,6 +145,15 @@ function initMediaProgress() {
       query: (platform) => queryShuffleCandidates(platform),
       prepare: (record, options) => prepareShuffleTarget(record, options),
       loadSelection: (platform) => loadShuffleSelection(platform),
+      // 本机增删与云端落地都要刷新可用性；dispose 时一并退订。
+      onFavoritesChange: (listener) => {
+        const offLocal = FavoritesStorageService.onChange(listener);
+        const offExternal = FavoritesStorageService.onExternalChange(listener);
+        return () => {
+          offLocal();
+          offExternal();
+        };
+      },
       now: () => Date.now(),
     },
     cutWatcher,
@@ -259,17 +261,11 @@ function registerShufflePickerEntry() {
       );
       return;
     }
-    const target =
-      platform ??
-      platformOf(
-        readPanelFocus(),
-        PluginSettings.getPluginSetting().defaultPage,
-      );
-    if (!target) {
-      console.warn("[IIROSE-MEDIA-WEB] 当前面板平台没有收藏，无法打开收藏随机");
-      return;
-    }
-    openShufflePicker({ platform: target });
+    openShufflePicker({
+      platform:
+        platform ??
+        resolveShufflePlatform(PluginSettings.getPluginSetting().defaultPage),
+    });
   };
 }
 

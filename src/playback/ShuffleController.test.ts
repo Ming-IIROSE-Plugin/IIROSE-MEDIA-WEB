@@ -6,7 +6,8 @@ import { resetPanelFocus, setPanelFocus } from "./PanelFocus";
 import { PlaybackMode } from "./PlaybackMode";
 import { SHUFFLE_REASONS, ShuffleController } from "./ShuffleController";
 import type { ShufflePrepareOptions, ShuffleTarget } from "./ShuffleController";
-import type { ShuffleSelection } from "./ShuffleSelection";
+import { saveShufflePlatform } from "./ShuffleSelection";
+import type { ShufflePlatform, ShuffleSelection } from "./ShuffleSelection";
 
 const settle = async () => {
   for (let index = 0; index < 12; index++) await Promise.resolve();
@@ -48,10 +49,13 @@ function fakeCut(active = false) {
 function setup(
   records: FavoriteRecord[] = [record("甲"), record("乙")],
   cut = fakeCut(),
+  bilibili: FavoriteRecord[] = [],
 ) {
   let clock = 1_000_000;
   const play = vi.fn();
-  const query = vi.fn(async () => records);
+  const query = vi.fn(async (platform: ShufflePlatform) =>
+    platform === "bilibili" ? bilibili : records,
+  );
   let selection: ShuffleSelection | null = null;
   const loadSelection = vi.fn(() => selection);
   const select = (next: ShuffleSelection | null) => {
@@ -67,6 +71,14 @@ function setup(
       play,
     }),
   );
+  const favoriteListeners = new Set<() => void>();
+  const onFavoritesChange = vi.fn((listener: () => void) => {
+    favoriteListeners.add(listener);
+    return () => favoriteListeners.delete(listener);
+  });
+  const emitFavorites = () => {
+    for (const listener of favoriteListeners) listener();
+  };
   const mode = new PlaybackMode();
   mode.setMediaPresent(true);
   let listener: ((value: MediaSnapshot) => void) | null = null;
@@ -80,7 +92,7 @@ function setup(
         };
       },
     },
-    { query, prepare, loadSelection, now: () => clock },
+    { query, prepare, loadSelection, onFavoritesChange, now: () => clock },
     cut as unknown as never,
   );
   controller.attach();
@@ -105,21 +117,26 @@ function setup(
     controller,
     cut,
     select,
+    emitFavorites,
+    favoriteListeners,
   };
 }
 
-beforeEach(() => {
-  setPanelFocus({ category: 0, platform: 0 });
+function setDefaultPage(defaultPage: number) {
   localStorage.setItem(
     "imwPluginSetting",
     JSON.stringify({
       chatBox: { isProxyAtInput: true },
-      defaultPage: 0,
+      defaultPage,
       searchViewMode: "card",
       announceMode: "card",
       sync: {},
     }),
   );
+}
+
+beforeEach(() => {
+  setDefaultPage(0);
 });
 
 afterEach(() => {
@@ -128,25 +145,58 @@ afterEach(() => {
 });
 
 describe("收藏随机控制器", () => {
-  it("焦点平台有收藏时可用，且按焦点平台请求候选", async () => {
+  it("有收藏时可用，可用性查询覆盖全部收藏平台", async () => {
     const { mode, push, query } = setup();
     push();
     await settle();
     push();
     expect(mode.state.shuffle).toEqual({ enabled: true, reason: "" });
     expect(query).toHaveBeenCalledWith("netease");
+    expect(query).toHaveBeenCalledWith("bilibili");
   });
 
-  it("焦点页面没有收藏时不可用并给出原因", async () => {
-    setPanelFocus({ category: 0, platform: 1 });
+  it("与主面板焦点无关：焦点停在无线电页仍可用", async () => {
+    setPanelFocus({ category: 2, platform: 0 });
     const { mode, push } = setup();
     push();
     await settle();
-    expect(mode.state.shuffle.enabled).toBe(false);
-    expect(mode.state.shuffle.reason).toBe(SHUFFLE_REASONS.noFavorites);
+    push();
+    expect(mode.state.shuffle).toEqual({ enabled: true, reason: "" });
   });
 
-  it("收藏为空时不可用", async () => {
+  it("只有另一平台有收藏也可用", async () => {
+    const { mode, push } = setup([], fakeCut(), [
+      record("视频", { id: "bilibili:video:BV1", platform: "bilibili" }),
+    ]);
+    push();
+    await settle();
+    push();
+    expect(mode.state.shuffle).toEqual({ enabled: true, reason: "" });
+  });
+
+  it("收藏变更后刷新可用性：从空到有收藏即可用，卸载后退订", async () => {
+    const records: FavoriteRecord[] = [];
+    const ctx = setup(records);
+    ctx.push();
+    await settle();
+    ctx.push();
+    expect(ctx.mode.state.shuffle).toEqual({
+      enabled: false,
+      reason: SHUFFLE_REASONS.empty,
+    });
+    records.push(record("甲"));
+    ctx.emitFavorites();
+    await settle();
+    expect(ctx.mode.state.shuffle).toEqual({ enabled: true, reason: "" });
+    records.length = 0;
+    ctx.emitFavorites();
+    await settle();
+    expect(ctx.mode.state.shuffle.enabled).toBe(false);
+    ctx.controller.dispose();
+    expect(ctx.favoriteListeners.size).toBe(0);
+  });
+
+  it("全部平台都没有收藏时不可用", async () => {
     const { mode, push } = setup([]);
     push();
     await settle();
@@ -475,5 +525,90 @@ describe("收藏随机的选择范围", () => {
     expect(stalePlay).not.toHaveBeenCalled();
     expect(ctx.play).toHaveBeenCalledTimes(1);
     expect(ctx.prepare.mock.lastCall?.[0].title).toBe("乙");
+  });
+});
+
+describe("随机平台", () => {
+  const idle = { playing: false, current: null, duration: null } as const;
+  const video = (title: string) =>
+    record(title, {
+      id: `bilibili:video:${title}`,
+      platform: "bilibili",
+      type: "video",
+    });
+
+  async function litWith(bilibili: FavoriteRecord[]) {
+    const ctx = setup([record("甲"), record("乙")], fakeCut(), bilibili);
+    ctx.push();
+    await settle();
+    ctx.push();
+    ctx.light();
+    return ctx;
+  }
+
+  it("无记录按 defaultPage：0 → 网易云", async () => {
+    const ctx = await litWith([video("视频")]);
+    ctx.push(idle);
+    await settle();
+    expect(ctx.prepare.mock.lastCall?.[0].platform).toBe("netease");
+  });
+
+  it("无记录按 defaultPage：1 → B站", async () => {
+    setDefaultPage(1);
+    const ctx = await litWith([video("视频")]);
+    ctx.push(idle);
+    await settle();
+    expect(ctx.prepare.mock.lastCall?.[0].platform).toBe("bilibili");
+  });
+
+  it("defaultPage 非 0/1 → 网易云", async () => {
+    setDefaultPage(3);
+    const ctx = await litWith([video("视频")]);
+    ctx.push(idle);
+    await settle();
+    expect(ctx.prepare.mock.lastCall?.[0].platform).toBe("netease");
+  });
+
+  it("已存随机平台优先于 defaultPage", async () => {
+    saveShufflePlatform("bilibili");
+    const ctx = await litWith([video("视频")]);
+    ctx.push(idle);
+    await settle();
+    expect(ctx.play).toHaveBeenCalledTimes(1);
+    expect(ctx.prepare.mock.lastCall?.[0].title).toBe("视频");
+  });
+
+  it("随机平台记录损坏：按 defaultPage，不抛错", async () => {
+    setDefaultPage(1);
+    // 未登录时账号键为 unknown。
+    localStorage.setItem("imwShufflePlatform:unknown", "{坏数据");
+    const ctx = await litWith([video("视频")]);
+    ctx.push(idle);
+    await settle();
+    expect(ctx.prepare.mock.lastCall?.[0].platform).toBe("bilibili");
+  });
+
+  it("点亮后主面板换页：不熄灭，仍在原平台抽取", async () => {
+    saveShufflePlatform("bilibili");
+    const ctx = await litWith([video("视频")]);
+    setPanelFocus({ category: 0, platform: 0 });
+    ctx.push({ current: 100 });
+    setPanelFocus({ category: 2, platform: 0 });
+    ctx.push({ current: 196 });
+    await settle();
+    expect(ctx.mode.mode).toBe("shuffle");
+    expect(ctx.play).toHaveBeenCalledTimes(1);
+    expect(ctx.prepare.mock.lastCall?.[0].platform).toBe("bilibili");
+  });
+
+  it("随机平台没有收藏而另一平台有：点亮后抽取时熄灭并报范围为空", async () => {
+    saveShufflePlatform("bilibili");
+    const ctx = await litWith([]);
+    expect(ctx.mode.mode).toBe("shuffle");
+    ctx.push(idle);
+    await settle();
+    expect(ctx.play).not.toHaveBeenCalled();
+    expect(ctx.mode.mode).toBe("none");
+    expect(ctx.mode.state.cleared?.reason).toBe(SHUFFLE_REASONS.emptySelection);
   });
 });

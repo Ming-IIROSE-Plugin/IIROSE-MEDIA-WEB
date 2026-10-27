@@ -1,22 +1,32 @@
 // 随机选择面板的打开入口（story 7 侧栏按钮接线用）：独立根挂 body、同页单例、
-// 确认保存选择后回调，取消不保存。重复注入时由新实例经 releaseShufflePicker 接管旧根。
+// 确认保存改动过的各平台选择与随机平台后回调，取消什么都不保存。重复注入时由新实例经 releaseShufflePicker 接管旧根。
 import { render } from "preact";
 import { FavoritesStorageService } from "../../../storage/FavoritesStorageService";
 import {
   loadShuffleSelection,
+  saveShufflePlatform,
   saveShuffleSelection,
+  shufflePlatformKey,
+  shuffleSelectionKey,
+  SHUFFLE_PLATFORMS,
   type ShufflePlatform,
   type ShuffleSelection,
 } from "../../../playback/ShuffleSelection";
-import { ShufflePicker, type PickerSource } from "./ShufflePicker";
+import {
+  ShufflePicker,
+  type PickerSource,
+  type ShufflePickerResult,
+} from "./ShufflePicker";
 
 export const SHUFFLE_PICKER_ROOT_ID = "imw-shuffle-picker-root";
 /** 退场动效最长时长（移动抽屉 220ms 的一半）。 */
 const EXIT_MS = 110;
 
 export interface OpenShufflePickerOptions {
+  /** 打开时停在的平台标签（面板内可切换）。 */
   platform: ShufflePlatform;
-  onConfirm?: (selection: ShuffleSelection) => void;
+  /** 确认后回调：platform 为新的随机平台，selections 为已保存的各平台选择。 */
+  onConfirm?: (result: ShufflePickerResult) => void;
   onCancel?: () => void;
   /** 关闭后焦点交还的元素；缺省为打开时的焦点元素。 */
   returnFocus?: HTMLElement | null;
@@ -121,13 +131,27 @@ function hostDark(): boolean {
   return !(window as unknown as { theme?: unknown }).theme;
 }
 
-/** 当前平台收藏只在打开时读一次；读不到按空收藏显示。 */
+/** 每个平台的收藏在切到该标签时读一次；读不到按空收藏显示。 */
 async function loadSource(platform: ShufflePlatform): Promise<PickerSource> {
   const records = await FavoritesStorageService.query({ platform });
   return { records, saved: loadShuffleSelection(platform) };
 }
 
-/** 确认时与当前收藏对齐：打开期间已删除的收藏丢弃。 */
+/** 确认时与当前收藏对齐：打开期间已删除的收藏丢弃（逐平台）。 */
+async function alignAll(
+  selections: ShufflePickerResult["selections"],
+): Promise<ShufflePickerResult["selections"]> {
+  const aligned: ShufflePickerResult["selections"] = {};
+  await Promise.all(
+    SHUFFLE_PLATFORMS.map(async (platform) => {
+      const selection = selections[platform];
+      if (selection)
+        aligned[platform] = await alignWithFavorites(platform, selection);
+    }),
+  );
+  return aligned;
+}
+
 async function alignWithFavorites(
   platform: ShufflePlatform,
   selection: ShuffleSelection,
@@ -226,13 +250,13 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
   page[PICKER_KEY] = handle;
 
   const dark = hostDark();
-  const load = () => loadSource(options.platform);
+  const load = (platform: ShufflePlatform) => loadSource(platform);
   // 确认对齐收藏的短暂异步期间不再接受取消或二次确认；主按钮显示忙碌。
   let confirming = false;
   let error = "";
   const view = (exiting = false) => (
     <ShufflePicker
-      platform={options.platform}
+      initialPlatform={options.platform}
       dark={dark}
       load={load}
       exiting={exiting}
@@ -240,6 +264,7 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
       error={error}
       onConfirm={confirm}
       onCancel={cancel}
+      onTabChange={clearError}
     />
   );
   const update = () => {
@@ -271,28 +296,66 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
     error = message;
     update();
   };
-  function confirm(selection: ShuffleSelection) {
+  // 换标签后底栏旧错误（针对另一平台）不再适用。
+  function clearError() {
+    if (!error) return;
+    error = "";
+    update();
+  }
+  function confirm({ platform, selections }: ShufflePickerResult) {
     if (handle.closing || confirming) return;
     confirming = true;
     error = "";
     update();
-    void alignWithFavorites(options.platform, selection).then((aligned) => {
+    void alignAll(selections).then((aligned) => {
       // 对齐期间被接管（重复注入）或经系统返回取消则作废：不保存、不回调。
       if (finished || handle.closing) return;
-      if (aligned.items.length === 0) {
+      // 只看当前标签：它就是要点亮的随机平台。
+      if (!aligned[platform]?.items.length) {
         fail("所选收藏已被删除，请重新选择");
         return;
       }
+      // 其他平台对齐后成空的不保存：保留该平台原有的选择。
+      for (const target of SHUFFLE_PLATFORMS)
+        if (target !== platform && !aligned[target]?.items.length)
+          delete aligned[target];
+      // 多次写入不是原子的：先快照旧值，任一步失败就全部回滚。
+      const keys = [
+        ...SHUFFLE_PLATFORMS.filter((target) => aligned[target]).map(
+          shuffleSelectionKey,
+        ),
+        shufflePlatformKey(),
+      ];
+      const previous = keys.map((key) => {
+        try {
+          return localStorage.getItem(key);
+        } catch {
+          return null;
+        }
+      });
       try {
-        saveShuffleSelection(options.platform, aligned);
+        for (const target of SHUFFLE_PLATFORMS) {
+          const selection = aligned[target];
+          if (selection) saveShuffleSelection(target, selection);
+        }
+        saveShufflePlatform(platform);
       } catch {
+        keys.forEach((key, index) => {
+          try {
+            const value = previous[index];
+            if (value === null) localStorage.removeItem(key);
+            else localStorage.setItem(key, value);
+          } catch {
+            /* 回滚尽力而为 */
+          }
+        });
         // 本机存储写不进（配额、隐私模式）。
         fail("保存失败，请重试");
         return;
       }
       confirming = false;
       close();
-      options.onConfirm?.(aligned);
+      options.onConfirm?.({ platform, selections: aligned });
     });
   }
 

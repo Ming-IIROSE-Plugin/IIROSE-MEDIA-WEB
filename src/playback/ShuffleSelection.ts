@@ -5,6 +5,12 @@ import { getCurrentOwnerUid } from "../storage/favorites/recordUtils";
 
 export type ShufflePlatform = "netease" | "bilibili";
 
+/** 有收藏功能、可作随机平台的全部平台（面板标签顺序）。 */
+export const SHUFFLE_PLATFORMS: readonly ShufflePlatform[] = [
+  "netease",
+  "bilibili",
+];
+
 /** entry：每个选中条目机会相同；song：每首被选中的歌机会相同。 */
 export type ShuffleWeight = "entry" | "song";
 
@@ -36,6 +42,7 @@ export interface ShuffleRound {
 }
 
 const STORAGE_PREFIX = "imwShuffleSelection";
+const PLATFORM_PREFIX = "imwShufflePlatform";
 const VERSION = 1;
 
 export function createShuffleRound(): ShuffleRound {
@@ -51,8 +58,15 @@ export function isSingle(record: FavoriteRecord): boolean {
   return record.type === "song" || record.type === "video";
 }
 
-function storageKey(platform: ShufflePlatform): string {
+/** 某平台选择的存储键（当前账号）；保存失败回滚时用来快照旧值。 */
+export function shuffleSelectionKey(platform: ShufflePlatform): string {
   return `${STORAGE_PREFIX}:${getCurrentOwnerUid()}:${platform}`;
+}
+const storageKey = shuffleSelectionKey;
+
+/** 随机平台的存储键（当前账号）。 */
+export function shufflePlatformKey(): string {
+  return `${PLATFORM_PREFIX}:${getCurrentOwnerUid()}`;
 }
 
 function parseItems(value: unknown): ShuffleSelectionItem[] | null {
@@ -102,6 +116,34 @@ export function saveShuffleSelection(
     storageKey(platform),
     JSON.stringify({ version: VERSION, ...selection }),
   );
+}
+
+function isShufflePlatform(value: unknown): value is ShufflePlatform {
+  return SHUFFLE_PLATFORMS.includes(value as ShufflePlatform);
+}
+
+/** 设置「插件启动默认页面」对应的随机平台：0 音乐→网易云，1 视频→B站，其他→网易云。 */
+export function defaultShufflePlatform(defaultPage: unknown): ShufflePlatform {
+  return defaultPage === 1 ? "bilibili" : "netease";
+}
+
+/** 本机上次确认的随机平台；没有或数据非法返回 null。 */
+export function loadShufflePlatform(): ShufflePlatform | null {
+  try {
+    const raw = localStorage.getItem(shufflePlatformKey());
+    return isShufflePlatform(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveShufflePlatform(platform: ShufflePlatform): void {
+  localStorage.setItem(shufflePlatformKey(), platform);
+}
+
+/** 随机平台：已存记录优先，否则按 defaultPage 规则。与主插件面板焦点无关。 */
+export function resolveShufflePlatform(defaultPage: unknown): ShufflePlatform {
+  return loadShufflePlatform() ?? defaultShufflePlatform(defaultPage);
 }
 
 function trackCountOf(record: FavoriteRecord): number {

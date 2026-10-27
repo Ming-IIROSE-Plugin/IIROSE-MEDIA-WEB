@@ -2,15 +2,15 @@ import type { MediaSnapshot } from "../media-progress/model";
 import type { FavoriteRecord } from "../storage/FavoritesStorageService";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import type { PlaybackMode } from "./PlaybackMode";
-import { platformOf, readPanelFocus } from "./PanelFocus";
-import type { FocusPlatform } from "./PanelFocus";
 import type { CutWatcher } from "./CutWatcher";
 import { endWindow, finiteNumber } from "./endWindow";
 import {
   createShuffleRound,
   isSingle,
   pickShuffleEntry,
+  resolveShufflePlatform,
   resolveShuffleSelection,
+  SHUFFLE_PLATFORMS,
 } from "./ShuffleSelection";
 import type {
   ShuffleEntry,
@@ -44,6 +44,8 @@ export interface ShuffleDeps {
   ): Promise<ShuffleTarget | "exhausted" | null>;
   /** 本机保存的随机选择；null = 全部收藏、按条目。 */
   loadSelection(platform: ShufflePlatform): ShuffleSelection | null;
+  /** 收藏增删（含云端落地）时通知；返回取消订阅。 */
+  onFavoritesChange?(listener: () => void): () => void;
   now(): number;
 }
 
@@ -52,7 +54,6 @@ export interface ShuffleBridge {
 }
 
 export const SHUFFLE_REASONS = {
-  noFavorites: "当前页面没有收藏",
   empty: "收藏为空，先去收藏一些内容",
   gaveUp: "连续 5 首无法播放，已停止随机",
   emptySelection: "随机范围为空，重新选择",
@@ -90,16 +91,22 @@ interface Prepared {
 }
 
 /**
- * 收藏随机：按面板焦点平台抽收藏，剩余 20 秒预取、5 秒发送。
+ * 收藏随机：按选择面板确认的随机平台抽收藏（无记录按 defaultPage），
+ * 与主插件面板焦点无关；剩余 20 秒预取、5 秒发送。
  * 只读快照，不接管播放器；失败换曲，连续失败达上限即熄灭并提示。
  */
 export class ShuffleController {
   private unsubscribe?: () => void;
-  private platform: FocusPlatform = null;
-  private candidates: FavoriteRecord[] | null = null;
-  private loadedFor: FocusPlatform = null;
-  private queryingFor: FocusPlatform = null;
-  private querying: Promise<FavoriteRecord[] | null> | null = null;
+  private unsubscribeFavorites?: () => void;
+  /** 收藏变更或 invalidate 递增：作废在途的收藏查询结果。 */
+  private listGeneration = 0;
+  private platform: ShufflePlatform | null = null;
+  /** 各平台已读出的收藏：可用性看全部平台，抽取只用随机平台。 */
+  private lists = new Map<ShufflePlatform, FavoriteRecord[]>();
+  private querying = new Map<
+    ShufflePlatform,
+    Promise<FavoriteRecord[] | null>
+  >();
   /** invalidate 递增：作废在途查询的结果。 */
   private generation = 0;
   private prepared?: Prepared;
@@ -125,16 +132,26 @@ export class ShuffleController {
     this.unsubscribe ??= this.bridge.subscribe((snapshot) =>
       this.onSnapshot(snapshot),
     );
+    this.unsubscribeFavorites ??= this.deps.onFavoritesChange?.(() =>
+      this.onFavoritesChange(),
+    );
+  }
+
+  /** 收藏增删：只丢掉缓存的收藏列表并刷新可用性，本轮记录与预取保留。 */
+  private onFavoritesChange(): void {
+    this.listGeneration += 1;
+    this.lists.clear();
+    this.querying.clear();
+    this.publishAvailability();
   }
 
   /** 选择范围变了（面板确认）：丢掉缓存的候选、预取结果与本轮记录。 */
   invalidate(): void {
     this.generation += 1;
-    this.querying = null;
-    this.queryingFor = null;
+    this.listGeneration += 1;
+    this.querying.clear();
     this.preparing = null;
-    this.candidates = null;
-    this.loadedFor = null;
+    this.lists.clear();
     this.prepared = undefined;
     this.round = createShuffleRound();
   }
@@ -142,6 +159,8 @@ export class ShuffleController {
   dispose(): void {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    this.unsubscribeFavorites?.();
+    this.unsubscribeFavorites = undefined;
     this.prepared = undefined;
     this.pending = undefined;
   }
@@ -202,30 +221,33 @@ export class ShuffleController {
 
   private trackPlatform(): void {
     const settings = PluginSettings.getPluginSetting();
-    const next = platformOf(readPanelFocus(), settings.defaultPage);
+    const next = resolveShufflePlatform(settings.defaultPage);
     if (next === this.platform) return;
     this.platform = next;
-    // 换平台同样作废在途的查询与预取。
+    // 换平台（面板确认了另一平台）同样作废在途的预取与本轮记录。
     this.generation += 1;
-    this.candidates = null;
-    this.loadedFor = null;
+    this.preparing = null;
     this.prepared = undefined;
     this.round = createShuffleRound();
     this.failures = 0;
   }
 
+  /** 连接就绪且任一平台有收藏即可用；随机平台本身是否有收藏留给抽取时判定。 */
   private publishAvailability(): void {
-    if (this.platform === null) {
-      this.setAvailability(false, SHUFFLE_REASONS.noFavorites);
+    const missing = SHUFFLE_PLATFORMS.filter((p) => !this.lists.has(p));
+    if (missing.length > 0) {
+      // 收藏还没读全：先取一次，读到后再刷新可用性（查询中不重复触发）。
+      for (const platform of missing)
+        if (!this.querying.has(platform))
+          void this.loadList(platform).then((list) => {
+            if (list) this.publishAvailability();
+          });
       return;
     }
-    if (this.candidates === null) {
-      // 候选还没读出来：先取一次，读到后再刷新可用性（查询中不重复触发）。
-      if (this.queryingFor === null)
-        void this.loadCandidates().then(() => this.publishAvailability());
-      return;
-    }
-    if (this.candidates.length === 0) {
+    const any = SHUFFLE_PLATFORMS.some(
+      (platform) => (this.lists.get(platform)?.length ?? 0) > 0,
+    );
+    if (!any) {
       this.setAvailability(false, SHUFFLE_REASONS.empty);
       return;
     }
@@ -236,15 +258,15 @@ export class ShuffleController {
     this.mode.setAvailability("shuffle", { enabled, reason });
   }
 
-  private loadCandidates(): Promise<FavoriteRecord[] | null> {
-    const platform = this.platform;
-    if (this.candidates !== null && this.loadedFor === platform)
-      return Promise.resolve(this.candidates);
-    if (platform === null) return Promise.resolve(null);
+  private loadList(
+    platform: ShufflePlatform,
+  ): Promise<FavoriteRecord[] | null> {
+    const cached = this.lists.get(platform);
+    if (cached) return Promise.resolve(cached);
     // 同平台的并发调用复用在途查询：预取不能因可用性刷新先发起了查询而空等一帧。
-    if (this.querying && this.queryingFor === platform) return this.querying;
-    const generation = this.generation;
-    this.queryingFor = platform;
+    const inflight = this.querying.get(platform);
+    if (inflight) return inflight;
+    const generation = this.listGeneration;
     const querying = (async () => {
       let list: FavoriteRecord[];
       try {
@@ -252,18 +274,15 @@ export class ShuffleController {
       } catch {
         list = [];
       }
-      // 期间换了平台或范围被刷新：结果作废，下一次调用重新查。
-      if (this.platform !== platform || this.generation !== generation)
-        return null;
-      this.candidates = list;
-      this.loadedFor = platform;
+      // 期间范围被刷新或收藏有变：结果作废，下一次调用重新查。
+      if (this.listGeneration !== generation) return null;
+      this.lists.set(platform, list);
       return list;
     })();
-    this.querying = querying;
+    this.querying.set(platform, querying);
     void querying.finally(() => {
-      if (this.querying !== querying) return;
-      this.querying = null;
-      this.queryingFor = null;
+      if (this.querying.get(platform) === querying)
+        this.querying.delete(platform);
     });
     return querying;
   }
@@ -308,12 +327,23 @@ export class ShuffleController {
     // 期间 invalidate 或换平台：本次预取作废，不再写入新状态。
     const stale = () => this.generation !== generation;
     try {
-      const list = await this.loadCandidates();
       const platform = this.platform;
-      if (!list || stale() || platform === null) return;
-      // 点亮期间收藏被删空：没有候选就熄灭，不空转。
+      if (platform === null) return;
+      const list = await this.loadList(platform);
+      if (!list || stale() || platform !== this.platform) return;
+      // 随机平台没有收藏就熄灭，不空转：全部平台都空才是「收藏为空」，
+      // 否则只是所选平台的范围为空。
       if (list.length === 0) {
-        this.mode.stop(SHUFFLE_REASONS.empty);
+        const others = await Promise.all(
+          SHUFFLE_PLATFORMS.filter((p) => p !== platform).map((p) =>
+            this.loadList(p),
+          ),
+        );
+        if (stale()) return;
+        const anyOther = others.some((other) => (other?.length ?? 0) > 0);
+        this.mode.stop(
+          anyOther ? SHUFFLE_REASONS.emptySelection : SHUFFLE_REASONS.empty,
+        );
         return;
       }
       // 一次预取只读一次选择，循环中途保存的新选择留给下一次预取。
