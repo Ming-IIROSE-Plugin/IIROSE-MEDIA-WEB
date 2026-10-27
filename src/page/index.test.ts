@@ -190,11 +190,10 @@ describe("收藏随机选择面板接线", () => {
     }
 
     afterEach(() => {
-      // 假定时器下撤回不会自行落地：清掉面板、撤回记录与历史状态，避免串扰。
+      // 清掉面板与系统返回登记，避免串扰。
       act(() => releaseShufflePicker());
       delete (window as unknown as Record<string, unknown>)
-        .__imwShufflePickerRetract;
-      history.replaceState(null, "");
+        .__imwShufflePickerBack;
       resetPanelFocus();
       localStorage.clear();
     });
