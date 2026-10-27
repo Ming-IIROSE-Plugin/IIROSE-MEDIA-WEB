@@ -246,12 +246,55 @@ describe("收藏随机控制器", () => {
     for (let round = 0; round < 5; round++) {
       push({ current: 196 });
       await settle();
-      advance(5001);
-      push({ current: 196 });
+      // 上一首放完停下后，10 秒内仍未回读到新曲目才算一次失败。
+      push({ playing: false, current: 200 });
+      await settle();
+      advance(10_001);
+      push({ playing: false, current: 200 });
       await settle();
     }
     expect(mode.mode).toBe("none");
     expect(mode.state.cleared?.reason).toBe(SHUFFLE_REASONS.gaveUp);
+  });
+
+  it("剩余 5 秒发出后旧歌仍在播：不判失败、不补发第二首", async () => {
+    const { mode, play, push, light, advance } = setup();
+    push();
+    await settle();
+    push();
+    light();
+    push({ current: 196 });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(1);
+    // 旧歌继续播到结尾，期间时间流逝超过回读等待。
+    for (let second = 197; second <= 200; second++) {
+      advance(3000);
+      push({ current: second });
+      await settle();
+    }
+    expect(play).toHaveBeenCalledTimes(1);
+    // 宿站切到新曲目：回读成功。
+    push({ current: 1, title: "乙" });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(mode.mode).toBe("shuffle");
+  });
+
+  it("旧歌停下后 10 秒内回读到新曲目即成功，不补发", async () => {
+    const { play, push, light, advance } = setup();
+    push();
+    await settle();
+    push();
+    light();
+    push({ current: 196 });
+    await settle();
+    push({ playing: false, current: 200 });
+    advance(9_000);
+    push({ playing: false, current: 200 });
+    await settle();
+    push({ current: 1, title: "乙" });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(1);
   });
 
   it("他人点播待命时零动作", async () => {

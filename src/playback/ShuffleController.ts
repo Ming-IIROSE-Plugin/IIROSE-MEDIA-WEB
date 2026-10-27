@@ -61,7 +61,8 @@ export const SHUFFLE_REASONS = {
 
 const PREFETCH_SECONDS = 20;
 const SEND_SECONDS = 5;
-const VERIFY_MS = 5000;
+/** 上一首停下后等新曲目回读的时长（与循环重播一致，留出宿站切歌与加载时间）。 */
+const VERIFY_MS = 10_000;
 const MAX_FAILURES = 5;
 const THRESHOLD_RATIO = 0.25;
 const MIN_THRESHOLD = 1;
@@ -448,6 +449,12 @@ export class ShuffleController {
       this.idleStarted = false;
       return;
     }
+    // 剩余 5 秒就发出：上一首还在播时宿站不会切歌，这段时间不计入回读等待，
+    // 否则旧歌没放完就判失败并补发，结尾会连发两首。
+    if (snapshot.playing && snapshot.title === pending.previousTitle) {
+      pending.at = this.deps.now();
+      return;
+    }
     if (this.deps.now() - pending.at < VERIFY_MS) return;
     this.pending = undefined;
     this.failures += 1;
@@ -455,7 +462,9 @@ export class ShuffleController {
       this.mode.stop(SHUFFLE_REASONS.gaveUp);
       return;
     }
-    // 换下一首：当前曲目结束时立刻补发，避免整段空档。
+    // 换下一首：仍在播（宿站已切到别的曲目）就立刻补发；已经停下则交给空闲起播
+    // 在下一帧补发（允许它再起播一次），直到失败上限。
+    this.idleStarted = false;
     if (snapshot.playing && finiteNumber(snapshot.duration))
       void this.send(snapshot);
   }
