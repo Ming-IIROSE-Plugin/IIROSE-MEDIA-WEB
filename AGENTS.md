@@ -3,7 +3,7 @@
 
 ## IIROSE-MEDIA-WEB
 
-注入 https://iirose.com/（蔷薇花园）聊天站的媒体点播插件。Preact + TypeScript + Vite 库模式，产出单文件 UMD `dist/bundle.js`（CSS 由 JS 注入）。无测试、无 lint，`npm run build` 即全部自动验证。
+注入 https://iirose.com/（蔷薇花园）聊天站的媒体点播插件。Preact + TypeScript + Vite 库模式，产出单文件 UMD `dist/bundle.js`（CSS 由 JS 注入）。无 lint；自动验证 = `npm test`（vitest + jsdom，`src/**/*.test.ts`，测试文件里不写 JSX）加 `npm run build`（`tsc -b && vite build`，**不跑测试**），两者都要过。
 
 ## Policy
 

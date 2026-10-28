@@ -7,7 +7,7 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
 
 ## 何时使用
 
-- 改完插件代码，需要在真实 iirose.com 上验证行为（本插件没有独立可跑的应用，无测试）
+- 改完插件代码，需要在真实 iirose.com 上验证行为（本插件没有独立可跑的应用；单测 `npm test` 只覆盖逻辑与 jsdom 行为，宿站交互仍需真站验证）
 - 排查只在宿站环境出现的问题（CORS 代理、宿站弹窗体系、WebSocket 媒体钩子）
 
 ## 前置
@@ -43,7 +43,7 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
 9b. **multiPage 条目在列表视图**（专辑 / 歌单 / B 站分 P）：搜索结果切到**列表视图**再验证 —— 未解析期播放按钮应为置灰不可点（`multiPage` 尚未 resolve），解析完成后按钮恢复，点播/选集表现与卡片视图一致。只测卡片视图会漏掉列表行对异步 `multiPage` 的处理。
 10. **坑：GD Studio API 限流**——`music-api.gdstudio.xyz` 按 **IP** 限流（types=url 端点全源共享），连续几次请求即触发，恢复窗口长（>10 分钟）。**限流时返回 HTTP 200 + `{"url":"","br":-1}`**——判失败必须看 `data.url` 是否为空，不能只看 HTTP 状态。要验证限流处理逻辑，先 curl 连发烧掉配额再测。
 11. **坑：搜索输入框旧选择器**——旧流程文档的 `.inputWrapper` 已不存在；当前触发搜索要点 `.inputIcon` 的父级 div（`MediaSearchBar.tsx` 的 searchInput onClick）。
-12. **视觉动效检查单(每轮 UI 改动后必跑)**——本仓无测试,`npm run build` 与功能清单都看不见纯视觉/交互动效缺陷(2026-10 搜索视图特性复盘教训,三类返工全由此盲区产生):
+12. **视觉动效检查单(每轮 UI 改动后必跑)**——`npm test`、`npm run build` 与功能清单都看不见纯视觉/交互动效缺陷(2026-10 搜索视图特性复盘教训,三类返工全由此盲区产生):
     - **溢出/裁切**:疑似改动元素与容器,双端读 `el.scrollWidth - el.clientWidth` / `getBoundingClientRect()` 对边,必须为 0 或负;本插件无 preflight,`w-*` + `px-*`/`border` 组合必须 `box-border`(容器级兜底已加 app.css,新容器外元素仍需自查)
     - **动画时长**:app.css 有未分层 `.IIROSE_MEDIA_CONTAINER * { transition: all .5s }`,会压掉 Tailwind `duration-*`;需要快反馈的交互(按压/hover)必须 `duration-N!`(important),真机确认动画肉眼可感知(<200ms)
     - **触屏 hover**:hover 态样式一律 `hov:` 门控(`@custom-variant hov` 已注册);400×800 视口真机点一下,确认无粘滞高亮
