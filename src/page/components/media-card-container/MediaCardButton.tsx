@@ -1,5 +1,11 @@
 import { Component, ContextType } from "preact";
 import { MediaContainerContext } from "../media-container-context/MediaContainerContext";
+import {
+  accentFill,
+  accentFillButton,
+  accentOutlineButton,
+  accentText,
+} from "../floating-panel/floatingPanel";
 
 interface MediaContainerProps {
   platformData: PlatformData;
@@ -68,7 +74,6 @@ export class MediaCardButton extends Component<MediaContainerProps> {
   render() {
     const { multipage, resolved } = this.state;
     const { platformData, variant = "full" } = this.props;
-    const contextState = this.context;
 
     // 加载状态
     const isLoading = !!platformData.multiPage && !resolved;
@@ -81,13 +86,12 @@ export class MediaCardButton extends Component<MediaContainerProps> {
     const playIconClass = isNetease ? "headphonesIcon" : "playIcon";
     const actionText = isNetease ? "选歌" : "选集";
 
-    // 公共容器类 (整合了原 SCSS 逻辑)
+    // 卡片底部按钮行：播放为强调色实心钮（白字），选集/选歌为强调色描边次要钮；44px 高
     const containerBaseClass =
-      "MediaCardButtonContainer w-full flex justify-center items-center text-[20px] leading-[88px] transition-all duration-100 ease-in-out hover:opacity-70 hover:bg-[rgba(0,0,0,0.05)]";
+      "MediaCardButtonContainer w-full flex justify-center items-center h-11 rounded-lg text-[14px] font-semibold transition-all duration-100! ease-in-out";
 
     // 图标公共类
-    const iconBaseClass =
-      "font-['md'] text-[28px] font-bold transition-all duration-500 ease-in-out";
+    const iconBaseClass = "font-['md'] text-[20px]";
 
     // 列表行的整高分段方钮（与 full 共享 demandPlay / multiPage 解析逻辑）
     // 与缩略图同高(72px)填满行的上下边缘：单个 72×72 方块，双个并排方格 + 分割线
@@ -98,23 +102,23 @@ export class MediaCardButton extends Component<MediaContainerProps> {
         } transition-all duration-100! ease-in-out! ${
           disabled
             ? "opacity-30 cursor-not-allowed"
-            : "cursor-pointer hov:hover:bg-[rgba(0,0,0,0.12)] active:scale-95"
+            : "cursor-pointer hov:hover:bg-(color:--imw-accent)/12 active:scale-95"
         }`;
       const compactIconClass =
         "font-['md'] text-[26px] max-[768px]:text-[20px] font-bold transition-all duration-100! ease-in-out!";
       return (
-        <div className="flex items-stretch h-[72px] max-[768px]:h-[56px] rounded-xl overflow-hidden bg-[rgba(0,0,0,0.08)] shrink-0">
+        <div
+          className={`flex items-stretch h-[72px] max-[768px]:h-[56px] rounded-xl overflow-hidden bg-(color:--imw-accent)/10 shrink-0 ${accentText}`}
+        >
           <div
             className={compactBtnClass(isLoading)}
-            style={{ color: contextState.color }}
             onClick={isLoading ? undefined : this.demandPlay}
           >
             <div className={`${playIconClass} ${compactIconClass}`}></div>
           </div>
           {hasMultiPage && (
             <div
-              className={`${compactBtnClass(false)} border-l border-black/10`}
-              style={{ color: contextState.color }}
+              className={`${compactBtnClass(false)} border-l border-(color:--imw-accent)/20`}
               onClick={this.confirmMultiPageAction}
             >
               <div className={`playlistPlusIcon ${compactIconClass}`}></div>
@@ -125,28 +129,28 @@ export class MediaCardButton extends Component<MediaContainerProps> {
     }
 
     return (
-      <div className="flex w-full justify-between border-t border-black/10 shrink-0">
+      <div className="flex w-full gap-2 px-3 pb-3 max-[768px]:px-2 max-[768px]:pb-2 shrink-0">
         {/* 播放按钮 */}
         <div
           className={`${containerBaseClass} ${
-            isLoading ? "opacity-30 cursor-not-allowed" : "cursor-pointer"
+            isLoading
+              ? `${accentFill} opacity-30 cursor-not-allowed`
+              : `${accentFillButton} cursor-pointer`
           }`}
-          style={{ color: contextState.color }}
           onClick={isLoading ? undefined : this.demandPlay}
         >
           <div className={`${playIconClass} ${iconBaseClass}`}></div>
-          <div className="ml-[22px] font-bold">播放</div>
+          <div className="ml-1.5">播放</div>
         </div>
 
         {/* 选集/选歌按钮 */}
         {hasMultiPage && (
           <div
-            className={`${containerBaseClass} border-l border-black/10 cursor-pointer`}
-            style={{ color: contextState.color }}
+            className={`${containerBaseClass} ${accentOutlineButton} cursor-pointer`}
             onClick={this.confirmMultiPageAction}
           >
             <div className={`playlistPlusIcon ${iconBaseClass}`}></div>
-            <div className="ml-[22px] font-bold">{actionText}</div>
+            <div className="ml-1.5">{actionText}</div>
           </div>
         )}
       </div>

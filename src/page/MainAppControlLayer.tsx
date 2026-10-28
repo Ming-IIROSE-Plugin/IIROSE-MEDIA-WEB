@@ -5,7 +5,10 @@ import { closeSidebar } from "../iirose_func/CloseSideBar";
 import { Gesture } from "../listener/Gesture";
 import { SyncManager } from "../sync/SyncManager";
 import { hostIsDark } from "../iirose_func/HostTheme";
-import { themeAttr } from "./components/floating-panel/floatingPanel";
+import {
+  accentVar,
+  themeAttr,
+} from "./components/floating-panel/floatingPanel";
 
 interface MainAppControlLayerState {
   mainAppDisplay: boolean;
@@ -37,7 +40,7 @@ export class MainAppControlLayer extends Component<
     return (
       <div
         id="IIROSE_MEDIA_CONTAINER"
-        class={`IIROSE_MEDIA_CONTAINER ${activeClass}`}
+        class={`IIROSE_MEDIA_CONTAINER ${activeClass} ${accentVar}`}
       >
         {init ? (
           <MainApp

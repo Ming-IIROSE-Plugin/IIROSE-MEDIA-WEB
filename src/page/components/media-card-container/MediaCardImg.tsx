@@ -1,4 +1,5 @@
 import { Component } from "preact";
+import { coverPlaceholder } from "../floating-panel/floatingPanel";
 
 interface MediaCardImgProps {
   src: string | Promise<string>;
@@ -58,6 +59,16 @@ export function getMediaInfoArea(platformData: PlatformData): string {
   return infoArea;
 }
 
+/** 视频类条目（B 站视频/直播、网易云 MV、多源剧集）用 16:9 封面区，其余（音乐等）方形。 */
+export function isVideoCover(platformData: PlatformData): boolean {
+  return !!(
+    platformData.bilibili ||
+    platformData.bilibiliLive ||
+    platformData.neteaseMusic?.isMV ||
+    (platformData.playList?.length ?? 0) > 0
+  );
+}
+
 function formatSecondsToMinutes(seconds: number) {
   const roundedSeconds = Math.round(seconds);
   const minutes = Math.floor(roundedSeconds / 60);
@@ -112,37 +123,34 @@ export class MediaCardImg extends Component<
 
     // 判断是否还在加载中（如果是 data 开头则是占位图）
     const isLoading = displaySrc.startsWith("data");
+    const openWebsite = () => {
+      window.open(platformData.websiteUrl || "");
+    };
 
     return (
       <div
         className={`flex relative transition-none shrink-0 ${
           compact
             ? "w-[72px] h-[72px] max-[768px]:w-[56px] max-[768px]:h-[56px] rounded-md overflow-hidden"
-            : "w-full h-auto aspect-square"
+            : `w-full overflow-hidden ${isVideoCover(platformData) ? "aspect-video" : "aspect-square"}`
         }`}
       >
         <img
           src={displaySrc}
-          className={`object-contain object-center w-full h-full overflow-hidden ${
-            compact ? "" : "aspect-square"
-          } cursor-pointer ${isLoading ? "MediaCardImg-loading" : "MediaCardImg-loaded"}`}
-          onClick={() => {
-            window.open(platformData.websiteUrl || "");
-          }}
+          className={`object-cover object-center w-full h-full overflow-hidden ${coverPlaceholder} cursor-pointer ${isLoading ? "MediaCardImg-loading" : "MediaCardImg-loaded"}`}
+          onClick={openWebsite}
           style={{
             transition: "opacity 0.3s ease",
             opacity: isLoading ? 0.5 : 1,
-            backgroundColor: "#1a1a1a", // 没图时的背景色
           }}
         />
-        {!compact && (
+        {/* 类型/时长：封面右下角的深色半透明胶囊，空值不渲染 */}
+        {!compact && infoArea && (
           <div
-            className="absolute text-white [text-shadow:1px_0_#000,-1px_0_#000,0_1px_#000,0_-1px_#000] bottom-6 right-6 left-6 text-right font-bold cursor-pointer"
-            onClick={() => {
-              window.open(platformData.websiteUrl || "");
-            }}
+            className="absolute bottom-2 right-2 max-w-[calc(100%-16px)] overflow-hidden text-ellipsis whitespace-nowrap rounded-full bg-black/60 px-2 py-0.5 text-[12px] leading-[18px] font-semibold text-white backdrop-blur-[4px] cursor-pointer"
+            onClick={openWebsite}
           >
-            {`${infoArea}`}
+            {infoArea}
           </div>
         )}
       </div>

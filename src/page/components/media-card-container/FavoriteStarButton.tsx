@@ -78,6 +78,10 @@ export class FavoriteStarButton extends Component<
 
     const iconClass = isFavorited ? "starSolidIcon" : "starOutlineIcon";
     const starColor = isFavorited ? "#fbc02d" : undefined;
+    // 列表行内联星标的未收藏色随主题（tailwind important 会压过行内 style，故用类）。
+    const inlineStarTone = isFavorited
+      ? "text-[#fbc02d]"
+      : "text-black/45 imw-dark:text-white/55";
 
     if (variant === "inline") {
       return (
@@ -85,14 +89,13 @@ export class FavoriteStarButton extends Component<
           className={`flex items-center justify-center w-[60px] max-[768px]:w-[44px] h-[72px] max-[768px]:h-[56px] rounded-xl overflow-hidden shrink-0 cursor-pointer transition-all duration-150 active:scale-95 border ${
             isFavorited
               ? "bg-[#fbc02d]/15 border-[#fbc02d]/30 hov:hover:bg-[#fbc02d]/25"
-              : "bg-[rgba(0,0,0,0.06)] border-black/[0.04] hov:hover:bg-[rgba(0,0,0,0.12)]"
+              : "bg-black/[0.04] border-black/[0.04] hov:hover:bg-black/[0.08] imw-dark:bg-white/[0.06] imw-dark:border-white/10 imw-dark:hov:hover:bg-white/[0.12]"
           }`}
           onClick={this.handleClick}
           title={isFavorited ? "已收藏，点击取消" : "点击添加到收藏"}
         >
           <div
-            className={`${iconClass} font-['md'] text-[24px] max-[768px]:text-[20px] transition-all duration-150`}
-            style={{ color: starColor || "rgba(0,0,0,0.45)" }}
+            className={`${iconClass} font-['md'] text-[24px] max-[768px]:text-[20px] transition-all duration-150 ${inlineStarTone}`}
           ></div>
         </div>
       );

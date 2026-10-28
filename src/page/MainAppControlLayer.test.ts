@@ -86,4 +86,16 @@ describe("主面板主题属性", () => {
     expect(ref.current!.state.searchKeyword).toBe("关键词");
     expect(panel().getAttribute("data-imw-theme")).toBe("light");
   });
+
+  it("根节点按主题解析强调色：默认天蓝，浅色取 --imw-brand / --imw-brand-ink", () => {
+    render(h(Layer, {}), host);
+    expect(panel().className.split(/\s+/)).toEqual(
+      expect.arrayContaining([
+        "[--imw-accent:var(--color-sky-500,#0ea5e9)]",
+        "data-[imw-theme=light]:[--imw-accent:var(--imw-brand,var(--color-sky-500,#0ea5e9))]",
+        "[--imw-accent-ink:var(--color-sky-500,#0ea5e9)]",
+        "data-[imw-theme=light]:[--imw-accent-ink:var(--imw-brand-ink,var(--color-sky-500,#0ea5e9))]",
+      ]),
+    );
+  });
 });

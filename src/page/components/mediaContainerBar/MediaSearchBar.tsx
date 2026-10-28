@@ -84,7 +84,7 @@ export class MediaSearchBar extends Component<MediaSearchBarProps> {
           </div>
         </div>
 
-        {/* 2. ⭐ 收藏模式 点亮/点暗 双态切换（开启态天蓝） */}
+        {/* 2. ⭐ 收藏模式 点亮/点暗 双态切换（开启态强调色） */}
         <div
           className={`${barButton} mr-auto ${
             this.props.favoritesMode
@@ -111,7 +111,7 @@ export class MediaSearchBar extends Component<MediaSearchBarProps> {
         {/* 3. 🔍 搜索框：带放大镜的描边输入样式（点击唤起宿站输入框） */}
         {!isCurrentInMultiPage && (
           <div
-            className={`flex items-center cursor-pointer h-8 max-[768px]:h-[44px] px-3 max-[768px]:px-2.5 rounded-lg border border-solid ${themedBorder} hov:hover:border-sky-500 focus-visible:border-sky-500 active:border-sky-500 bg-transparent active:bg-sky-500/15 transition-all duration-100! max-w-[460px] max-[768px]:max-w-[120px] max-[400px]:max-w-[70px] max-[768px]:mr-1 shrink min-w-0`}
+            className={`flex items-center cursor-pointer h-8 max-[768px]:h-[44px] px-3 max-[768px]:px-2.5 rounded-lg border border-solid ${themedBorder} hov:hover:border-(color:--imw-accent) focus-visible:border-(color:--imw-accent) active:border-(color:--imw-accent) bg-transparent active:bg-(color:--imw-accent)/15 transition-all duration-100! max-w-[460px] max-[768px]:max-w-[120px] max-[400px]:max-w-[70px] max-[768px]:mr-1 shrink min-w-0`}
             onClick={() => this.searchInput()}
             title={
               searchKeyword ||

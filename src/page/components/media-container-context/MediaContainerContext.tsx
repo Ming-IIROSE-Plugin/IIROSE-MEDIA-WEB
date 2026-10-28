@@ -1,7 +1,6 @@
 import { createContext } from "preact";
 
 export const MediaContainerContext = createContext({
-  color: "",
   switchToMultiPage: (
     platformData: PlatformData,
     isCurrentInMultiPage?: boolean,

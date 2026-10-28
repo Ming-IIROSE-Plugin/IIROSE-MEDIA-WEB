@@ -24,6 +24,10 @@ import { FavoritesService } from "./MainAppContainerServices/FavoritesService";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { SyncManager } from "../sync/SyncManager";
 import { themedDividerBottom } from "./components/floating-panel/floatingPanel";
+import {
+  DEFAULT_BRAND,
+  readableAccent,
+} from "./components/floating-panel/accent";
 
 export class MainAppContainer extends Component<
   MainAppContainerProps,
@@ -63,7 +67,34 @@ export class MainAppContainer extends Component<
 
   private discoveryOldItems: OldItems | null = null;
 
+  /**
+   * 把当前平台品牌色压深后的两份强调色（见 readableAccent）写到主面板根节点：
+   * `--imw-brand`（fill）与 `--imw-brand-ink`（文字/图标）；根节点再按主题解析出
+   * `--imw-accent` / `--imw-accent-ink`（浅色 = 这两色，深色 = sky-500）。
+   */
+  private applyBrandAccent() {
+    // 按原始品牌色缓存：只在平台/分类切换导致品牌色变化时才重新压深与写入
+    const brand = this.currentBrandColor();
+    if (brand === this.appliedBrand) return;
+    const root = document.getElementById("IIROSE_MEDIA_CONTAINER");
+    if (!root) return;
+    const { fill, ink } = readableAccent(brand);
+    root.style.setProperty("--imw-brand", fill);
+    root.style.setProperty("--imw-brand-ink", ink);
+    this.appliedBrand = brand;
+  }
+
+  private appliedBrand: string | null = null;
+
+  private currentBrandColor() {
+    const categories = this.getActiveCategories(this.props.CategoriesIndex);
+    const platform =
+      categories?.platform[this.state.PlatformIndex] || categories?.platform[0];
+    return platform?.color || DEFAULT_BRAND;
+  }
+
   componentDidMount() {
+    this.applyBrandAccent();
     setPanelFocus({
       category: this.props.CategoriesIndex,
       platform: this.state.PlatformIndex,
@@ -85,6 +116,7 @@ export class MainAppContainer extends Component<
     prevProps: Readonly<MainAppContainerProps>,
     prevState: Readonly<MainAppContainerState>,
   ): void {
+    this.applyBrandAccent();
     if (prevProps.CategoriesIndex !== this.props.CategoriesIndex) {
       setPanelFocus({ category: this.props.CategoriesIndex, platform: 0 });
       this.discoveryOldItems = null;
@@ -250,10 +282,8 @@ export class MainAppContainer extends Component<
     const categories = this.getActiveCategories(CategoriesIndex);
     const categoriesPlatform =
       categories?.platform[PlatformIndex] || categories.platform[0];
-    const color = categoriesPlatform?.color || "rgb(100, 149, 237)";
 
     const providerValue = {
-      color,
       switchToMultiPage,
       currentOnDemandPlay,
       updateCurrentInMultiPageStatus,

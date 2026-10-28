@@ -6,6 +6,7 @@ import { MediaCardMessage } from "./MediaCardMessage";
 import { MediaListRow } from "./MediaListRow";
 import { FavoriteStarButton } from "./FavoriteStarButton";
 import { SettingCard } from "../../../page/components/SettingCard";
+import { themedCard } from "../floating-panel/floatingPanel";
 
 interface MediaCardProps {
   mediaData: Promise<{
@@ -173,7 +174,7 @@ export class MediaCard extends Component<MediaCardProps, MediaCardState> {
       >
         {data.platformData.map((item, index) => (
           <div
-            className="flex grow shrink flex-col bg-white/50 m-3 max-[768px]:m-0 max-[980px]:max-h-full relative animate-[fadeIn_.25s_ease-out] rounded-xl overflow-hidden backdrop-blur-[10px]"
+            className={`flex grow shrink flex-col m-3 max-[768px]:m-0 max-[980px]:max-h-full relative animate-[fadeIn_.25s_ease-out] rounded-xl overflow-hidden ${themedCard}`}
             key={index}
           >
             <MediaCardImg src={item.coverImg} platformData={item} />

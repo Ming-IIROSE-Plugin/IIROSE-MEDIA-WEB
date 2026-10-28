@@ -42,9 +42,21 @@ export const primaryButton = `${resetButton} min-h-[44px] rounded-lg border-0 bg
 /** 主面板根节点 `data-imw-theme` 的取值。 */
 export const themeAttr = (dark: boolean) => (dark ? "dark" : "light");
 
-/** 表面底色 + 正文色（同 panelTheme 的底色与文字色）。 */
+// 主面板强调色：根节点的两个变量（MainAppControlLayer 按主题解析——浅色取当前平台品牌色经
+// readableAccent 压深的两份，深色都为 sky-500）。主面板的强调一律经这两个变量，浮窗仍用天蓝常量。
+// - `--imw-accent`：实底、描边、淡底、光晕、转圈与空状态图形；
+// - `--imw-accent-ink`：强调色文字与图标（浅色下更深，落在光晕与淡底上仍 ≥4.5:1）。
+
+/** 主面板根节点的强调色变量：默认（深色）天蓝，浅色取 `--imw-brand` / `--imw-brand-ink`。 */
+export const accentVar =
+  "[--imw-accent:var(--color-sky-500,#0ea5e9)] data-[imw-theme=light]:[--imw-accent:var(--imw-brand,var(--color-sky-500,#0ea5e9))] [--imw-accent-ink:var(--color-sky-500,#0ea5e9)] data-[imw-theme=light]:[--imw-accent-ink:var(--imw-brand-ink,var(--color-sky-500,#0ea5e9))]";
+
+/**
+ * 主面板表面：浅色柔灰底 + 顶部四行背后的强调色光晕（约 16% 向下渐隐，只在顶部区域）；
+ * 深色同浮窗表面、无光晕。
+ */
 export const themedSurface =
-  "bg-[#fafbfe] text-[#253047] imw-dark:bg-[#242a34] imw-dark:text-[#f4f6fa]";
+  "bg-[#eef1f6] bg-[linear-gradient(180deg,color-mix(in_oklab,var(--imw-accent)_16%,transparent)_0px,color-mix(in_oklab,var(--imw-accent)_6%,transparent)_110px,transparent_180px)] text-[#253047] imw-dark:bg-[#242a34] imw-dark:bg-none imw-dark:text-[#f4f6fa]";
 
 /** 描边色（同 borderTone）；描边宽度与线型由使用处补。 */
 export const themedBorder = "border-black/10 imw-dark:border-white/15";
@@ -56,17 +68,21 @@ export const themedDividerBottom =
 /** 次要文字。 */
 export const mutedText = "opacity-65";
 
-/** 悬停淡天蓝、按压加深（透明底控件用）。 */
-export const pressTone = "hov:hover:bg-sky-500/8 active:bg-sky-500/15";
+/** 强调色文字/图标（用 ink：浅色下压得更深，落在光晕与淡底上仍可读）。 */
+export const accentText = "text-(color:--imw-accent-ink)";
+
+/** 悬停淡强调、按压加深（透明底控件用）。 */
+export const pressTone =
+  "hov:hover:bg-(color:--imw-accent)/8 active:bg-(color:--imw-accent)/15";
 
 /**
- * 分段标签选中段：天蓝实底白字（描边同为天蓝，不与 themedBorder 并存）；
- * 抬到相邻段之上，四边都露出天蓝描边。
+ * 分段标签选中段：强调色实底白字（描边同为强调色，不与 themedBorder 并存）；
+ * 抬到相邻段之上，四边都露出强调色描边。
  */
 export const selectedSegment =
-  "relative z-[1] border-sky-500 bg-sky-500 font-semibold text-white";
+  "relative z-[1] border-(color:--imw-accent) bg-(color:--imw-accent) font-semibold text-white";
 
-/** 分段标签未选段：透明底、主题描边、悬停淡天蓝。 */
+/** 分段标签未选段：透明底、主题描边、悬停淡强调。 */
 export const idleSegment = `${themedBorder} bg-transparent ${pressTone}`;
 
 /**
@@ -83,14 +99,34 @@ export const segmentEdge = (index: number, count: number) =>
     .join(" ");
 
 /**
- * 主面板次要按钮：透明底 + 主题描边、`rounded-lg`、悬停淡天蓝。
+ * 主面板次要按钮：透明底 + 主题描边、`rounded-lg`、悬停淡强调。
  * 不含尺寸、内边距、字号与文字色，由使用处补。
  */
 export const themedSecondaryButton = `rounded-lg border border-solid bg-transparent ${themedBorder} ${pressTone}`;
 
-/** 主面板次要按钮的开启态：天蓝描边与文字、淡天蓝底（替换 themedSecondaryButton）。 */
+/** 主面板次要按钮的开启态：强调色描边与文字、淡强调底（替换 themedSecondaryButton）。 */
 export const themedSecondaryButtonOn =
-  "rounded-lg border border-solid border-sky-500 bg-sky-500/10 text-sky-500 active:bg-sky-500/15";
+  "rounded-lg border border-solid border-(color:--imw-accent) bg-(color:--imw-accent)/10 text-(color:--imw-accent-ink) active:bg-(color:--imw-accent)/15";
+
+/**
+ * 主面板结果卡片与列表行的表面：浅色白底 + black/8 描边 + 轻阴影；
+ * 深色次级表面 white/[0.04] + white/10 描边、无阴影。圆角与内边距由使用处补。
+ */
+export const themedCard =
+  "border border-solid bg-white border-black/8 shadow-[0_1px_2px_rgba(16,24,40,0.06),0_4px_12px_rgba(16,24,40,0.07)] imw-dark:bg-white/[0.04] imw-dark:border-white/10 imw-dark:shadow-none";
+
+/** 强调色实底白字（不含交互反馈；禁用态直接用它再补 opacity）。 */
+export const accentFill = "border-0 bg-(color:--imw-accent) text-white";
+
+/** 强调色实心按钮（白字，悬停/按压减淡）；不含尺寸、圆角与字号。 */
+export const accentFillButton = `${accentFill} hov:hover:opacity-90 active:opacity-80`;
+
+/** 强调色描边次要按钮；不含尺寸、圆角与字号。 */
+export const accentOutlineButton =
+  "border border-solid border-(color:--imw-accent)/45 bg-transparent text-(color:--imw-accent-ink) hov:hover:bg-(color:--imw-accent)/8 active:bg-(color:--imw-accent)/15";
+
+/** 封面占位底（图片未加载或透明处）。 */
+export const coverPlaceholder = "bg-black/10 imw-dark:bg-white/[0.06]";
 
 /** 拖动手柄的光标与触控行为。 */
 export const dragHandleClass = (dragging: boolean) =>

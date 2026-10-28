@@ -7,7 +7,7 @@ import { MainNavigationBar } from "../navigationBar/main/MainNavigationBar";
 import { themedSurface } from "../floating-panel/floatingPanel";
 
 // 顶部四行的外观约定（spec-main-panel-visual-unify story 1）：
-// 选中天蓝、无平台品牌色整条底、相连分段、各行尺寸类不变。
+// 选中为强调色（--imw-accent 填充 / --imw-accent-ink 文字：浅色品牌色、深色天蓝）、无平台品牌色整条底、相连分段、各行尺寸类不变。
 let host: HTMLDivElement;
 const noop = () => {};
 const classesOf = (el: Element) => el.className.split(/\s+/);
@@ -27,7 +27,7 @@ const brandBackground = () =>
   );
 
 describe("Row1 导航", () => {
-  it("选中项天蓝，未选中继承正文色，按钮尺寸不变", () => {
+  it("选中项强调色，未选中继承正文色，按钮尺寸不变", () => {
     render(
       h(MainNavigationBar, {
         switchCategories: noop,
@@ -38,9 +38,9 @@ describe("Row1 导航", () => {
     );
     const music = host.querySelector('[title="音乐"]')!;
     const video = host.querySelector('[title="视频"]')!;
-    expect(classesOf(video)).toContain("text-sky-500");
+    expect(classesOf(video)).toContain("text-(color:--imw-accent-ink)");
     expect(classesOf(music)).toContain("text-inherit");
-    expect(classesOf(music)).not.toContain("text-sky-500");
+    expect(classesOf(music)).not.toContain("text-(color:--imw-accent-ink)");
     for (const el of [music, video]) {
       expect(classesOf(el)).toContain("max-[768px]:h-[44px]");
       expect(classesOf(el)).toContain("max-[768px]:w-[44px]");
@@ -60,14 +60,19 @@ describe("Row1 导航", () => {
 });
 
 describe("主面板表面令牌", () => {
-  it("浅色与 imw-dark 的表面、正文色与 visual-language.md 一致", () => {
+  it("浅色柔灰底 + 顶部光晕、深色中性底，与 visual-language.md 一致", () => {
     expect(themedSurface.split(" ")).toEqual(
       expect.arrayContaining([
-        "bg-[#fafbfe]",
+        "bg-[#eef1f6]",
         "text-[#253047]",
         "imw-dark:bg-[#242a34]",
+        "imw-dark:bg-none",
         "imw-dark:text-[#f4f6fa]",
       ]),
+    );
+    // 浅色顶部强调色光晕（深色由 imw-dark:bg-none 去掉）
+    expect(themedSurface).toMatch(
+      /bg-\[linear-gradient\(180deg,color-mix\(in_oklab,var\(--imw-accent\)_16%/,
     );
   });
 });
@@ -94,18 +99,22 @@ describe("Row2 工具栏", () => {
     );
   const favorite = () => host.querySelector('[title^="当前:"][title*="收藏"]')!;
 
-  it("收藏开启态天蓝，关闭态正文色描边按钮", () => {
+  it("收藏开启态强调色，关闭态正文色描边按钮", () => {
     draw(true);
-    expect(classesOf(favorite())).toContain("text-sky-500");
-    expect(classesOf(favorite())).toContain("border-sky-500");
-    expect(classesOf(favorite())).toContain("active:bg-sky-500/15");
+    expect(classesOf(favorite())).toContain("text-(color:--imw-accent-ink)");
+    expect(classesOf(favorite())).toContain("border-(color:--imw-accent)");
+    expect(classesOf(favorite())).toContain(
+      "active:bg-(color:--imw-accent)/15",
+    );
     expect(classesOf(favorite())).not.toContain("border-black/10");
     expect(favorite().className).not.toMatch(/fbc02d/);
     draw(false);
     expect(classesOf(favorite())).toContain("text-inherit");
     expect(classesOf(favorite())).toContain("border-black/10");
     expect(classesOf(favorite())).toContain("imw-dark:border-white/15");
-    expect(classesOf(favorite())).not.toContain("text-sky-500");
+    expect(classesOf(favorite())).not.toContain(
+      "text-(color:--imw-accent-ink)",
+    );
     expect(classesOf(favorite())).toContain("mr-auto");
   });
 
@@ -119,7 +128,7 @@ describe("Row2 工具栏", () => {
           "border",
           "border-black/10",
           "imw-dark:border-white/15",
-          "active:bg-sky-500/15",
+          "active:bg-(color:--imw-accent)/15",
           "max-[768px]:w-[48px]",
           "max-[768px]:h-[44px]",
         ]),
@@ -137,9 +146,9 @@ describe("Row2 工具栏", () => {
         "border",
         "border-black/10",
         "imw-dark:border-white/15",
-        "hov:hover:border-sky-500",
-        "focus-visible:border-sky-500",
-        "active:bg-sky-500/15",
+        "hov:hover:border-(color:--imw-accent)",
+        "focus-visible:border-(color:--imw-accent)",
+        "active:bg-(color:--imw-accent)/15",
       ]),
     );
     expect(search.querySelector(".inputIcon")).not.toBeNull();
@@ -181,7 +190,7 @@ const platforms = [
 ] as unknown as Platform[];
 
 describe("Row3 平台", () => {
-  it("相连分段：选中天蓝实底白字、首尾圆角、无品牌色底", () => {
+  it("相连分段：选中强调色实底白字、首尾圆角、无品牌色底", () => {
     render(
       h(PlatformSelector, {
         platform: platforms,
@@ -194,14 +203,19 @@ describe("Row3 平台", () => {
     const tabs = Array.from(host.firstElementChild!.children);
     expect(tabs).toHaveLength(3);
     expect(classesOf(tabs[1])).toEqual(
-      expect.arrayContaining(["bg-sky-500", "text-white", "h-10"]),
+      expect.arrayContaining(["bg-(color:--imw-accent)", "text-white", "h-10"]),
     );
-    expect(classesOf(tabs[0])).not.toContain("bg-sky-500");
+    expect(classesOf(tabs[0])).not.toContain("bg-(color:--imw-accent)");
     expect(classesOf(tabs[0])).toContain("rounded-l-lg");
     expect(classesOf(tabs[2])).toContain("rounded-r-lg");
-    // 选中的非首段：描边整圈天蓝、盖在相邻段之上（左缘不露出灰色）
+    // 选中的非首段：描边整圈强调色、盖在相邻段之上（左缘不露出灰色）
     expect(classesOf(tabs[1])).toEqual(
-      expect.arrayContaining(["border-sky-500", "relative", "z-[1]", "-ml-px"]),
+      expect.arrayContaining([
+        "border-(color:--imw-accent)",
+        "relative",
+        "z-[1]",
+        "-ml-px",
+      ]),
     );
     expect(classesOf(tabs[1])).not.toContain("border-l-0");
     expect(classesOf(tabs[1])).not.toContain("border-black/10");
@@ -249,7 +263,7 @@ describe("Row3 平台", () => {
 });
 
 describe("Row4 分类", () => {
-  it("相连分段：选中天蓝、尺寸约定不变", () => {
+  it("相连分段：选中强调色、尺寸约定不变", () => {
     const platform = {
       ...platforms[0],
       subNavBarItems: [
@@ -277,7 +291,7 @@ describe("Row4 分类", () => {
     const tabs = Array.from(strip.children);
     expect(classesOf(tabs[0])).toEqual(
       expect.arrayContaining([
-        "bg-sky-500",
+        "bg-(color:--imw-accent)",
         "text-white",
         "rounded-l-lg",
         "max-[768px]:px-3.5",
@@ -285,7 +299,11 @@ describe("Row4 分类", () => {
       ]),
     );
     expect(classesOf(tabs[0])).toEqual(
-      expect.arrayContaining(["relative", "z-[1]", "border-sky-500"]),
+      expect.arrayContaining([
+        "relative",
+        "z-[1]",
+        "border-(color:--imw-accent)",
+      ]),
     );
     expect(classesOf(tabs[1])).toEqual(
       expect.arrayContaining([

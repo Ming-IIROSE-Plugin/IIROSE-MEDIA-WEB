@@ -1,5 +1,6 @@
 import { Component } from "preact";
 import {
+  accentText,
   pressTone,
   themedDividerBottom,
 } from "../../floating-panel/floatingPanel";
@@ -30,10 +31,10 @@ export class MainNavigationBar extends Component<
     this.setState({ activeButtonIndex: index }); // 更新活动按钮索引
   };
 
-  // NavBarButton：图标按钮语言（透明底、`rounded-lg`、悬停淡天蓝），选中项天蓝字 + 淡天蓝底
+  // NavBarButton：图标按钮语言（透明底、`rounded-lg`、悬停淡强调），选中项强调色字 + 淡强调底
   // 移动端（≤768px）：隐藏文字，44px 触控区紧密相连无间距，纯图标高密度
   private navButtonClass = (active: boolean) =>
-    `min-w-[40px] min-h-[40px] max-[768px]:min-w-[44px] max-[768px]:min-h-[44px] max-[768px]:w-[44px] max-[768px]:h-[44px] px-[20px] max-[768px]:px-0 flex items-center justify-center cursor-pointer rounded-lg text-2xl transition-all duration-100! [&>div]:transition-transform [&>div]:duration-100 active:[&>div]:scale-95 ${active ? "bg-sky-500/10 text-sky-500 active:bg-sky-500/15" : `text-inherit ${pressTone}`}`;
+    `min-w-[40px] min-h-[40px] max-[768px]:min-w-[44px] max-[768px]:min-h-[44px] max-[768px]:w-[44px] max-[768px]:h-[44px] px-[20px] max-[768px]:px-0 flex items-center justify-center cursor-pointer rounded-lg text-2xl transition-all duration-100! [&>div]:transition-transform [&>div]:duration-100 active:[&>div]:scale-95 ${active ? `bg-(color:--imw-accent)/10 ${accentText} active:bg-(color:--imw-accent)/15` : `text-inherit ${pressTone}`}`;
 
   render() {
     const { activeButtonIndex } = this.props;
@@ -60,7 +61,7 @@ export class MainNavigationBar extends Component<
             id="NavBarTitle"
           >
             <div
-              className="text-2xl text-sky-500 pl-[10px] mr-[20px] cursor-pointer"
+              className={`text-2xl ${accentText} pl-[10px] mr-[20px] cursor-pointer`}
               id="TitleIcon"
             ></div>
             <div className="text-[15px] font-semibold transition-all duration-500 max-[768px]:hidden whitespace-nowrap">
