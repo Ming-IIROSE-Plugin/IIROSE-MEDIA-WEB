@@ -137,11 +137,6 @@
   opacity: 0.4;
 }
 
-#imw-progress-icon::before {
-  content: "\F0150";
-  font-family: "md";
-}
-
 /* 播放模式开关行：宿站 DOM，Tailwind 无法作用，等分按钮 + 点亮/灰化态。 */
 #imw-playback-controls {
   display: flex;

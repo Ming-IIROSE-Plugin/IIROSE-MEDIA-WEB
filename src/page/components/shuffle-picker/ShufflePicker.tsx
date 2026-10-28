@@ -1,5 +1,5 @@
 // 收藏随机的选择面板（CAP-8/9/10/14）：非模态浮动工具窗，桌面居中、移动端停在上半部。
-// 状态规则在 pickerModel，这里只渲染与转发交互；视觉沿用「播放进度」浮窗。
+// 状态规则在 pickerModel，这里只渲染与转发交互；外观取自共享浮窗模块 floating-panel。
 import {
   useEffect,
   useLayoutEffect,
@@ -46,6 +46,22 @@ import {
   currentViewportPosition,
   pointerPosition,
 } from "../../../media-progress/viewport";
+import {
+  borderTone,
+  DragGrip,
+  focusRing,
+  iconButton,
+  PanelHeader,
+  panelFrame,
+  panelTheme,
+  primaryButton,
+  resetButton,
+  secondaryButton,
+  startsOnControl,
+  stopHostGestures,
+  Svg,
+  textButton,
+} from "../floating-panel/floatingPanel";
 import {
   readShufflePickerPosition,
   saveShufflePickerPosition,
@@ -110,44 +126,6 @@ const WEIGHT_HINT: Record<ShuffleWeight, string> = {
   song: "每首歌机会相同，大歌单出现更多",
 };
 
-const focusRing =
-  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-sky-500 focus-visible:outline-offset-[-2px]";
-// 同一属性的 Tailwind 类不能同时出现（顺序由 Tailwind 决定，不由书写顺序）：
-// 底色、文字色、描边各自按用途补，不放进公共基类。
-const resetButton = `m-0 cursor-pointer p-0 font-[inherit] ${focusRing}`;
-const plainButton = `${resetButton} border-0 bg-transparent`;
-const iconButton = `${plainButton} text-inherit flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hov:hover:bg-sky-500/8 active:bg-sky-500/15`;
-const textButton = `${plainButton} min-h-[44px] rounded-lg px-3 text-[13px] text-sky-500 hov:hover:bg-sky-500/8 active:bg-sky-500/15`;
-
-function Svg({
-  size,
-  children,
-  className = "",
-  strokeWidth = 2,
-}: {
-  size: number;
-  children: JSX.Element | JSX.Element[];
-  className?: string;
-  strokeWidth?: number;
-}) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width={strokeWidth}
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      className={`block shrink-0 ${className}`}
-      aria-hidden="true"
-    >
-      {children}
-    </svg>
-  );
-}
-
 const ShuffleIcon = ({ size = 22 }: { size?: number }) => (
   <Svg size={size}>
     <path d="M16 3h5v5" />
@@ -155,12 +133,6 @@ const ShuffleIcon = ({ size = 22 }: { size?: number }) => (
     <path d="M21 16v5h-5" />
     <path d="m15 15 6 6" />
     <path d="M4 4l5 5" />
-  </Svg>
-);
-
-const CloseIcon = () => (
-  <Svg size={20}>
-    <path d="M6 6l12 12M18 6 6 18" />
   </Svg>
 );
 
@@ -283,7 +255,6 @@ const tabId = (platform: ShufflePlatform) =>
 const LIST_ID = "imw-shuffle-picker-list";
 
 /** 拖动手柄里按下这些元素不触发拖动（关闭钮等照常工作）。 */
-const NO_DRAG = 'button, input, select, textarea, a, [role="tab"], [tabindex]';
 
 export function ShufflePicker({
   platforms,
@@ -596,9 +567,7 @@ export function ShufflePicker({
   const dragHandle = {
     onPointerDown: (event: JSX.TargetedPointerEvent<HTMLDivElement>) => {
       if (!event.isPrimary || event.button !== 0 || exiting) return;
-      // 只看手柄内部的可交互元素（面板自身带 tabindex，不能算进来）。
-      const blocker = (event.target as Element | null)?.closest?.(NO_DRAG);
-      if (blocker && event.currentTarget.contains(blocker)) return;
+      if (startsOnControl(event)) return;
       const element = dialog.current;
       if (!element || !layer.current) return;
       const pointer = pointerPosition(
@@ -652,15 +621,6 @@ export function ShufflePicker({
     onPointerCancel: endDrag,
     onLostPointerCapture: endDrag,
   };
-  const handleClass = `touch-none select-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`;
-
-  // 面板上的触摸不冒泡到 window：主面板的双指下滑手势不被误触发（不 preventDefault，指针拖动照常）。
-  const stopTouch = (event: JSX.TargetedTouchEvent<HTMLDivElement>) =>
-    event.stopPropagation();
-  // 面板上的鼠标按下/抬起不冒泡到 document：宿站在 document 上用 mousedown→mouseup（500ms 内）
-  // 识别滑动手势，面板里的拖动会被当成右滑返回（关掉面板）或左滑打开「捷径」等。
-  const stopMouse = (event: JSX.TargetedMouseEvent<HTMLDivElement>) =>
-    event.stopPropagation();
 
   // 面板内的按键不冒泡到 window：插件主面板的全局热键（Esc 关主面板、Alt+S）不被误触发。
   // 非模态：Tab 不锁在面板内，可移到宿站；面板外的 Esc 根本到不了这里，不关面板。
@@ -673,11 +633,8 @@ export function ShufflePicker({
   };
 
   const visibleNow = shown && !exiting;
-  const theme = dark
-    ? "border-white/15 bg-[#242a34] text-[#f4f6fa]"
-    : "border-black/10 bg-[#fafbfe] text-[#253047]";
   // 面板自身接收指针（定位层不拦截）；退场中不再接收。
-  const cardBase = `flex max-h-[70%] w-[400px] max-w-[calc(100%-24px)] flex-col overflow-hidden rounded-2xl border border-solid shadow-[0_12px_40px_rgba(0,0,0,0.25)] outline-none ease-out ${exiting ? "pointer-events-none" : "pointer-events-auto"} ${theme}`;
+  const cardBase = `flex max-h-[70%] w-[400px] max-w-[calc(100%-24px)] flex-col overflow-hidden ${panelFrame} ease-out ${exiting ? "pointer-events-none" : "pointer-events-auto"} ${panelTheme(dark)}`;
   const motion = `transition-[opacity,scale] motion-reduce:transition-opacity ${visibleNow ? "scale-100 opacity-100 duration-[180ms]" : "scale-95 opacity-0 duration-[90ms] motion-reduce:scale-100"}`;
   // 有已存位置：桌面与移动端都是浮动卡片，入场淡入 + scale-95→100（减弱动效只淡入）。
   // 无已存位置：桌面居中；移动端浮动卡片停在视口上半部（距顶 12px），不挡底部聊天输入栏。
@@ -774,41 +731,18 @@ export function ShufflePicker({
         className={dialogClass}
         style={position ? { left: position.x, top: position.y } : undefined}
         onKeyDown={onKeyDown}
-        onTouchStart={stopTouch}
-        onTouchMove={stopTouch}
-        onTouchEnd={stopTouch}
-        onMouseDown={stopMouse}
-        onMouseUp={stopMouse}
+        {...stopHostGestures}
       >
-        <div
-          className={`hidden shrink-0 justify-center pt-2 max-[768px]:flex ${handleClass}`}
-          aria-hidden="true"
-          {...dragHandle}
-        >
-          <div className="h-1 w-9 rounded-full bg-current opacity-25" />
-        </div>
-        <div
-          className={`flex h-12 shrink-0 items-center gap-2 pl-4 pr-1 ${handleClass}`}
-          {...dragHandle}
-        >
-          <span className="text-sky-500">
-            <ShuffleIcon />
-          </span>
-          <span
-            id="imw-shuffle-picker-title"
-            className="text-[15px] font-semibold"
-          >
-            收藏随机
-          </span>
-          <button
-            type="button"
-            className={`${iconButton} ml-auto`}
-            aria-label="关闭收藏随机"
-            onClick={() => !exiting && onCancel()}
-          >
-            <CloseIcon />
-          </button>
-        </div>
+        <DragGrip dragging={dragging} handle={dragHandle} />
+        <PanelHeader
+          icon={<ShuffleIcon />}
+          title="收藏随机"
+          titleId="imw-shuffle-picker-title"
+          closeLabel="关闭收藏随机"
+          onClose={() => !exiting && onCancel()}
+          dragging={dragging}
+          handle={dragHandle}
+        />
 
         {showTabs && (
           <div className="shrink-0 px-3 pb-1">
@@ -830,7 +764,7 @@ export function ShufflePicker({
 
         <div className="shrink-0 px-3">
           <div
-            className={`flex h-11 items-center rounded-lg border border-solid pl-3 ${dark ? "border-white/15" : "border-black/10"} focus-within:border-sky-500`}
+            className={`flex h-11 items-center rounded-lg border border-solid pl-3 ${borderTone(dark)} focus-within:border-sky-500`}
           >
             <SearchIcon />
             <input
@@ -880,7 +814,7 @@ export function ShufflePicker({
             <div
               role="radiogroup"
               aria-label="随机权重"
-              className={`flex h-8 overflow-hidden rounded-lg border border-solid ${dark ? "border-white/15" : "border-black/10"}`}
+              className={`flex h-8 overflow-hidden rounded-lg border border-solid ${borderTone(dark)}`}
             >
               {(["entry", "song"] as const).map((weight) => {
                 const selected = state.weight === weight;
@@ -932,7 +866,7 @@ export function ShufflePicker({
           aria-labelledby={
             showTabs ? tabId(platform) : "imw-shuffle-picker-title"
           }
-          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain border-0 border-y border-solid ${dark ? "border-white/15" : "border-black/10"}`}
+          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain border-0 border-y border-solid ${borderTone(dark)}`}
         >
           {!records && loadFailed.has(platform) ? (
             <div className="flex h-28 flex-col items-center justify-center gap-1">
@@ -1058,14 +992,14 @@ export function ShufflePicker({
             <div className="flex gap-2 max-[768px]:grid max-[768px]:grid-cols-2">
               <button
                 type="button"
-                className={`${resetButton} min-h-[44px] rounded-lg border border-solid bg-transparent px-4 text-[14px] text-inherit hov:hover:bg-sky-500/8 active:bg-sky-500/15 ${dark ? "border-white/15" : "border-black/10"}`}
+                className={`${secondaryButton(dark)} px-4 text-[14px]`}
                 onClick={() => !exiting && onCancel()}
               >
                 取消
               </button>
               <button
                 type="button"
-                className={`${resetButton} min-h-[44px] rounded-lg border-0 bg-sky-500 px-4 text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40`}
+                className={`${primaryButton} px-4 text-[14px]`}
                 disabled={!canConfirm}
                 aria-busy={busy ? "true" : undefined}
                 aria-describedby={

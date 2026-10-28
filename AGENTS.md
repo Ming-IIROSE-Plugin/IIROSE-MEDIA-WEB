@@ -20,6 +20,7 @@
 - 新增音乐平台需同步三处：`src/platforms/`（平台类）、`src/Api/`（API 客户端）、`src/settings/`（平台设置），类型放 `src/types/`。
 - 宿站交互（WebSocket 媒体、消息）：`src/iirose_func/`。
 - 出网请求走 `src/environment/Environment.ts` 选定的阿里云 CORS 代理（ipinfo.io 判 CN/Global）；改 API 层时注意 fetch 是否需要过代理。
+- 浮窗（播放进度、收藏随机）共用 `src/page/components/floating-panel/` 的样式常量与无状态组件（外框、头部、按钮、拖动手柄、事件隔离）；改两窗外观时改这里，不要在单个浮窗里另写一套。
 - `src/app.css` 只放 Tailwind 无法表达的东西：@keyframes、mdi 图标 `::before` content（反斜杠不能进 class 名）、JS 切换的状态类（`ShowIIROSE_MEDIA_CONTAINER`）、宿站元素选择器、通配过渡；其余样式一律写进组件的 Tailwind 类，**不要新增 SCSS**。
 
 ## Running and verifying
@@ -32,7 +33,7 @@
 
 - `react`/`react-dom` 由 tsconfig paths 映射到 `preact/compat`——直接 import 'react' 即可，不要安装真正的 react 包。
 - 样式统一 Tailwind v4 任意值类（如 `max-[768px]:hidden`、`[grid-auto-rows:max-content]`）；移动端响应式断点统一使用 `max-[768px]`；点歌卡片网格行必须保持 `max-content` 自适应，否则按钮会被 `overflow:hidden` 裁掉（曾出过此 bug）。
-- 图标一律自包含方案：元素加 id + `src/app.css` 写 `#id::before { content:"\F0xxx"; font-family:"md" }`；**不要借用宿站 `mdi-*` 类**（宿站样式表里未必有该类规则，且没有 `font-family:"md"` 兜底会渲染成无字形——关于图标曾因此消失）。
+- 图标一律自包含方案：浮窗（播放进度、收藏随机）用 `src/page/components/floating-panel/` 的内联 SVG 组件；其余位置元素加 id + `src/app.css` 写 `#id::before { content:"\F0xxx"; font-family:"md" }`；**不要借用宿站 `mdi-*` 类**（宿站样式表里未必有该类规则，且没有 `font-family:"md"` 兜底会渲染成无字形——关于图标曾因此消失）。
 - 顶栏布局与触控目标约定：
   - Row 1（主导航项）：移动端高 44px（`min-h-[44px]`），按钮 44×44px 紧密相连无 gap，纯图标 24px（符合 Apple HIG 44pt 规范）；
   - Row 2（操作与分页）：移动端高 48px（`min-h-[48px]`），上一页/下一页按钮放大为 48×44px 触控药丸（`rounded-lg`，双钮占宽 25.6%，箭头 22px），视图切换与搜索按钮为 44×44px，搜索框靠右紧邻分页（由左侧视图切换按钮 `mr-auto` 撑满空隙，禁止父级 `justify-between` 导致居中）；

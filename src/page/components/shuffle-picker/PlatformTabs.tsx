@@ -1,6 +1,7 @@
 // 选择面板的平台标签行（CAP-12）：与平台类型无关，按项数自适应形态。
 // 0～1 项不渲染；2～3 项等宽分段（首尾自动圆角）；4 项及以上为可横向滑动的胶囊。
 import { useEffect, useRef, useState } from "preact/hooks";
+import { focusRing } from "../floating-panel/floatingPanel";
 
 export interface PlatformTabItem<T extends string = string> {
   id: T;
@@ -25,9 +26,7 @@ export interface PlatformTabsProps<T extends string = string> {
 /** 达到该数量改为可横向滑动的胶囊标签。 */
 export const PILL_THRESHOLD = 4;
 
-const focusRing =
-  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-sky-500 focus-visible:outline-offset-[-2px]";
-const resetButton = `m-0 p-0 font-[inherit] border-0 bg-transparent text-inherit ${focusRing}`;
+const tabReset = `m-0 p-0 font-[inherit] border-0 bg-transparent text-inherit ${focusRing}`;
 
 export function PlatformTabs<T extends string>({
   items,
@@ -140,7 +139,7 @@ export function PlatformTabs<T extends string>({
             aria-controls={controls}
             aria-disabled={disabled ? "true" : undefined}
             tabIndex={index === focusIndex ? 0 : -1}
-            className={`${resetButton} flex min-h-[44px] items-center rounded-lg ${pills ? "shrink-0" : "min-w-0 flex-1"} ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+            className={`${tabReset} flex min-h-[44px] items-center rounded-lg ${pills ? "shrink-0" : "min-w-0 flex-1"} ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
             onClick={() => select(index, false)}
             onKeyDown={(event) => onKeyDown(event, index)}
           >

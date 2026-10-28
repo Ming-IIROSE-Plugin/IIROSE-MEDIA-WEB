@@ -19,6 +19,10 @@ let range: HTMLInputElement;
 let resizePanel: () => void;
 const entry = () => document.getElementById("imw-media-progress-entry")!;
 const panel = () => document.getElementById("imw-media-progress");
+/** 头部行（拖动手柄）：关闭钮所在行，而非移动端拖拽条。 */
+const headerRow = (floating: HTMLElement) =>
+  floating.querySelector<HTMLElement>('[aria-label="关闭播放进度"]')!
+    .parentElement!;
 function key(value: string, repeat = false) {
   act(() => {
     range.dispatchEvent(
@@ -238,7 +242,7 @@ describe("浮窗原生交互与页面生命周期", () => {
     });
     expect(floating.style.maxWidth).toBe("476px");
     expect(floating.style.maxHeight).toBe("776px");
-    const title = floating.querySelector<HTMLElement>(".cursor-grab")!;
+    const title = headerRow(floating);
     title.setPointerCapture = vi.fn();
     const drag = (type: string, x: number, y: number) => {
       const event = new Event(type, { bubbles: true, cancelable: true });
@@ -287,16 +291,6 @@ describe("浮窗原生交互与页面生命周期", () => {
     const close = floating.querySelector<HTMLButtonElement>(
       '[aria-label="关闭播放进度"]',
     )!;
-    // 标题栏关闭按钮44×44，右上内边距12px；验证该目标仍在可见范围。
-    const closeRect = new DOMRect(
-      rect.right - (12 + 44) * scale,
-      rect.top + 12 * scale,
-      44 * scale,
-      44 * scale,
-    );
-    expect(closeRect.left).toBeGreaterThanOrEqual(rect.left);
-    expect(closeRect.right).toBeLessThanOrEqual(viewport.width);
-    expect(closeRect.bottom).toBeLessThanOrEqual(viewport.height);
     act(() => {
       close.focus();
     });
@@ -322,7 +316,7 @@ describe("浮窗原生交互与页面生命周期", () => {
           floating.offsetHeight,
         ),
     );
-    const title = floating.querySelector<HTMLElement>(".cursor-grab")!;
+    const title = headerRow(floating);
     title.setPointerCapture = vi.fn();
     const drag = (type: string, x: number, y: number) => {
       const event = new Event(type, { bubbles: true, cancelable: true });
@@ -372,7 +366,7 @@ describe("浮窗原生交互与页面生命周期", () => {
           floating.offsetHeight * 0.8,
         ),
     );
-    const title = floating.querySelector<HTMLElement>(".cursor-grab")!;
+    const title = headerRow(floating);
     title.setPointerCapture = vi.fn();
     const down = new Event("pointerdown", { bubbles: true, cancelable: true });
     Object.assign(down, {
@@ -487,7 +481,7 @@ describe("浮窗原生交互与页面生命周期", () => {
           floating.offsetHeight * 0.8,
         ),
     );
-    const title = floating.querySelector<HTMLElement>(".cursor-grab")!;
+    const title = headerRow(floating);
     title.setPointerCapture = vi.fn();
     const drag = (type: string, x: number, y: number) => {
       const event = new Event(type, { bubbles: true, cancelable: true });
@@ -938,6 +932,182 @@ describe("浮窗原生交互与页面生命周期", () => {
     });
     expect(vi.getTimerCount()).toBe(0);
     delete (window as { _alert?: unknown })._alert;
+  });
+});
+
+describe("浮窗外观与收藏随机统一（CAP-6）", () => {
+  const classes = (element: Element) => element.className.split(/\s+/);
+  const reopen = () => {
+    act(() => {
+      document
+        .querySelector<HTMLButtonElement>('[aria-label="关闭播放进度"]')!
+        .click();
+    });
+    act(() => {
+      entry().click();
+    });
+  };
+  const steps = () =>
+    ["快退1分钟", "快退1秒", "快进1秒", "快进1分钟"].map((label) =>
+      panel()!.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!,
+    );
+
+  it("头部为拖拽条 + SVG 图标、15px 标题、SVG 关闭钮，与收藏随机一样不加分隔线", () => {
+    const [grip, header, content] = Array.from(panel()!.children);
+    expect(grip.getAttribute("aria-hidden")).toBe("true");
+    expect(classes(grip)).toEqual(
+      expect.arrayContaining(["hidden", "max-[768px]:flex", "cursor-grab"]),
+    );
+    expect(classes(header)).toEqual(
+      expect.arrayContaining(["h-12", "pl-4", "cursor-grab", "touch-none"]),
+    );
+    const [icon, title, close] = Array.from(header.children);
+    expect(icon.className).toContain("text-sky-500");
+    expect(icon.querySelector("svg")).not.toBeNull();
+    expect(title.textContent).toBe("播放进度");
+    expect(classes(title)).toEqual(
+      expect.arrayContaining(["text-[15px]", "font-semibold"]),
+    );
+    expect(close.getAttribute("aria-label")).toBe("关闭播放进度");
+    expect(classes(close)).toEqual(
+      expect.arrayContaining(["h-11", "w-11", "ml-auto"]),
+    );
+    expect(close.querySelector("svg")).not.toBeNull();
+    expect(close.textContent).toBe("");
+    expect(panel()!.textContent).not.toContain("⠿");
+    expect(panel()!.textContent).not.toContain("×");
+    expect(panel()!.querySelector("#imw-progress-icon")).toBeNull();
+    expect(panel()!.children).toHaveLength(3);
+    expect(classes(content)).toEqual(expect.arrayContaining(["px-4"]));
+    expect(classes(content)).not.toContain("border-t");
+    expect(classes(panel()!)).not.toContain("p-3");
+    expect(panel()!.getAttribute("aria-labelledby")).toBe(title.id);
+    expect(panel()!.hasAttribute("aria-label")).toBe(false);
+  });
+
+  it("拖拽条与头部行都能拖动，在关闭钮上按下不拖动", () => {
+    const floating = panel()!;
+    Object.defineProperties(floating, {
+      offsetWidth: { get: () => 320 },
+      offsetHeight: { get: () => 270 },
+    });
+    const [grip, header] = Array.from(floating.children) as HTMLElement[];
+    const close = header.querySelector("button")!;
+    const drag = (target: HTMLElement, type: string, x: number, y: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, {
+        pointerId: 3,
+        isPrimary: true,
+        button: 0,
+        clientX: x,
+        clientY: y,
+      });
+      act(() => {
+        target.dispatchEvent(event);
+      });
+    };
+    for (const handle of [grip, header]) handle.setPointerCapture = vi.fn();
+    const start = [floating.style.left, floating.style.top];
+    drag(close, "pointerdown", 300, 20);
+    drag(header, "pointermove", 340, 60);
+    expect(header.setPointerCapture).not.toHaveBeenCalled();
+    expect([floating.style.left, floating.style.top]).toEqual(start);
+    drag(header, "pointerup", 340, 60);
+    for (const handle of [grip, header]) {
+      const before = [
+        parseFloat(floating.style.left),
+        parseFloat(floating.style.top),
+      ];
+      drag(handle, "pointerdown", 50, 20);
+      drag(handle, "pointermove", 60, 30);
+      drag(handle, "pointerup", 60, 30);
+      expect(handle.setPointerCapture).toHaveBeenCalledWith(3);
+      expect([
+        parseFloat(floating.style.left),
+        parseFloat(floating.style.top),
+      ]).toEqual([before[0] + 10, before[1] + 10]);
+    }
+    expect(readMediaProgressPosition()).toEqual({
+      x: parseFloat(floating.style.left),
+      y: parseFloat(floating.style.top),
+    });
+  });
+
+  it("快进快退为描边次要按钮，深浅主题各取对应描边与底色", () => {
+    for (const button of steps())
+      expect(classes(button)).toEqual(
+        expect.arrayContaining([
+          "rounded-lg",
+          "border",
+          "bg-transparent",
+          "border-white/15",
+          "hov:hover:bg-sky-500/8",
+          "active:bg-sky-500/15",
+          "min-h-[44px]",
+          "disabled:opacity-35",
+        ]),
+      );
+    expect(classes(panel()!)).toEqual(
+      expect.arrayContaining(["rounded-2xl", "bg-[#242a34]"]),
+    );
+    Object.assign(window, { theme: 1 });
+    try {
+      reopen();
+      for (const button of steps()) {
+        expect(classes(button)).toContain("border-black/10");
+        expect(classes(button)).not.toContain("bg-black/5");
+      }
+      expect(classes(panel()!)).toContain("bg-[#fafbfe]");
+    } finally {
+      delete (window as { theme?: unknown }).theme;
+    }
+  });
+
+  it("浮窗上的鼠标按下/抬起与触摸不冒泡到宿站，且不 preventDefault", () => {
+    const floating = panel()!;
+    const mouse = vi.fn();
+    const touch = vi.fn();
+    const mouseNames = ["mousedown", "mouseup"];
+    const touchNames = ["touchstart", "touchmove", "touchend"];
+    for (const name of mouseNames) document.addEventListener(name, mouse);
+    for (const name of touchNames) window.addEventListener(name, touch);
+    const targets = [
+      headerRow(floating),
+      floating.querySelector<HTMLElement>('[aria-label="关闭播放进度"]')!,
+      range,
+      floating,
+    ];
+    const events: Event[] = [];
+    try {
+      for (const target of targets)
+        for (const name of [...mouseNames, ...touchNames]) {
+          const event = new Event(name, { bubbles: true, cancelable: true });
+          events.push(event);
+          act(() => {
+            target.dispatchEvent(event);
+          });
+        }
+    } finally {
+      for (const name of mouseNames) document.removeEventListener(name, mouse);
+      for (const name of touchNames) window.removeEventListener(name, touch);
+    }
+    expect(mouse).not.toHaveBeenCalled();
+    expect(touch).not.toHaveBeenCalled();
+    expect(events.some((event) => event.defaultPrevented)).toBe(false);
+    // 浮窗外的鼠标事件照常到达宿站。
+    const outside = vi.fn();
+    document.addEventListener("mousedown", outside);
+    document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    document.removeEventListener("mousedown", outside);
+    expect(outside).toHaveBeenCalledOnce();
+  });
+
+  it("同属性 Tailwind 类不在同一按钮上并存", () => {
+    for (const button of steps()) {
+      const list = classes(button);
+      for (const prefix of [/^px-/, /^text-\[/, /^rounded-/, /^bg-/])
+        expect(list.filter((name) => prefix.test(name))).toHaveLength(1);
+    }
   });
 });
 
