@@ -4,6 +4,7 @@ import { MainAppContainer } from "./MainAppContainer";
 import { setPanelFocus } from "../playback/PanelFocus";
 import { LocalStorageUtils } from "../settings/localStorageUtils/LocalStorageUtils";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
+import { themedSurface } from "./components/floating-panel/floatingPanel";
 
 interface MainAppState {
   CategoriesIndex: number;
@@ -52,7 +53,10 @@ export class MainApp extends Component<MainAppProps, MainAppState> {
       this.state;
     const { searchKeyword, mainAppDisplay, changeSearchKeyword } = this.props;
     return (
-      <div className="flex flex-col w-full h-full" id="IIROSE_MEDIA">
+      <div
+        className={`flex flex-col w-full h-full ${themedSurface}`}
+        id="IIROSE_MEDIA"
+      >
         <MainNavigationBar
           switchCategories={this.switchCategories}
           ShowHideMainApp={this.props.ShowHideMainApp}

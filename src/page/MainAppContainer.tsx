@@ -23,6 +23,7 @@ import { RadioService } from "./MainAppContainerServices/RadioService";
 import { FavoritesService } from "./MainAppContainerServices/FavoritesService";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { SyncManager } from "../sync/SyncManager";
+import { themedDividerBottom } from "./components/floating-panel/floatingPanel";
 
 export class MainAppContainer extends Component<
   MainAppContainerProps,
@@ -279,8 +280,8 @@ export class MainAppContainer extends Component<
             )
           }
         >
-          <div className="h-full w-full flex flex-col absolute transition-all duration-250 bg-[rgba(224,224,224,0.8)]">
-            <div className="flex flex-col" style={{ backgroundColor: color }}>
+          <div className="h-full w-full flex flex-col absolute transition-all duration-250">
+            <div className={`flex flex-col gap-1 pb-1 ${themedDividerBottom}`}>
               {!settingsData && (
                 <MediaSearchBar
                   searchKeyword={currentDisplayKeyword}

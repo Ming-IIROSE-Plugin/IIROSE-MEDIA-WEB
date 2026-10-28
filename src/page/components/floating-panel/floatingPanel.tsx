@@ -35,6 +35,63 @@ export const secondaryButton = (dark: boolean) =>
 /** 主按钮（天蓝底白字）；不含内边距与字号。 */
 export const primaryButton = `${resetButton} min-h-[44px] rounded-lg border-0 bg-sky-500 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40`;
 
+// ---- 主题变体版：给插件主面板用 ----
+// 主面板不逐个组件传 dark，而是根节点写 `data-imw-theme`，由 `imw-dark:` 变体
+// （注册在 src/app.css）切深色；取值与上面的 panelTheme / borderTone 一致。
+
+/** 主面板根节点 `data-imw-theme` 的取值。 */
+export const themeAttr = (dark: boolean) => (dark ? "dark" : "light");
+
+/** 表面底色 + 正文色（同 panelTheme 的底色与文字色）。 */
+export const themedSurface =
+  "bg-[#fafbfe] text-[#253047] imw-dark:bg-[#242a34] imw-dark:text-[#f4f6fa]";
+
+/** 描边色（同 borderTone）；描边宽度与线型由使用处补。 */
+export const themedBorder = "border-black/10 imw-dark:border-white/15";
+
+/** 底部分隔线：用内阴影画，不占盒子高度（各行高度约定不受影响）。 */
+export const themedDividerBottom =
+  "shadow-[inset_0_-1px_0_rgba(0,0,0,0.1)] imw-dark:shadow-[inset_0_-1px_0_rgba(255,255,255,0.15)]";
+
+/** 次要文字。 */
+export const mutedText = "opacity-65";
+
+/** 悬停淡天蓝、按压加深（透明底控件用）。 */
+export const pressTone = "hov:hover:bg-sky-500/8 active:bg-sky-500/15";
+
+/**
+ * 分段标签选中段：天蓝实底白字（描边同为天蓝，不与 themedBorder 并存）；
+ * 抬到相邻段之上，四边都露出天蓝描边。
+ */
+export const selectedSegment =
+  "relative z-[1] border-sky-500 bg-sky-500 font-semibold text-white";
+
+/** 分段标签未选段：透明底、主题描边、悬停淡天蓝。 */
+export const idleSegment = `${themedBorder} bg-transparent ${pressTone}`;
+
+/**
+ * 相连分段的首尾圆角；非首段左移 1px 与前一段描边重叠（不叠出 2px 竖线），
+ * 选中段靠 selectedSegment 的 z-index 盖在上面，左右描边对称。
+ */
+export const segmentEdge = (index: number, count: number) =>
+  [
+    index === 0 ? "rounded-l-lg" : "",
+    index === count - 1 ? "rounded-r-lg" : "",
+    index > 0 ? "-ml-px" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+/**
+ * 主面板次要按钮：透明底 + 主题描边、`rounded-lg`、悬停淡天蓝。
+ * 不含尺寸、内边距、字号与文字色，由使用处补。
+ */
+export const themedSecondaryButton = `rounded-lg border border-solid bg-transparent ${themedBorder} ${pressTone}`;
+
+/** 主面板次要按钮的开启态：天蓝描边与文字、淡天蓝底（替换 themedSecondaryButton）。 */
+export const themedSecondaryButtonOn =
+  "rounded-lg border border-solid border-sky-500 bg-sky-500/10 text-sky-500 active:bg-sky-500/15";
+
 /** 拖动手柄的光标与触控行为。 */
 export const dragHandleClass = (dragging: boolean) =>
   `touch-none select-none ${dragging ? "cursor-grabbing" : "cursor-grab"}`;

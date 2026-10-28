@@ -4,6 +4,8 @@ import { Input_Behavior_Module } from "../input-behavior-module/Input-Behavior-M
 import { closeSidebar } from "../iirose_func/CloseSideBar";
 import { Gesture } from "../listener/Gesture";
 import { SyncManager } from "../sync/SyncManager";
+import { hostIsDark } from "../iirose_func/HostTheme";
+import { themeAttr } from "./components/floating-panel/floatingPanel";
 
 interface MainAppControlLayerState {
   mainAppDisplay: boolean;
@@ -54,6 +56,7 @@ export class MainAppControlLayer extends Component<
     Gesture.ShowHideMainApp = this.ShowHideMainApp;
 
     this.mainHolder = document.getElementById("mainHolder");
+    this.applyTheme();
 
     // 2. 初始化其他模块
     const { changeSearchKeyword } = this.controller;
@@ -86,6 +89,13 @@ export class MainAppControlLayer extends Component<
 
     // 4. 引用清理
     Gesture.ShowHideMainApp = undefined;
+  }
+
+  /** 按宿站当前主题写 `data-imw-theme`（与浮窗同一判定）；面板打开期间不跟随。 */
+  private applyTheme() {
+    document
+      .getElementById("IIROSE_MEDIA_CONTAINER")
+      ?.setAttribute("data-imw-theme", themeAttr(hostIsDark()));
   }
 
   // 将副作用逻辑提取成一个独立方法
@@ -132,11 +142,16 @@ export class MainAppControlLayer extends Component<
     _nextProps: object,
     nextState: MainAppControlLayerState,
   ) {
-    // 1. 初始化检查
-    if (!this.state.init && nextState.init) return true;
+    // 1. 初始化检查（与打开合批时也要先按当前主题着色）
+    if (!this.state.init && nextState.init) {
+      if (nextState.mainAppDisplay) this.applyTheme();
+      return true;
+    }
 
     // 2. 核心：只要显示状态发生了变化，就执行副作用
     if (this.state.mainAppDisplay !== nextState.mainAppDisplay) {
+      // 只在关→开时读宿站主题：面板开着期间（如搜索词变化）不跟随
+      if (nextState.mainAppDisplay) this.applyTheme();
       this.applyDisplaySideEffects(nextState.mainAppDisplay);
       // 注意：如果 searchKeyword 没变，我们可以拦截 render
       if (this.state.searchKeyword === nextState.searchKeyword) {

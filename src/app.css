@@ -6,6 +6,9 @@
 /* 触屏设备无真 hover：hov: 变体仅在支持 hover 的指针下生效，避免粘滞高亮 */
 @custom-variant hov (@media (hover: hover));
 
+/* 主面板深色主题：根节点 .IIROSE_MEDIA_CONTAINER 的 data-imw-theme 由 MainAppControlLayer 在打开时写入 */
+@custom-variant imw-dark (&:where([data-imw-theme="dark"], [data-imw-theme="dark"] *));
+
 /* 本插件不带 preflight，容器内默认 content-box；
    统一 border-box 防 width+padding/border 组合溢出（bf2bd01 修过的同类坑） */
 .IIROSE_MEDIA_CONTAINER,

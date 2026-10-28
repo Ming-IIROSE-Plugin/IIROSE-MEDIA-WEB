@@ -1,4 +1,9 @@
 import { Component } from "preact";
+import {
+  idleSegment,
+  segmentEdge,
+  selectedSegment,
+} from "../floating-panel/floatingPanel";
 interface MediaContainerSubNavBarProps {
   platform: Platform;
   searchKeyword: string | null;
@@ -170,19 +175,18 @@ export class MediaContainerSubNavBar extends Component<
     }
 
     return (
-      <div className="relative overflow-hidden w-full">
-        <div className="flex text-white overflow-x-auto overflow-y-hidden whitespace-nowrap scroll-smooth subnavbar-mask no-scrollbar h-[30px] max-[768px]:h-[36px] pr-6 animate-[fadeIn_.25s_ease-out,expandHeight_.25s_ease-in-out]">
+      <div className="relative overflow-hidden w-full px-[20px] max-[768px]:px-2">
+        <div className="flex overflow-x-auto overflow-y-hidden whitespace-nowrap scroll-smooth subnavbar-mask no-scrollbar h-[30px] max-[768px]:h-[36px] pr-6 animate-[fadeIn_.25s_ease-out,expandHeight_.25s_ease-in-out]">
           {platform.subNavBarItems.map((item, index) => {
             const isActive = index === activeIndex;
             const subNavBarClass = item.class ? item.class : "";
             return (
               <div
                 key={index} // 加入 key 属性
-                className={`flex items-center shrink-0 h-full px-[20px] max-[768px]:px-3.5 max-[768px]:text-xs cursor-pointer transition-all duration-100! animate-[fadeIn_.25s_ease-out] hov:hover:opacity-70 [&>span]:transition-transform [&>span]:duration-100 active:[&>span]:scale-95 ${
-                  isActive
-                    ? "bg-[rgba(255,255,255,0.85)] text-[#2f2f2f] font-semibold"
-                    : "bg-black/30 text-white/90"
-                } ${subNavBarClass}`} // 动态应用类名
+                className={`flex items-center shrink-0 h-full px-[20px] max-[768px]:px-3.5 text-[13px] max-[768px]:text-xs border border-solid cursor-pointer transition-all duration-100! animate-[fadeIn_.25s_ease-out] [&>span]:transition-transform [&>span]:duration-100 active:[&>span]:scale-95 ${segmentEdge(
+                  index,
+                  platform.subNavBarItems.length,
+                )} ${isActive ? selectedSegment : idleSegment} ${subNavBarClass}`} // 动态应用类名
                 onClick={() =>
                   this.handleItemClick(index, item.searchAction, item.class)
                 }

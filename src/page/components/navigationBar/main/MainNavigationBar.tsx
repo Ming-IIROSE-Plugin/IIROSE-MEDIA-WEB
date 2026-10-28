@@ -1,4 +1,8 @@
 import { Component } from "preact";
+import {
+  pressTone,
+  themedDividerBottom,
+} from "../../floating-panel/floatingPanel";
 
 interface MainNavigationBarProps {
   switchCategories: (index: number) => void;
@@ -26,19 +30,21 @@ export class MainNavigationBar extends Component<
     this.setState({ activeButtonIndex: index }); // 更新活动按钮索引
   };
 
-  // NavBarButton：px-[20px] flex items-center cursor-pointer text-2xl 文字白 半透明底 悬停变淡
+  // NavBarButton：图标按钮语言（透明底、`rounded-lg`、悬停淡天蓝），选中项天蓝字 + 淡天蓝底
   // 移动端（≤768px）：隐藏文字，44px 触控区紧密相连无间距，纯图标高密度
   private navButtonClass = (active: boolean) =>
-    `min-w-[40px] min-h-[40px] max-[768px]:min-w-[44px] max-[768px]:min-h-[44px] max-[768px]:w-[44px] max-[768px]:h-[44px] px-[20px] max-[768px]:px-0 flex items-center justify-center cursor-pointer text-white text-2xl transition-all duration-100! hov:hover:opacity-70 [&>div]:transition-transform [&>div]:duration-100 active:[&>div]:scale-95 ${active ? "bg-[#00000080]" : "bg-[#fff3]"}`;
+    `min-w-[40px] min-h-[40px] max-[768px]:min-w-[44px] max-[768px]:min-h-[44px] max-[768px]:w-[44px] max-[768px]:h-[44px] px-[20px] max-[768px]:px-0 flex items-center justify-center cursor-pointer rounded-lg text-2xl transition-all duration-100! [&>div]:transition-transform [&>div]:duration-100 active:[&>div]:scale-95 ${active ? "bg-sky-500/10 text-sky-500 active:bg-sky-500/15" : `text-inherit ${pressTone}`}`;
 
   render() {
     const { activeButtonIndex } = this.props;
 
     return (
-      <div className="flex min-h-[40px] max-[768px]:min-h-[44px] justify-between">
+      <div
+        className={`flex min-h-[40px] max-[768px]:min-h-[44px] justify-between ${themedDividerBottom}`}
+      >
         <div className="flex">
           <div
-            className={this.navButtonClass(true)}
+            className={this.navButtonClass(false)}
             id="BackButton"
             title="返回"
             onClick={this.quitFromMainApp}
@@ -50,14 +56,14 @@ export class MainNavigationBar extends Component<
           </div>
 
           <div
-            className="px-[20px] max-[768px]:hidden flex items-center cursor-auto text-base bg-white/20 text-white transition-opacity duration-300"
+            className="px-[20px] max-[768px]:hidden flex items-center cursor-auto text-base transition-opacity duration-300"
             id="NavBarTitle"
           >
             <div
-              className="text-2xl pl-[10px] mr-[20px] cursor-pointer"
+              className="text-2xl text-sky-500 pl-[10px] mr-[20px] cursor-pointer"
               id="TitleIcon"
             ></div>
-            <div className="text-sm transition-all duration-500 max-[768px]:hidden whitespace-nowrap">
+            <div className="text-[15px] font-semibold transition-all duration-500 max-[768px]:hidden whitespace-nowrap">
               {" "}
               IIROSE - MEDIA{" "}
             </div>

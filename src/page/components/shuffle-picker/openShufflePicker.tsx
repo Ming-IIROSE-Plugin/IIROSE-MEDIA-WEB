@@ -20,6 +20,7 @@ import {
   type PickerSource,
   type ShufflePickerResult,
 } from "./ShufflePicker";
+import { hostIsDark } from "../../../iirose_func/HostTheme";
 
 export const SHUFFLE_PICKER_ROOT_ID = "imw-shuffle-picker-root";
 /** 退场动效时长上限（退场 90ms，留余量后卸载）。 */
@@ -108,11 +109,6 @@ function canRestoreFocus(element: HTMLElement | null | undefined) {
     element.getClientRects().length > 0 &&
     getComputedStyle(element).visibility !== "hidden"
   );
-}
-
-/** 与 HostMediaBridge 同一判定：宿站 `window.theme` 为假值即深色。 */
-function hostDark(): boolean {
-  return !(window as unknown as { theme?: unknown }).theme;
 }
 
 /** 每个平台的收藏在切到该标签时读一次；读不到按空收藏显示。 */
@@ -280,7 +276,7 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
   };
   page[PICKER_KEY] = handle;
 
-  const dark = hostDark();
+  const dark = hostIsDark();
   // 可见平台在打开时算一次，打开期间不随收藏增减；算好之前面板显示读取中、无标签行。
   let prepared: Awaited<ReturnType<typeof preparePlatforms>> | null = null;
   const pendingPlatform =
