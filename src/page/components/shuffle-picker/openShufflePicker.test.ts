@@ -672,6 +672,33 @@ describe("非模态", () => {
     expect(events.some((event) => event.defaultPrevented)).toBe(false);
   });
 
+  it("面板上的鼠标按下/抬起不冒泡到 document：不触发宿站滑动手势", async () => {
+    await open();
+    const gesture = vi.fn();
+    const names = ["mousedown", "mouseup"];
+    for (const name of names) document.addEventListener(name, gesture);
+    const targets = [
+      dialog().querySelector("input")!,
+      byLabel("关闭收藏随机"),
+      dialog(),
+    ];
+    for (const target of targets)
+      for (const name of names)
+        act(() => {
+          target.dispatchEvent(
+            new MouseEvent(name, { bubbles: true, cancelable: true }),
+          );
+        });
+    for (const name of names) document.removeEventListener(name, gesture);
+    expect(gesture).not.toHaveBeenCalled();
+    // 面板外的鼠标事件照常到达宿站。
+    const outside = vi.fn();
+    document.addEventListener("mousedown", outside);
+    document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    document.removeEventListener("mousedown", outside);
+    expect(outside).toHaveBeenCalledOnce();
+  });
+
   it("Tab 不锁在面板内：最后一个元素按 Tab 不拦截、焦点不跳回开头", async () => {
     await open();
     const nodes = Array.from(

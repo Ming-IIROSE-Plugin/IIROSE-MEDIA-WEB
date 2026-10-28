@@ -16,7 +16,7 @@ import {
 } from "../../../media-progress/viewport";
 
 const controlClass =
-  "min-h-[44px] min-w-[44px] cursor-pointer rounded-xl border-0 bg-black/5 px-2 font-[inherit] text-[13px] text-inherit hov:bg-black/10 focus-visible:outline-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-35";
+  "min-h-[44px] min-w-[44px] cursor-pointer rounded-xl border-0 bg-black/5 px-2 font-[inherit] text-[13px] text-inherit hov:hover:bg-black/10 focus-visible:outline-2 focus-visible:outline-sky-500 disabled:cursor-not-allowed disabled:opacity-35";
 
 function samePosition(
   first: MediaProgressPosition,

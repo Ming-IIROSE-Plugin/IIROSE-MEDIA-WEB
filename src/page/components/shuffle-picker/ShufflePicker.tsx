@@ -657,6 +657,10 @@ export function ShufflePicker({
   // 面板上的触摸不冒泡到 window：主面板的双指下滑手势不被误触发（不 preventDefault，指针拖动照常）。
   const stopTouch = (event: JSX.TargetedTouchEvent<HTMLDivElement>) =>
     event.stopPropagation();
+  // 面板上的鼠标按下/抬起不冒泡到 document：宿站在 document 上用 mousedown→mouseup（500ms 内）
+  // 识别滑动手势，面板里的拖动会被当成右滑返回（关掉面板）或左滑打开「捷径」等。
+  const stopMouse = (event: JSX.TargetedMouseEvent<HTMLDivElement>) =>
+    event.stopPropagation();
 
   // 面板内的按键不冒泡到 window：插件主面板的全局热键（Esc 关主面板、Alt+S）不被误触发。
   // 非模态：Tab 不锁在面板内，可移到宿站；面板外的 Esc 根本到不了这里，不关面板。
@@ -773,6 +777,8 @@ export function ShufflePicker({
         onTouchStart={stopTouch}
         onTouchMove={stopTouch}
         onTouchEnd={stopTouch}
+        onMouseDown={stopMouse}
+        onMouseUp={stopMouse}
       >
         <div
           className={`hidden shrink-0 justify-center pt-2 max-[768px]:flex ${handleClass}`}
