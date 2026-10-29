@@ -485,6 +485,23 @@ describe("音乐网格卡", () => {
       "hov:group-hover:pointer-events-auto",
     );
   });
+
+  it("手机没有悬停：胶囊常显且可点，遮罩不上色（story 4 操作条接管后回收）", async () => {
+    await mount(
+      withCtx(h(MusicTile, { platformData: song, onPlay: () => {} })),
+    );
+    const overlay = host.querySelector(".bg-\\[\\#0A090861\\]")!;
+    expect(overlay.getAttribute("class")).toContain("max-[768px]:opacity-100");
+    expect(overlay.getAttribute("class")).toContain(
+      "max-[768px]:bg-transparent",
+    );
+    const capsule = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "点播",
+    )!;
+    expect(capsule.getAttribute("class")).toContain(
+      "max-[768px]:pointer-events-auto",
+    );
+  });
 });
 
 describe("视频卡", () => {
@@ -536,6 +553,18 @@ describe("视频卡", () => {
     ).not.toBeNull();
     const overlay = host.querySelector(".bg-\\[\\#0A090861\\]")!;
     expect(overlay.getAttribute("class")).toContain("opacity-100");
+    const capsule = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "点播到房间",
+    )!;
+    capsule.click();
+    expect(onPlay).toHaveBeenCalledOnce();
+  });
+
+  it("手机没有悬停：胶囊常显且可点（story 4 操作条接管后回收）", async () => {
+    const onPlay = vi.fn();
+    await mount(withCtx(h(VideoTile, { platformData: video, onPlay })));
+    const overlay = host.querySelector(".bg-\\[\\#0A090861\\]")!;
+    expect(overlay.getAttribute("class")).toContain("max-[768px]:opacity-100");
     const capsule = Array.from(host.querySelectorAll("button")).find(
       (el) => el.textContent === "点播到房间",
     )!;

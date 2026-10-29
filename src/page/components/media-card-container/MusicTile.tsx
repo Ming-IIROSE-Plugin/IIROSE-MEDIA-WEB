@@ -80,8 +80,9 @@ export function MusicTile({
     onPlay();
   };
 
-  const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
-  const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto`;
+  // 手机没有悬停：胶囊常显，保证「点播」可达（story 4 的操作条接管后回收）。
+  const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100 max-[768px]:opacity-100`;
+  const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto max-[768px]:pointer-events-auto`;
 
   return (
     <div
@@ -116,7 +117,7 @@ export function MusicTile({
         )}
 
         <div
-          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 ${deskVideoScrim} ${overlayVisibility}`}
+          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 ${deskVideoScrim} max-[768px]:bg-transparent ${overlayVisibility}`}
         >
           <button
             type="button"
