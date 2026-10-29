@@ -291,9 +291,15 @@ export class MainAppContainer extends Component<
 
   /**
    * 视图切换只在「该范围有两种视图」时出现：
-   * 音乐的单曲范围可切列表/网格；专辑、歌单只有列表，MV 与视频只有网格（story 2 落地）。
+   * 音乐的单曲范围可切列表/网格；专辑、歌单只有列表，MV 只有网格；
+   * 视频的推荐/视频/直播两种视图都在（收藏只有列表，多源剧集只有列表）。
    */
   private viewToggleMode(): "card" | "list" | null {
+    if (this.state.mode === MODE.video) {
+      return this.currentPlatform()?.shortTitle === "多源"
+        ? null
+        : this.state.searchViewMode;
+    }
     if (this.state.mode !== MODE.music || this.state.SubNavBarIndex !== 0)
       return null;
     return this.state.searchViewMode;
@@ -412,6 +418,8 @@ export class MainAppContainer extends Component<
      */
     submitSearch: (text: string) => {
       const keyword = text.trim();
+      // 空提交不发起检索（沿用旧搜索栏：清空后提交无动作）
+      if (!keyword) return;
       const video = detectVideoTarget(keyword);
       if (video && this.state.mode !== MODE.video) {
         this.pendingSearch = video;
@@ -421,7 +429,7 @@ export class MainAppContainer extends Component<
       this.controller.runSearch(video ?? keyword);
     },
 
-    /** 真正发起检索：页码归 1、清结果，再交给当前范围的动作。 */
+    /** 真正发起检索：页码归 1、清结果，再交给当前范围的动作。空的检索只重置现场、不发请求。 */
     runSearch: (text: string, options?: { propagate?: boolean }) => {
       const keyword = text.trim();
       // 浏览型范围（视频的「推荐」）不承接关键词：有词时自动落到第一个可搜索的范围
@@ -433,6 +441,9 @@ export class MainAppContainer extends Component<
         );
         if (first !== undefined && first >= 0) scope = first;
       }
+      const nextAction =
+        platform?.subNavBarItems[scope]?.searchAction ??
+        this.state.currentSubNavBarAction;
       this.setState(
         {
           SubNavBarIndex: scope,
@@ -444,9 +455,10 @@ export class MainAppContainer extends Component<
           isCurrentInMultiPage: false,
           oldItems: null,
           updating: false,
+          currentSubNavBarAction: nextAction,
         },
         () => {
-          this.runCurrentScope();
+          if (keyword) this.runCurrentScope();
           if (options?.propagate !== false)
             this.props.changeSearchKeyword(keyword);
         },

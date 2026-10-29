@@ -64,7 +64,8 @@ export function hasScopeRow(index: unknown): boolean {
   return normalizeMode(index) !== MODE.about;
 }
 
-/** 有分页的模式：设置与关于不分页。 */
+/** 有分页的模式：设置与关于不分页；电台按 EXPERIENCE（地区列表）不分页。 */
 export function hasPager(index: unknown): boolean {
-  return hasSearchBar(index);
+  const mode = normalizeMode(index);
+  return mode !== MODE.radio && hasSearchBar(mode);
 }

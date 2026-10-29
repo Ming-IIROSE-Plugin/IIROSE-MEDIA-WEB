@@ -331,6 +331,8 @@
 .containerSpin::before,
 .searchLogo::before,
 .noresultLogo::before,
+.listViewIcon::before,
+.cardViewIcon::before,
 .headphonesIcon::before,
 .playIcon::before,
 .playlistPlusIcon::before,

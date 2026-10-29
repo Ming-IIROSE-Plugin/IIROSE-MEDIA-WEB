@@ -251,4 +251,45 @@ describe("六种模式的现场", () => {
     expect(about.showAbout).toHaveBeenCalled();
     expect(root.querySelector("input")).toBeNull();
   });
+
+  it("桌面打开面板把焦点放进搜索栏", async () => {
+    await mount(MODE.music);
+    expect(document.activeElement).toBe(root.querySelector("input"));
+  });
+
+  it("手机打开面板不自动聚焦搜索栏", async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true });
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      await mount(MODE.music);
+      expect(document.activeElement).not.toBe(root.querySelector("input"));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("电台模式不分页，收藏只有列表视图", async () => {
+    await mount(MODE.radio);
+    expect(root.querySelector('[role="tablist"]')).not.toBeNull();
+    expect(root.querySelector('[aria-label="上一页"]')).toBeNull();
+
+    render(null, root);
+    await mount(MODE.favorites);
+    expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+  });
+
+  it("视图切换：视频显示，音乐的 MV 范围不显示", async () => {
+    const { ref } = await mount(MODE.video);
+    expect(root.querySelector('[role="radiogroup"]')).not.toBeNull();
+
+    const controller = (ref.current as unknown as Harness).controller;
+    render(null, root);
+    const music = await mount(MODE.music);
+    expect(root.querySelector('[role="radiogroup"]')).not.toBeNull();
+    await act(async () => {
+      (music.ref.current as unknown as Harness).controller.selectScope(3); // MV
+    });
+    expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+    void controller;
+  });
 });
