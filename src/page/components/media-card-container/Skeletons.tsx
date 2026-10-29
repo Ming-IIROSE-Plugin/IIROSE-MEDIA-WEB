@@ -8,8 +8,8 @@ import {
 } from "../floating-panel/tokens";
 import { trackColumns } from "./TracklistRow";
 
-/** 骨架行：封面块 + 标题条 40% 宽 + 副行条 24% 宽，行高与曲目行一致。 */
-export function SkeletonRows({ count = 8 }: { count?: number }) {
+/** 骨架行：封面块 + 标题条 40% 宽 + 副行条 24% 宽，行高与曲目行一致。条数与页大小一致（10），数据落地时不跳行。 */
+export function SkeletonRows({ count = 10 }: { count?: number }) {
   return (
     <div aria-hidden="true">
       {Array.from({ length: count }, (_, index) => (
@@ -51,7 +51,7 @@ export function SkeletonRows({ count = 8 }: { count?: number }) {
   );
 }
 
-/** 骨架瓦片：封面块 + 下方两根条，圆角同所替代的卡片（16:9 或 1:1）。 */
+/** 骨架瓦片：封面块 + 下方两根条，圆角同所替代的卡片（16:9 或 1:1）。音乐网格两行满格（5 列）取 10，视频网格两行满格（4 列）取 8。 */
 export function SkeletonTiles({
   count = 8,
   aspect = "video",

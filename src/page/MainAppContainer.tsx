@@ -3,6 +3,11 @@ import { Component, createRef } from "preact";
 import { ResultsArea } from "./components/media-card-container/ResultsArea";
 import { CollectionHeader } from "./components/media-card-container/CollectionHeader";
 import type { PlayOrder } from "./components/media-card-container/OrderMenu";
+import { isCollectionItem } from "./components/media-card-container/mediaFormat";
+import {
+  notifyRoomUnsupported,
+  roomSupportsRequest,
+} from "./components/media-card-container/roomSupport";
 import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
 import { NetEasePlatform } from "../platforms/NetEasePlatform";
 import { AllVideosPlatform } from "../platforms/AllVideosPlatform";
@@ -179,12 +184,20 @@ export class MainAppContainer extends Component<
     if (event.key !== "Escape") return;
     if (document.querySelector("[data-imw-order-menu]")) return;
     if (!this.state.isCurrentInMultiPage) return;
+    // 没有外层现场就退不回去：放行给宿站，别把 Esc 吞掉
+    if (!this.state.oldItems) return;
     this.controller.switchToOutFromMultiPage();
     event.stopPropagation();
   };
 
-  /** 手机操作条的挂点：story 4 在这里打开操作条，本 story 只保证行体点击有落点。 */
-  private handleRowActivate = (_platformData: PlatformData) => {};
+  /** 手机操作条的挂点：story 4 在这里打开操作条；在那之前点行体直接点播，不做死点击。 */
+  private handleRowActivate = (platformData: PlatformData) => {
+    if (!roomSupportsRequest()) {
+      notifyRoomUnsupported();
+      return;
+    }
+    this.state.currentOnDemandPlay(platformData);
+  };
 
   /** 重试：内页重载内页，否则重发当前范围。 */
   private handleRetry = () => {
@@ -205,6 +218,11 @@ export class MainAppContainer extends Component<
   private playCollectionAll = (order: PlayOrder) => {
     const collection = this.state.innerCollection;
     if (!collection) return;
+    // 灰化基于渲染期快照：点击时再判一次，与行内点播一致
+    if (!roomSupportsRequest()) {
+      notifyRoomUnsupported();
+      return;
+    }
     void NetEasePlatform.playCollectionAll(collection, order);
   };
 
@@ -236,7 +254,6 @@ export class MainAppContainer extends Component<
 
     const providerValue = {
       switchToMultiPage: this.controller.switchToMultiPage,
-      switchToOutFromMultiPage: this.controller.switchToOutFromMultiPage,
       currentOnDemandPlay,
       updateCurrentInMultiPageStatus:
         this.controller.updateCurrentInMultiPageStatus,
@@ -326,6 +343,7 @@ export class MainAppContainer extends Component<
                 scopeIndex={SubNavBarIndex}
                 keyword={searchKeyword}
                 isInnerPage={this.state.isCurrentInMultiPage}
+                pageOffset={(currentPage - 1) * this.itemsPerPage}
                 onRetry={this.handleRetry}
                 onClearSearch={this.handleClearSearch}
               />
@@ -647,10 +665,7 @@ export class MainAppContainer extends Component<
       // 记住来源条目：内页加载失败时「重试」按它重载内页
       this.innerPageSource = platformData;
       // 专辑 / 歌单的内页头（名称 + 曲目数 + 全部播放）；多 P / 多集仍用范围行
-      const isCollection = !!(
-        platformData.neteaseMusic?.isSongList ||
-        platformData.neteaseMusic?.isAlbum
-      );
+      const isCollection = isCollectionItem(platformData);
       this.setState({ innerCollection: isCollection ? platformData : null });
 
       if (platformData.bilibili) {

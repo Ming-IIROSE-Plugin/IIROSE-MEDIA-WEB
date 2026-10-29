@@ -8,8 +8,7 @@ export const MediaContainerContext = createContext({
     platformData;
     isCurrentInMultiPage;
   },
-  /** 内页「‹ 返回」：回到进入内页前的外层结果（关键词、页码与滚动位置不变）。 */
-  switchToOutFromMultiPage: () => {},
+  /** 内页「‹ 返回」由 `CollectionHeader` 的 `onBack` prop 承担，不放进上下文。 */
   currentOnDemandPlay: (platformData: PlatformData) => {
     platformData;
   },

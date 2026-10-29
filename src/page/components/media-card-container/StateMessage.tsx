@@ -1,6 +1,11 @@
 // 状态部件（DESIGN.md `state-message` / `text-button`）：结果区内水平居中的一行文案，
 // 可跟一个蔷薇红文字钮（「重试」「清除搜索」）。无插画、无自绘 toast。
-import { deskInk2, deskTextButton, typeLabel } from "../floating-panel/tokens";
+import {
+  deskFocusRing,
+  deskInk2,
+  deskTextButton,
+  typeLabel,
+} from "../floating-panel/tokens";
 
 export interface StateMessageProps {
   message: string;
@@ -16,7 +21,7 @@ export function StateMessage({ message, action, onAction }: StateMessageProps) {
       {action && (
         <button
           type="button"
-          className={`mt-3 inline-flex items-center px-3 ${deskTextButton}`}
+          className={`mt-3 inline-flex min-h-[44px] items-center px-3 ${deskTextButton} ${deskFocusRing}`}
           onClick={onAction}
         >
           {action}

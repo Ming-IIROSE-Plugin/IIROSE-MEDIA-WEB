@@ -686,6 +686,16 @@ export class NetEasePlatform extends Platform {
     return mergedOutput;
   };
 
+  /** 等概率洗牌（Fisher–Yates）：`sort(() => Math.random() - 0.5)` 的分布不均。 */
+  private static shuffleIds(ids: number[]): number[] {
+    const result = [...ids];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
   /**
    * @description 整张点播（专辑 / 歌单）：按所选顺序批量点播全部曲目。
    * 宿站弹窗入口（`MLOD` / `AOD` 的 select 0/1）与内页头「全部播放」共用本入口，
@@ -703,14 +713,13 @@ export class NetEasePlatform extends Platform {
         const songListDetail = await NeteaseMusicAPI.getSongListDetail(id);
         // 失败提示已由统一入口发出，这里静默结束本次点播
         if (!songListDetail) return;
-        let trackID = songListDetail.playlist.trackIds.map((item) => item.id);
-        if (order === "shuffle") {
-          trackID = trackID.sort(() => Math.random() - 0.5);
-        }
+        const trackID = songListDetail.playlist.trackIds.map((item) => item.id);
+        const ids =
+          order === "shuffle" ? NetEasePlatform.shuffleIds(trackID) : trackID;
         void Announce.runBatchAnnounce(
           songListDetail.playlist.name,
-          trackID.length,
-          () => NetEasePlatform.finalODSONG(trackID),
+          ids.length,
+          () => NetEasePlatform.finalODSONG(ids),
           songListDetail.playlist.description,
         );
         return;
@@ -719,14 +728,13 @@ export class NetEasePlatform extends Platform {
       if (platformData.neteaseMusic.isAlbum) {
         const albumDetails = await NeteaseMusicAPI.getAlbumDetail(id);
         if (!albumDetails) return;
-        let songsID = albumDetails.songs.map((item) => item.id);
-        if (order === "shuffle") {
-          songsID = songsID.sort(() => Math.random() - 0.5);
-        }
+        const songsID = albumDetails.songs.map((item) => item.id);
+        const ids =
+          order === "shuffle" ? NetEasePlatform.shuffleIds(songsID) : songsID;
         void Announce.runBatchAnnounce(
           albumDetails.album.name,
-          songsID.length,
-          () => NetEasePlatform.finalODSONG(songsID),
+          ids.length,
+          () => NetEasePlatform.finalODSONG(ids),
           albumDetails.album.description,
         );
         return;
@@ -734,7 +742,10 @@ export class NetEasePlatform extends Platform {
 
       throw new Error("这不是专辑或歌单");
     } catch (error) {
-      ShowMessage.show((error as Error).message);
+      // 抛出物未必是 Error：统一成可读文案，别把 `undefined` 提示给用户
+      ShowMessage.show(
+        error instanceof Error ? error.message : String(error || "点播失败"),
+      );
     }
   };
 
@@ -755,9 +766,7 @@ export class NetEasePlatform extends Platform {
 
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
-      let songListDetail: SongList | null = null;
-
-      songListDetail = await NeteaseMusicAPI.getSongListDetail(id);
+      const songListDetail = await NeteaseMusicAPI.getSongListDetail(id);
 
       // 失败提示已由统一入口发出，这里静默结束本次点播
       if (!songListDetail) return;
@@ -855,9 +864,7 @@ export class NetEasePlatform extends Platform {
 
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
-      let albumDetails: AlbumData | null = null;
-
-      albumDetails = await NeteaseMusicAPI.getAlbumDetail(id);
+      const albumDetails = await NeteaseMusicAPI.getAlbumDetail(id);
 
       if (!albumDetails) return;
 

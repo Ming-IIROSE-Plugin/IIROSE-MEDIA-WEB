@@ -1,7 +1,7 @@
 // 「全部播放」的顺序菜单（DESIGN.md `order-menu`）：插件自有浮层，不经过宿站 `buildSelect2`。
 // 桌面为贴在按钮下方右对齐的小浮层（宽 200px），手机为底部操作条（头部为专辑/歌单名 + 曲目数）。
 // 透明拦截层：点外侧 = 取消不点播；`Esc` 自管并阻止冒泡（宿站与面板的 Esc 不参与）。
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { trackCountLabel } from "./mediaFormat";
 import {
   DeskIcon,
@@ -62,7 +62,8 @@ export function OrderMenu({
     };
   }, []);
 
-  useEffect(() => {
+  // 定位必须在浏览器绘制前算好，否则浮层会先闪在左上角再滑到按钮下方。
+  useLayoutEffect(() => {
     if (phone) return;
     const rect = anchor?.getBoundingClientRect();
     if (!rect) return;

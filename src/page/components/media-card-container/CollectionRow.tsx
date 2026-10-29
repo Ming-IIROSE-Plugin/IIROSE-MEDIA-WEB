@@ -45,6 +45,7 @@ export function CollectionRow({
       <Cover
         src={platformData.coverImg}
         icon="note"
+        alt={platformData.title}
         rounded={roundedTrackCover}
         className="h-[42px] w-[42px] max-[768px]:h-12 max-[768px]:w-12"
         onOpen={

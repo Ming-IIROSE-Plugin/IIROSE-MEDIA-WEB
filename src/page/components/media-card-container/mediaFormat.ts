@@ -83,10 +83,8 @@ export function isPhoneLayout(): boolean {
  * 卡片改为「第一次点按选中显示按钮，再点按钮点播」。jsdom 无 matchMedia 时按有悬停处理。
  */
 export function isTapToReveal(): boolean {
-  const matchMedia = window.matchMedia;
-  if (!matchMedia) return false;
   return (
-    !!matchMedia("(hover: none)").matches &&
-    !matchMedia("(max-width: 768px)").matches
+    !!window.matchMedia?.("(hover: none)").matches &&
+    !window.matchMedia?.("(max-width: 768px)").matches
   );
 }

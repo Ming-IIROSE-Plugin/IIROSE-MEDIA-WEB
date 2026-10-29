@@ -1,6 +1,6 @@
 // 收藏星（DESIGN.md `favorite-star`）：18px，空心 ink3 / 实心 star-on。
 // 点击即时切换（乐观更新，失败回滚）；不可收藏的条目返回 null。
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { FavoritesStorageService } from "../../../storage/FavoritesStorageService";
 import {
   DeskIcon,
@@ -24,8 +24,11 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
     setIsFavorited(FavoritesStorageService.isFavorited(platformData));
   };
 
+  /** 连点期间只认第一次：两次 toggle 交错落地会让星标与存储对不上。 */
+  const pending = useRef(false);
+
   useEffect(() => {
-    setIsFavorited(FavoritesStorageService.isFavorited(platformData));
+    reread();
   }, [platformData]);
 
   // 存储层就绪与外部变更（云端拉取落地）后重读一次：否则慢速 IndexedDB 下
@@ -33,12 +36,10 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
   useEffect(() => {
     let alive = true;
     void FavoritesStorageService.init().then(() => {
-      if (alive)
-        setIsFavorited(FavoritesStorageService.isFavorited(platformData));
+      if (alive) reread();
     });
     const off = FavoritesStorageService.onExternalChange?.(() => {
-      if (alive)
-        setIsFavorited(FavoritesStorageService.isFavorited(platformData));
+      if (alive) reread();
     });
     return () => {
       alive = false;
@@ -52,6 +53,8 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
     // 行本身可点（进入内页 / 打开操作条），星标不能连带动到整行。
     event.stopPropagation();
     event.preventDefault();
+    if (pending.current) return;
+    pending.current = true;
     const next = !isFavorited;
     setIsFavorited(next);
     try {
@@ -60,6 +63,8 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
       onToggle?.(result.isFavorited);
     } catch {
       setIsFavorited(!next);
+    } finally {
+      pending.current = false;
     }
   };
 

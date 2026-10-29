@@ -162,6 +162,7 @@ export function TracklistRow({
       <Cover
         src={platformData.coverImg}
         icon={radio ? "radio" : isVideoItem(platformData) ? "film" : "note"}
+        alt={platformData.title}
         rounded={roundedTrackCover}
         className="h-[42px] w-[42px] max-[768px]:h-12 max-[768px]:w-12"
         onOpen={
@@ -205,7 +206,11 @@ export function TracklistRow({
         {!radio && <FavoriteStar platformData={platformData} />}
       </span>
 
-      <RequestButton supported={supported} onPlay={onPlay} />
+      <RequestButton
+        supported={supported}
+        label={`点播 ${platformData.title}`}
+        onPlay={onPlay}
+      />
     </div>
   );
 }

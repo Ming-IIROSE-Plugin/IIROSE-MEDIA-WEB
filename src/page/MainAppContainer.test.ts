@@ -59,8 +59,16 @@ vi.mock("./MainAppContainerServices/SettingsService", () => ({
 vi.mock("./MainAppContainerServices/AboutService", () => ({
   AboutService: about,
 }));
+const resultsAreaProps = vi.hoisted(() => ({
+  last: null as Record<string, unknown> | null,
+}));
+
 vi.mock("./components/media-card-container/ResultsArea", () => ({
-  ResultsArea: () => null,
+  // 桩只负责记录实参：容器的接线（onRetry / onClearSearch / pageOffset）直接调这些实参验证
+  ResultsArea: (props: Record<string, unknown>) => {
+    resultsAreaProps.last = props;
+    return null;
+  },
   shapeOf: () => "tracklist",
 }));
 vi.mock("../platforms/NetEasePlatform", () => ({
@@ -365,8 +373,8 @@ describe("专辑 / 歌单内页", () => {
 
   it("‹ 返回清空内页标记与集合，图纸回到外层", async () => {
     const { ref } = await mount(MODE.music);
-    const controller = await enterInnerPage(ref);
     const before = (ref.current as unknown as Harness).state.mediaData;
+    const controller = await enterInnerPage(ref);
 
     await act(async () => {
       controller.switchToOutFromMultiPage();
@@ -376,7 +384,8 @@ describe("专辑 / 歌单内页", () => {
     expect(state.innerCollection).toBeNull();
     expect(state.oldItems).toBeNull();
     // 回到进入内页前的现场（同一份数据承诺，不重新请求）
-    expect(before).toBeDefined();
+    expect(state.mediaData).toBe(before);
+    expect(state.currentPage).toBe(1);
     expect(root.querySelector("[data-imw-collection-header]")).toBeNull();
     expect(root.querySelector('[role="tablist"]')).not.toBeNull();
   });
@@ -471,15 +480,29 @@ describe("专辑 / 歌单内页", () => {
     neteasePlatform.getAlbumMultiPageData.mockClear();
     netease.searchAlbum.mockClear();
 
-    // 内页头的「重试」在结果区里（容器只保证来自 onRetry 的回调）
-    const container = ref.current as unknown as {
-      handleRetry: () => void;
-    };
+    // 结果区的「重试」经 onRetry 到达容器：这里直接点结果区桩收到的那个回调
     await act(async () => {
-      container.handleRetry();
+      (resultsAreaProps.last!.onRetry as () => void)();
     });
     expect(neteasePlatform.getAlbumMultiPageData).toHaveBeenCalled();
     expect(netease.searchAlbum).not.toHaveBeenCalled();
+  });
+
+  it("结果区拿到的 pageOffset 跟着当前页走（序号续接）", async () => {
+    neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
+      platformData: [trackData],
+      totalPage: 3,
+      allPlatformData: [trackData, trackData, trackData],
+    });
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref);
+    expect(resultsAreaProps.last!.pageOffset).toBe(0);
+
+    await act(async () => {
+      (root.querySelector('[aria-label="下一页"]') as HTMLElement).click();
+    });
+    expect((ref.current as unknown as Harness).state.currentPage).toBe(2);
+    expect(resultsAreaProps.last!.pageOffset).toBe(10);
   });
 });
 
@@ -500,11 +523,9 @@ describe("清除搜索", () => {
       favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword;
     expect(keywordBeforeClear).toBe("abc");
 
-    const container = ref.current as unknown as {
-      handleClearSearch: () => void;
-    };
+    // 结果区的「清除搜索」经 onClearSearch 到达容器（接线在容器里）
     await act(async () => {
-      container.handleClearSearch();
+      (resultsAreaProps.last!.onClearSearch as () => void)();
     });
     expect(
       favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword,

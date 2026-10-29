@@ -74,7 +74,9 @@ export function CollectionHeader({
         {title}
       </span>
       {count && (
-        <span className={`shrink-0 ${typeMonoCaption} ${deskInk3}`}>
+        <span
+          className={`max-[768px]:hidden shrink-0 ${typeMonoCaption} ${deskInk3}`}
+        >
           {count}
         </span>
       )}

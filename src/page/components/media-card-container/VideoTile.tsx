@@ -11,12 +11,15 @@ import {
   isPhoneLayout,
   isTapToReveal,
 } from "./mediaFormat";
+import { NowPlayingBars } from "./TracklistRow";
 import {
   deskDurationPill,
   deskFocusRingOnRose,
   deskInk,
   deskInk3,
   deskOnRose,
+  deskOnRoseFill,
+  deskRose,
   deskRoseSolid,
   deskSelectedRing,
   deskVideoScrim,
@@ -30,6 +33,8 @@ import {
 
 export interface VideoTileProps {
   platformData: PlatformData;
+  /** 房间正在放这条（视频列表里同样要标出来）。 */
+  nowPlaying?: boolean;
   supported?: boolean;
   revealed?: boolean;
   onReveal?: () => void;
@@ -40,6 +45,7 @@ export interface VideoTileProps {
 
 export function VideoTile({
   platformData,
+  nowPlaying = false,
   supported = true,
   revealed = false,
   onReveal,
@@ -112,6 +118,14 @@ export function VideoTile({
         <span className="absolute right-1 top-1 max-[768px]:hidden">
           <FavoriteStar platformData={platformData} />
         </span>
+
+        {nowPlaying && (
+          <span
+            className={`pointer-events-none absolute bottom-2 left-2 flex items-center ${roundedXs} px-1.5 py-1 ${deskDurationPill}`}
+          >
+            <NowPlayingBars tone={deskOnRoseFill} />
+          </span>
+        )}
 
         {/* 右下角：直播徽章占时长胶囊的位置，直播卡不显示时长 */}
         {(live || duration) && (

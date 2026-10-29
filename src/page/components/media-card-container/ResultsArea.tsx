@@ -33,6 +33,8 @@ export interface ResultsAreaProps {
   keyword: string;
   /** 专辑/歌单/多集内页：形态固定为曲目行。 */
   isInnerPage?: boolean;
+  /** 本页首条在整份结果里的序号偏移：分页后序号续接，不每页从 01 重排。 */
+  pageOffset?: number;
   /** 重试：内页重载内页，否则重发当前范围。 */
   onRetry: () => void;
   /** 清除搜索（收藏 / 电台过滤后为空时）。 */
@@ -91,6 +93,7 @@ export function ResultsArea({
   scopeIndex,
   keyword,
   isInnerPage = false,
+  pageOffset = 0,
   onRetry,
   onClearSearch,
 }: ResultsAreaProps) {
@@ -209,6 +212,8 @@ export function ResultsArea({
   };
 
   const emptyState = (): { message: string; action?: string } => {
+    // 内页没有关键词可换：空列表说明这张专辑/歌单本身没有曲目。
+    if (isInnerPage) return { message: "这张列表没有曲目。" };
     if (shape === "favorites") {
       return trimmedKeyword
         ? { message: "没有匹配的收藏", action: "清除搜索" }
@@ -216,7 +221,7 @@ export function ResultsArea({
     }
     if (shape === "radio" && trimmedKeyword)
       return { message: "没有匹配的电台", action: "清除搜索" };
-    if (mode === MODE.music && !trimmedKeyword)
+    if (mode === MODE.music && scopeIndex === 0 && !trimmedKeyword)
       return { message: "搜索歌名或歌手，点播到房间。" };
     return { message: "没有找到结果。换个关键词试试。" };
   };
@@ -230,7 +235,7 @@ export function ResultsArea({
         <CollectionRow
           key={`${index}:${platformData.title}`}
           platformData={platformData}
-          index={index + 1}
+          index={pageOffset + index + 1}
           onOpen={() => openCollection(platformData)}
         />
       ));
@@ -239,7 +244,7 @@ export function ResultsArea({
       <TracklistRow
         key={`${index}:${platformData.title}`}
         platformData={platformData}
-        index={index + 1}
+        index={pageOffset + index + 1}
         variant={shape === "radio" ? "radio" : "track"}
         nowPlaying={isNowPlaying(platformData)}
         supported={supported}
@@ -269,6 +274,7 @@ export function ResultsArea({
         <VideoTile
           key={key}
           platformData={platformData}
+          nowPlaying={isNowPlaying(platformData)}
           supported={supported}
           revealed={revealed}
           onReveal={() => setRevealedKey(key)}
@@ -308,7 +314,10 @@ export function ResultsArea({
         <div
           className={`${deskGutter} ${shape === "musicGrid" ? musicGridClass : videoGridClass}`}
         >
-          <SkeletonTiles aspect={shape === "musicGrid" ? "square" : "video"} />
+          <SkeletonTiles
+            count={shape === "musicGrid" ? 10 : 8}
+            aspect={shape === "musicGrid" ? "square" : "video"}
+          />
         </div>
       );
     }

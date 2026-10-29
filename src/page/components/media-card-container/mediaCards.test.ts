@@ -6,9 +6,11 @@ import { MediaContainerContext } from "../media-container-context/MediaContainer
 import { MODE } from "../desk/deskModes";
 import { ShowMessage } from "../../../iirose_func/ShowMessage";
 import { NetEasePlatform } from "../../../platforms/NetEasePlatform";
+import { FavoritesStorageService } from "../../../storage/FavoritesStorageService";
 import { Cover, upgradeCoverUrl } from "./Cover";
 import { CollectionHeader } from "./CollectionHeader";
 import { CollectionRow } from "./CollectionRow";
+import { FavoriteStar } from "./FavoriteStar";
 import { MusicTile } from "./MusicTile";
 import { ResultsArea, shapeOf } from "./ResultsArea";
 import { SkeletonRows, SkeletonTiles } from "./Skeletons";
@@ -790,6 +792,8 @@ describe("结果区状态机", () => {
     const retry = Array.from(host.querySelectorAll("button")).find(
       (el) => el.textContent === "重试",
     )!;
+    // 手机可点目标 ≥ 44px（DESIGN text-button.hit-area）
+    expect(classesOf(retry)).toContain("min-h-[44px]");
     retry.click();
     expect(onRetry).toHaveBeenCalledOnce();
   });
@@ -822,14 +826,16 @@ describe("结果区状态机", () => {
     const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
     const songs = ready([song]);
     await mount(results({ ...resultsBase, mediaData: songs }), songs);
-    (host.querySelector('button[aria-label="点播"]') as HTMLElement).click();
+    (
+      host.querySelector('button[aria-label="点播 晴天"]') as HTMLElement
+    ).click();
     expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(song);
 
     render(null, host);
     (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom = false;
     const again = ready([song]);
     await mount(results({ ...resultsBase, mediaData: again }), again);
-    const disabled = host.querySelector('button[aria-label="点播"]')!;
+    const disabled = host.querySelector('button[aria-label="点播 晴天"]')!;
     expect(disabled.getAttribute("aria-disabled")).toBe("true");
     (disabled as HTMLElement).click();
     expect(show).toHaveBeenCalledWith("这个房间不支持点播");
@@ -859,6 +865,92 @@ describe("结果区状态机", () => {
     const rows = host.querySelectorAll("[data-imw-tracklist-row]");
     expect(rows[0].getAttribute("data-now-playing")).toBeNull();
     expect(rows[1].getAttribute("data-now-playing")).toBe("true");
+  });
+
+  it("房间切歌后 1s 内跟着切换；卸载后停止轮询", async () => {
+    vi.useFakeTimers();
+    try {
+      const name = document.createElement("div");
+      name.id = "shareMediaSongName";
+      name.textContent = "晴天";
+      document.body.append(name);
+      const songs = ready([song, secondSong]);
+      await mount(results({ ...resultsBase, mediaData: songs }), songs);
+      const rows = () => host.querySelectorAll("[data-imw-tracklist-row]");
+      expect(rows()[0].getAttribute("data-now-playing")).toBe("true");
+
+      name.textContent = "鱼";
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(rows()[0].getAttribute("data-now-playing")).toBeNull();
+      expect(rows()[1].getAttribute("data-now-playing")).toBe("true");
+
+      // 卸载即退订：轮询定时器随之清掉
+      render(null, host);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("分页后序号续接（pageOffset）", async () => {
+    const songs = ready([song]);
+    await mount(
+      results({ ...resultsBase, mediaData: songs, pageOffset: 10 }),
+      songs,
+    );
+    const row = host.querySelector("[data-imw-tracklist-row]")!;
+    expect(row.textContent).toContain("11");
+  });
+
+  it("内页空列表给内页文案；专辑 / 歌单范围未搜索时不说「搜索歌名」", async () => {
+    const empty = ready([]);
+    await mount(
+      results({ ...resultsBase, isInnerPage: true, mediaData: empty }),
+      empty,
+    );
+    expect(host.textContent).toContain("这张列表没有曲目。");
+
+    const emptyAlbum = ready([]);
+    await mount(
+      results({ ...resultsBase, scopeIndex: 1, mediaData: emptyAlbum }),
+      emptyAlbum,
+    );
+    expect(host.textContent).not.toContain("搜索歌名或歌手");
+    expect(host.textContent).toContain("没有找到结果。");
+  });
+
+  it("点封面打开来源页；没有来源网址时不渲染覆盖按钮", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    await mount(
+      withCtx(h(TracklistRow, { platformData: song, index: 1, onPlay() {} })),
+    );
+    (
+      host.querySelector('button[aria-label="打开来源页：晴天"]') as HTMLElement
+    ).click();
+    expect(open).toHaveBeenCalledWith(song.websiteUrl);
+
+    render(null, host);
+    await mount(
+      withCtx(
+        h(TracklistRow, {
+          platformData: { ...song, websiteUrl: "" } as PlatformData,
+          index: 1,
+          onPlay() {},
+        }),
+      ),
+    );
+    expect(host.querySelector('[aria-label^="打开来源页"]')).toBeNull();
+  });
+
+  it("视频卡也标「房间正在播放」", async () => {
+    await mount(
+      withCtx(
+        h(VideoTile, { platformData: video, nowPlaying: true, onPlay() {} }),
+      ),
+    );
+    expect(host.querySelector("[data-imw-now-playing]")).not.toBeNull();
   });
 
   it("内页进出保留外层滚动位置（返回同一份外层结果时）", async () => {
@@ -928,5 +1020,176 @@ describe("骨架与音柱小组件", () => {
     const bars = host.querySelectorAll("span");
     expect(bars).toHaveLength(4); // 容器 + 三根
     expect(host.innerHTML).toContain("bg-[#FFFFFF]");
+  });
+});
+
+describe("收藏星", () => {
+  const star = () => host.querySelector("button")!;
+
+  beforeEach(() => {
+    vi.spyOn(FavoritesStorageService, "init").mockResolvedValue(null);
+    vi.spyOn(FavoritesStorageService, "onExternalChange").mockReturnValue(
+      () => {},
+    );
+  });
+
+  it("已收藏：实心星 + star 色 + aria-pressed", async () => {
+    vi.spyOn(FavoritesStorageService, "isFavorited").mockReturnValue(true);
+    await mount(withCtx(h(FavoriteStar, { platformData: song })));
+    expect(star().getAttribute("aria-pressed")).toBe("true");
+    expect(star().getAttribute("aria-label")).toBe("取消收藏");
+    expect(star().getAttribute("class")).toContain(tokens.deskStarOn);
+    // 实心星：路径填充实色；空心星是描边
+    expect(host.innerHTML).toContain('fill="currentColor"');
+  });
+
+  it("未收藏：空心星 + ink3", async () => {
+    vi.spyOn(FavoritesStorageService, "isFavorited").mockReturnValue(false);
+    await mount(withCtx(h(FavoriteStar, { platformData: song })));
+    expect(star().getAttribute("aria-pressed")).toBe("false");
+    expect(star().getAttribute("class")).toContain(tokens.deskInk3);
+    expect(host.innerHTML).toContain('fill="none"');
+  });
+
+  it("toggle 跟随返回值；失败回滚到点击前的状态", async () => {
+    vi.spyOn(FavoritesStorageService, "isFavorited").mockReturnValue(false);
+    const toggle = vi
+      .spyOn(FavoritesStorageService, "toggle")
+      .mockResolvedValue({ isFavorited: true } as never);
+    await mount(withCtx(h(FavoriteStar, { platformData: song })));
+
+    await act(async () => {
+      star().click();
+    });
+    expect(toggle).toHaveBeenCalledOnce();
+    expect(star().getAttribute("aria-pressed")).toBe("true");
+
+    toggle.mockRejectedValueOnce(new Error("quota exceeded"));
+    await act(async () => {
+      star().click();
+    });
+    // 乐观更新到 false 后失败 → 回到 true，不与存储脱节
+    expect(star().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("连点只认第一次：toggle 未落地前的第二次点击被丢弃", async () => {
+    vi.spyOn(FavoritesStorageService, "isFavorited").mockReturnValue(false);
+    let settle: (value: never) => void = () => {};
+    const toggle = vi
+      .spyOn(FavoritesStorageService, "toggle")
+      .mockImplementation(
+        () => new Promise((resolve) => (settle = resolve)) as never,
+      );
+    await mount(withCtx(h(FavoriteStar, { platformData: song })));
+
+    await act(async () => {
+      star().click();
+      star().click();
+    });
+    expect(toggle).toHaveBeenCalledOnce();
+    await act(async () => {
+      settle({ isFavorited: true } as never);
+    });
+    expect(star().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("存储层就绪后重读：慢速 IndexedDB 下已收藏的条目不会显示成空心星", async () => {
+    let resolveInit: (value: null) => void = () => {};
+    vi.spyOn(FavoritesStorageService, "init").mockImplementation(
+      () => new Promise<null>((resolve) => (resolveInit = resolve)) as never,
+    );
+    const isFavorited = vi
+      .spyOn(FavoritesStorageService, "isFavorited")
+      .mockReturnValue(false);
+    await mount(withCtx(h(FavoriteStar, { platformData: song })));
+    expect(star().getAttribute("aria-pressed")).toBe("false");
+
+    isFavorited.mockReturnValue(true);
+    await act(async () => {
+      resolveInit(null);
+      await Promise.resolve();
+    });
+    expect(star().getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("不可收藏的条目返回 null", async () => {
+    await mount(
+      withCtx(
+        h(FavoriteStar, {
+          platformData: { title: "无来源", websiteUrl: "" } as PlatformData,
+        }),
+      ),
+    );
+    expect(host.querySelector("button")).toBeNull();
+  });
+});
+
+describe("多 P / 多集的「选集」入口", () => {
+  it("multiPage 落地后才出现「选集」，点击走钻取回调", async () => {
+    const onSelectEpisodes = vi.fn();
+    const multi = {
+      ...video,
+      multiPage: Promise.resolve({ platform: "bilibili" }),
+    } as unknown as PlatformData;
+    await mount(
+      withCtx(
+        h(VideoTile, {
+          platformData: multi,
+          onPlay: () => {},
+          onSelectEpisodes,
+        }),
+      ),
+      multi.multiPage,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const episodes = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "选集",
+    )!;
+    episodes.click();
+    expect(onSelectEpisodes).toHaveBeenCalledOnce();
+
+    render(null, host);
+    await mount(
+      withCtx(
+        h(VideoTile, {
+          platformData: video,
+          onPlay: () => {},
+          onSelectEpisodes,
+        }),
+      ),
+    );
+    expect(
+      Array.from(host.querySelectorAll("button")).find(
+        (el) => el.textContent === "选集",
+      ),
+    ).toBeUndefined();
+  });
+
+  it("multiPage 拒绝时按「没有多集」处理，不抛错也不出按钮", async () => {
+    let reject: (error: Error) => void = () => {};
+    const pending = new Promise<undefined>((_resolve, r) => {
+      reject = r;
+    });
+    await mount(
+      withCtx(
+        h(MusicTile, {
+          platformData: { ...song, multiPage: pending } as PlatformData,
+          onPlay: () => {},
+          onSelectEpisodes: () => {},
+        }),
+      ),
+    );
+    await act(async () => {
+      reject(new Error("分 P 探测失败"));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(
+      Array.from(host.querySelectorAll("button")).find(
+        (el) => el.textContent === "选集",
+      ),
+    ).toBeUndefined();
   });
 });

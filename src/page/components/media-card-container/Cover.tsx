@@ -1,10 +1,12 @@
 // 封面 / 缩略图：`http://`→`https://` 安全升级、加载失败回退 thumb 底 + 自包含图标、
 // `object-cover` 裁切填满并挂内环（DESIGN.md `video-tile` / `tracklist-row`）。
+// 异步封面（收藏恢复等）在落地前只画 thumb 底块，不先闪一个图标再跳成图片。
 import { useEffect, useState } from "preact/hooks";
 import {
   DeskIcon,
   type DeskIconName,
   deskCoverRing,
+  deskFocusRing,
   deskInk2,
   deskThumb,
   roundedXs,
@@ -38,23 +40,31 @@ export function Cover({
 }: CoverProps) {
   const [url, setUrl] = useState("");
   const [failed, setFailed] = useState(false);
+  /** 封面地址已定（字符串封面，或 Promise 已落地）。落地前的空地址不是「没有封面」。 */
+  const [settled, setSettled] = useState(typeof src === "string");
 
   useEffect(() => {
     let alive = true;
     setFailed(false);
     if (typeof src === "string") {
       setUrl(src);
+      setSettled(true);
       return () => {
         alive = false;
       };
     }
     setUrl("");
+    setSettled(false);
     src.then(
       (value) => {
-        if (alive) setUrl(value || "");
+        if (!alive) return;
+        setUrl(value || "");
+        setSettled(true);
       },
       () => {
-        if (alive) setUrl("");
+        if (!alive) return;
+        setUrl("");
+        setSettled(true);
       },
     );
     return () => {
@@ -72,23 +82,31 @@ export function Cover({
         <img
           src={upgradeCoverUrl(url)}
           alt={alt}
+          loading="lazy"
+          decoding="async"
           className="block h-full w-full object-cover object-center"
           onError={() => setFailed(true)}
         />
-      ) : (
+      ) : settled ? (
         <div
           className={`grid h-full w-full place-items-center ${deskInk2}`}
           data-imw-cover-fallback="true"
         >
           <DeskIcon name={icon} size={20} />
         </div>
+      ) : (
+        <div
+          className="h-full w-full"
+          aria-hidden="true"
+          data-imw-cover-pending="true"
+        />
       )}
       {onOpen && (
         <button
           type="button"
-          aria-label="打开来源页"
+          aria-label={alt ? `打开来源页：${alt}` : "打开来源页"}
           title="打开来源页"
-          className="absolute inset-0 h-full w-full cursor-pointer border-0 bg-transparent p-0"
+          className={`absolute inset-0 h-full w-full cursor-pointer border-0 bg-transparent p-0 ${deskFocusRing}`}
           onClick={(event) => {
             event.stopPropagation();
             onOpen();
