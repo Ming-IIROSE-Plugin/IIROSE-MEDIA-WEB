@@ -1,15 +1,14 @@
 import { Component } from "preact";
-import { MainNavigationBar } from "./components/navigationBar/main/MainNavigationBar";
+import { DeskNavigation } from "./components/desk/DeskNavigation";
 import { MainAppContainer } from "./MainAppContainer";
 import { setPanelFocus } from "../playback/PanelFocus";
 import { LocalStorageUtils } from "../settings/localStorageUtils/LocalStorageUtils";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
-import { themedSurface } from "./components/floating-panel/floatingPanel";
+import { normalizeMode } from "./components/desk/deskModes";
+import { deskInk, deskPaper } from "./components/floating-panel/tokens";
 
 interface MainAppState {
-  CategoriesIndex: number;
-  needOutFromMultiPage: boolean;
-  needOutFromSettings: boolean;
+  mode: number;
 }
 
 interface MainAppProps {
@@ -24,48 +23,29 @@ export class MainApp extends Component<MainAppProps, MainAppState> {
     super(props);
     LocalStorageUtils.Init();
     this.state = {
-      CategoriesIndex: PluginSettings.getPluginSetting().defaultPage,
-      needOutFromMultiPage: false,
-      needOutFromSettings: false,
+      // 首次打开进入「插件启动默认页面」指定的模式（非法值回退音乐）
+      mode: normalizeMode(PluginSettings.getPluginSetting().defaultPage),
     };
   }
 
   itemsPerPage = 10;
 
   componentDidMount(): void {
-    setPanelFocus({ category: this.state.CategoriesIndex, platform: 0 });
-  }
-
-  componentDidUpdate(
-    _prevProps: Readonly<MainAppProps>,
-    prevState: Readonly<MainAppState>,
-  ): void {
-    const { needOutFromMultiPage, CategoriesIndex } = this.state;
-    if (CategoriesIndex !== prevState.CategoriesIndex) {
-      this.setState({ needOutFromMultiPage: true });
-    } else if (needOutFromMultiPage) {
-      this.setState({ needOutFromMultiPage: false });
-    }
+    setPanelFocus({ category: this.state.mode, platform: 0 });
   }
 
   render() {
-    const { CategoriesIndex, needOutFromMultiPage, needOutFromSettings } =
-      this.state;
+    const { mode } = this.state;
     const { searchKeyword, mainAppDisplay, changeSearchKeyword } = this.props;
     return (
       <div
-        className={`flex flex-col w-full h-full ${themedSurface}`}
+        className={`flex h-full w-full max-[768px]:flex-col ${deskPaper} ${deskInk}`}
         id="IIROSE_MEDIA"
       >
-        <MainNavigationBar
-          switchCategories={this.switchCategories}
-          ShowHideMainApp={this.props.ShowHideMainApp}
-          activeButtonIndex={CategoriesIndex}
-        />
+        <DeskNavigation mode={mode} onSelectMode={this.switchMode} />
         <MainAppContainer
-          CategoriesIndex={CategoriesIndex}
-          needOutFromMultiPage={needOutFromMultiPage}
-          needOutFromSettings={needOutFromSettings}
+          mode={mode}
+          switchMode={this.switchMode}
           ShowOrHideIMC={this.props.ShowHideMainApp}
           searchKeyword={searchKeyword}
           changeSearchKeyword={changeSearchKeyword}
@@ -76,16 +56,12 @@ export class MainApp extends Component<MainAppProps, MainAppState> {
   }
 
   /**
-   *
-   * @param index 0: 视频 1: 音乐 2: 设置 3: 关于
+   * @param index 0 音乐 1 视频 2 电台 3 收藏 4 设置 5 关于
    */
-  protected switchCategories = async (index: number) => {
-    await this.setState({ CategoriesIndex: index });
-    setPanelFocus({ category: index, platform: 0 });
-    if (index !== 2 && index !== 3) {
-      this.setState({ needOutFromSettings: true });
-    } else if (this.state.needOutFromSettings) {
-      this.setState({ needOutFromSettings: false });
-    }
+  protected switchMode = async (index: number) => {
+    const mode = normalizeMode(index);
+    if (mode === this.state.mode) return;
+    await this.setState({ mode });
+    // 平台下标由 MainAppContainer 按各模式的现场快照写回
   };
 }

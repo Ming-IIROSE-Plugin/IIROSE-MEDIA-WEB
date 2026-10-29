@@ -122,7 +122,10 @@ function isShufflePlatform(value: unknown): value is ShufflePlatform {
   return SHUFFLE_PLATFORMS.includes(value as ShufflePlatform);
 }
 
-/** 设置「插件启动默认页面」对应的随机平台：0 音乐→网易云，1 视频→B站，其他→网易云。 */
+/**
+ * 设置「插件启动默认页面」对应的随机平台：0 音乐→网易云，1 视频→B站。
+ * 2 电台 / 3 收藏 / 4 设置 / 5 关于 都没有单一收藏平台，一律回退网易云。
+ */
 export function defaultShufflePlatform(defaultPage: unknown): ShufflePlatform {
   return defaultPage === 1 ? "bilibili" : "netease";
 }

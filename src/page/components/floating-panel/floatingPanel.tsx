@@ -1,9 +1,11 @@
 // 插件浮窗（收藏随机、播放进度）共用的外观：样式常量与无状态小组件，不含业务逻辑。
 // 以收藏随机的视觉为准（shuffle-picker-panel.md「视觉规范」）；两窗只从这里取外观。
 import type { JSX } from "preact";
+import { deskFocusRing } from "./tokens";
 
-export const focusRing =
-  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-sky-500 focus-visible:outline-offset-[-2px]";
+// 焦点环：2px ink 外圈、2px 间隔（DESIGN.md components.focus-ring）。
+// 浮窗的其余配色归 story 8，本 story 只换环。
+export const focusRing = deskFocusRing;
 // 同一属性的 Tailwind 类不能同时出现（顺序由 Tailwind 决定，不由书写顺序）：
 // 底色、文字色、描边各自按用途补，不放进公共基类。
 export const resetButton = `m-0 cursor-pointer p-0 font-[inherit] ${focusRing}`;
@@ -42,25 +44,6 @@ export const primaryButton = `${resetButton} min-h-[44px] rounded-lg border-0 bg
 /** 主面板根节点 `data-imw-theme` 的取值。 */
 export const themeAttr = (dark: boolean) => (dark ? "dark" : "light");
 
-// 主面板强调色：根节点的两个变量（MainAppControlLayer 按主题解析——浅色取当前平台品牌色经
-// readableAccent 压深的两份，深色都为 sky-500）。主面板的强调一律经这两个变量，浮窗仍用天蓝常量。
-// - `--imw-accent`：实底、描边、淡底、光晕、转圈与空状态图形；
-// - `--imw-accent-ink`：强调色文字与图标（浅色下更深，落在光晕与淡底上仍 ≥4.5:1）。
-
-/** 主面板根节点的强调色变量：默认（深色）天蓝，浅色取 `--imw-brand` / `--imw-brand-ink`。 */
-export const accentVar =
-  "[--imw-accent:var(--color-sky-500,#0ea5e9)] data-[imw-theme=light]:[--imw-accent:var(--imw-brand,var(--color-sky-500,#0ea5e9))] [--imw-accent-ink:var(--color-sky-500,#0ea5e9)] data-[imw-theme=light]:[--imw-accent-ink:var(--imw-brand-ink,var(--color-sky-500,#0ea5e9))]";
-
-/**
- * 主面板表面：浅色柔灰底 + 顶部四行背后的强调色光晕（约 16% 向下渐隐，只在顶部区域）；
- * 深色同浮窗表面、无光晕。
- */
-export const themedSurface =
-  "bg-[#eef1f6] bg-[linear-gradient(180deg,color-mix(in_oklab,var(--imw-accent)_16%,transparent)_0px,color-mix(in_oklab,var(--imw-accent)_6%,transparent)_110px,transparent_180px)] text-[#253047] imw-dark:bg-[#242a34] imw-dark:bg-none imw-dark:text-[#f4f6fa]";
-
-/** 描边色（同 borderTone）；描边宽度与线型由使用处补。 */
-export const themedBorder = "border-black/10 imw-dark:border-white/15";
-
 /** 底部分隔线：用内阴影画，不占盒子高度（各行高度约定不受影响）。 */
 export const themedDividerBottom =
   "shadow-[inset_0_-1px_0_rgba(0,0,0,0.1)] imw-dark:shadow-[inset_0_-1px_0_rgba(255,255,255,0.15)]";
@@ -74,39 +57,6 @@ export const accentText = "text-(color:--imw-accent-ink)";
 /** 悬停淡强调、按压加深（透明底控件用）。 */
 export const pressTone =
   "hov:hover:bg-(color:--imw-accent)/8 active:bg-(color:--imw-accent)/15";
-
-/**
- * 分段标签选中段：强调色实底白字（描边同为强调色，不与 themedBorder 并存）；
- * 抬到相邻段之上，四边都露出强调色描边。
- */
-export const selectedSegment =
-  "relative z-[1] border-(color:--imw-accent) bg-(color:--imw-accent) font-semibold text-white";
-
-/** 分段标签未选段：透明底、主题描边、悬停淡强调。 */
-export const idleSegment = `${themedBorder} bg-transparent ${pressTone}`;
-
-/**
- * 相连分段的首尾圆角；非首段左移 1px 与前一段描边重叠（不叠出 2px 竖线），
- * 选中段靠 selectedSegment 的 z-index 盖在上面，左右描边对称。
- */
-export const segmentEdge = (index: number, count: number) =>
-  [
-    index === 0 ? "rounded-l-lg" : "",
-    index === count - 1 ? "rounded-r-lg" : "",
-    index > 0 ? "-ml-px" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-/**
- * 主面板次要按钮：透明底 + 主题描边、`rounded-lg`、悬停淡强调。
- * 不含尺寸、内边距、字号与文字色，由使用处补。
- */
-export const themedSecondaryButton = `rounded-lg border border-solid bg-transparent ${themedBorder} ${pressTone}`;
-
-/** 主面板次要按钮的开启态：强调色描边与文字、淡强调底（替换 themedSecondaryButton）。 */
-export const themedSecondaryButtonOn =
-  "rounded-lg border border-solid border-(color:--imw-accent) bg-(color:--imw-accent)/10 text-(color:--imw-accent-ink) active:bg-(color:--imw-accent)/15";
 
 /**
  * 主面板结果卡片与列表行的表面：浅色白底 + black/8 描边 + 轻阴影；

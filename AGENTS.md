@@ -21,7 +21,8 @@
 - 宿站交互（WebSocket 媒体、消息）：`src/iirose_func/`。
 - 出网请求走 `src/environment/Environment.ts` 选定的阿里云 CORS 代理（ipinfo.io 判 CN/Global）；改 API 层时注意 fetch 是否需要过代理。
 - 浮窗（播放进度、收藏随机）共用 `src/page/components/floating-panel/` 的样式常量与无状态组件（外框、头部、按钮、拖动手柄、事件隔离）；改两窗外观时改这里，不要在单个浮窗里另写一套。
-- 主面板配色跟随宿站主题：`.IIROSE_MEDIA_CONTAINER` 打开时写 `data-imw-theme="light|dark"`，深色样式用 Tailwind 自定义变体 `imw-dark:`（注册在 `src/app.css`）；主面板颜色一律取 `floating-panel` 的 `themed*` 令牌，不要硬写 `text-white`、`bg-[#…]` 或平台品牌色整条底。
+- 外观令牌唯一来源是 `src/page/components/floating-panel/tokens.ts`（DESIGN.md frontmatter 的落地）：颜色导出**浅深成对的完整 Tailwind 类串**（如 `deskSheet = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]"`），另有字号/圆角/间距、`deskFocusRing`（2px ink 外圈 + 2px 间隔）与内联 SVG 图标 `DeskIcon`。组件只拼令牌，**不得裸写颜色 / `rgba(` / `themed*` / `accentVar`**；需要新颜色先加令牌。结果区与设置组件仍在用 `floatingPanel` 的 `themed*`（story 2 / 7 之前的存量），不要在新代码里继续引用。
+- 主面板配色跟随宿站主题：`.IIROSE_MEDIA_CONTAINER` 打开时写 `data-imw-theme="light|dark"`，深色样式用 Tailwind 自定义变体 `imw-dark:`（注册在 `src/app.css`）；点歌台是「纸/墨/蔷薇红」——`paper` 主区、`rail` 竖栏、`sheet` 抬起面，蔷薇红只表示「点播」与「房间正在放」，平台品牌色只做 7px 来源圆点，从不整片铺底。
 - `src/app.css` 只放 Tailwind 无法表达的东西：@keyframes、mdi 图标 `::before` content（反斜杠不能进 class 名）、JS 切换的状态类（`ShowIIROSE_MEDIA_CONTAINER`）、宿站元素选择器、通配过渡；其余样式一律写进组件的 Tailwind 类，**不要新增 SCSS**。
 
 ## Running and verifying
@@ -34,12 +35,14 @@
 
 - `react`/`react-dom` 由 tsconfig paths 映射到 `preact/compat`——直接 import 'react' 即可，不要安装真正的 react 包。
 - 样式统一 Tailwind v4 任意值类（如 `max-[768px]:hidden`、`[grid-auto-rows:max-content]`）；移动端响应式断点统一使用 `max-[768px]`；点歌卡片网格行必须保持 `max-content` 自适应，否则按钮会被 `overflow:hidden` 裁掉（曾出过此 bug）。
-- 图标一律自包含方案：浮窗（播放进度、收藏随机）用 `src/page/components/floating-panel/` 的内联 SVG 组件；其余位置元素加 id + `src/app.css` 写 `#id::before { content:"\F0xxx"; font-family:"md" }`；**不要借用宿站 `mdi-*` 类**（宿站样式表里未必有该类规则，且没有 `font-family:"md"` 兜底会渲染成无字形——关于图标曾因此消失）。
-- 顶栏布局与触控目标约定：
-  - Row 1（主导航项）：移动端高 44px（`min-h-[44px]`），按钮 44×44px 紧密相连无 gap，纯图标 24px（符合 Apple HIG 44pt 规范）；
-  - Row 2（操作与分页）：移动端高 48px（`min-h-[48px]`），上一页/下一页按钮放大为 48×44px 触控药丸（`rounded-lg`，双钮占宽 25.6%，箭头 22px），视图切换与搜索按钮为 44×44px，搜索框靠右紧邻分页（由左侧视图切换按钮 `mr-auto` 撑满空隙，禁止父级 `justify-between` 导致居中）；
-  - Row 3（选平台组件）：移动端高 40px（`h-10`），保持紧凑相连的长方形选项卡形态（无 gap），图标 26px，文字 13px，禁止切为带间隙的圆形胶囊；
-  - Row 4（子分类标签）：移动端高 36px（`h-[36px]`），内边距 `px-3.5`，文字 12px 防误触。
+- 图标一律自包含方案：点歌台外壳用 `tokens.ts` 的 `DeskIcon`（`currentColor`，DESIGN.md 的 symbol 路径），浮窗（播放进度、收藏随机）用 `floating-panel` 的内联 SVG 组件；仍有 mdi 字形的位置（设置卡、结果区空/加载图形）加 id/类 + `src/app.css` 写 `::before { content:"\F0xxx"; font-family:"md" }`；**不要借用宿站 `mdi-*` 类**（宿站样式表里未必有该类规则，且没有 `font-family:"md"` 兜底会渲染成无字形——关于图标曾因此消失），也不用 emoji。
+- 点歌台外壳布局与触控目标约定（取代旧「Row 1–4 顶栏」）：
+  - 桌面 >768px：左侧 84px 竖栏（品牌标 + 音乐/视频/电台/收藏 + 弹性空白 + 设置/关于，选中项抬到 sheet 底 + 1px 细线环 + 左缘 3px 蔷薇红竖条）+ 主列（页头 → 搜索栏 → 范围行 → 结果区 → 底部条）。页头、搜索栏、范围行用 36px 左右边距。
+  - 手机 ≤768px（`max-[768px]`）：单列——页头 → 搜索栏 → 范围行 → 列表 → 迷你条 → 五项底部标签栏（音乐/视频/电台/收藏/设置，关于并入设置）；搜索栏与列表左右 16px，页头与范围行 20px。
+  - 搜索栏是面板内联输入（来源切换器 → 竖分隔线 → 放大镜 + 输入区 → 键位提示 → 墨底「搜索」），提交仍走 `SearchBar.onSubmit → changeSearchKeyword → searchAction`；桌面空提示 `/`、有内容提示 `Enter`，手机只留来源简称 + 输入区（16px 防 iOS 放大）；桌面打开面板自动聚焦、手机不聚焦。
+  - 范围行：左为范围标签（`role="tablist"`、方向键移动、选中项 2px 墨色下划线压在行底线上），右为视图切换（仅两种视图时出现）与等宽分页 `01 / 28`；手机标签区可横滚、右侧固定。
+  - 手机端所有可点目标 ≥44px（视觉可更小，用 `max-[768px]:h-11 max-[768px]:w-11` 外扩），断点一律 `max-[768px]`（宿站 iframe 有 1.13–1.19 倍缩放）。
+  - 六种模式各自保留关键词、范围与页码：切模式先快照现场再恢复，**不要用「切模式即重置搜索词」**的老写法。
 
 ## Known pitfalls
 
@@ -51,6 +54,7 @@
 - 宿站 `messages.html` iframe 存在 1.13~1.19 倍视口缩放：物理宽度 390px 对应 iframe 465px，412px+ 对应 470px~512px；移动端响应式断点必须使用 `max-[768px]`，禁止单一依赖 `max-[490px]`（否则大屏手机会回退桌面布局并导致文字折行）。
 - 宿站 `buildSelect2` 多弹窗流转与 fadeOut 冲突：选项/多选确定点击后，宿站**先同步执行业务回调，紧随其后立即触发 `fadeOut(speed250, () => selectHolderBox.empty())`**！若在回调内同步唤起下一个 `buildSelect2`（如选集后打开正序/乱序确认框），刚生成的新弹窗会被宿站后续的 `fadeOut` 瞬间清空销毁。**跨弹窗流转必须包裹在 `setTimeout(() => { ... }, 300)` 中**，待前置 250ms 淡出动画完全结束且 DOM 清空后再行淡入。
 - 宿站 `buildSelect2` 多选无序收集与顺序选择扩展：宿站原生多选点击确定时，遍历已缓存的 jQuery 集合 `m`（索引 `0` 到 `u-1`），**会彻底丢失用户的点击先后次序**。实现「按点选顺序（12345）播放」必须在微任务中接管选项与确定按钮的 `onclick`，用响应式队列动态追踪点击时间线并渲染序号徽章；同时确定按钮按使用习惯保留在列表最下方原生末端；在业务层（如网易云批量详情接口及 B 站分 P 数组）必须依此有序数组二次重排，防止接口返回的乱序覆盖用户的选取顺序。
+- **选集不再走 `buildSelect2`**：选集的目标形态是插件自有面板（`episode-picker`：有序多选、序号徽章、正序/乱序、`点播所选`），不再受宿站弹窗淡出冲突约束。`BilibiliPlatform.buildBiliSelect`、`NetEasePlatform` 的 `MLOD`/`AOD` 选集分支与 `IIROSEUtils` 里的 `selectedQueue` 接管是**待移除的存量**：不要在这些分支上继续加功能，改选集时一并迁到插件面板并删掉那段接管代码与跨弹窗 `setTimeout(300)`。
 - 输入框 `@` 链接拦截防泄露：拦截必须在 `moveinputDo` 最前端**同步清空输入框并中断原生发送**，再进入异步 URL 重定向与直链嗅探；不可在异步期间保留输入内容，否则用户连按回车或异常放行会导致链接以私聊或公聊文字误发。
 - 混合内容安全与封面 HTTPS 升级：宿站运行在 HTTPS 上下文，第三方 API（如网易云）返回的封面常为 `http://` 形式，会触发浏览器 Mixed Content 拦截导致图片破损；渲染封面必须先做 `src.replace(/^http:\/\//, 'https://')` 安全升级，并挂载 `onerror` 平滑回退到自包含矢量图标。
 - 宿站控制台日志陷阱：宿站会把 `&1` 媒体播放事件以 `m__4@0>...` 卡片形态打到控制台（来自宿站自身脚本，非插件日志）——**不能**凭该日志判断「点歌卡片已发送」；`Socket.sendMessage`（公聊文本/总结消息）则完全没有控制台日志。判定消息是否真的发出/渲染，必须查聊天区消息流 DOM（`div.msgholderBox`，取 children 最多的容器看末尾子块）——spec-announce-batch-scope 真机验证曾两次把「正常抑制」误判成「summary 失效」皆因读日志不读 DOM。
@@ -68,7 +72,6 @@
 - **本地 HTTP 注入会被 CSP 拦**：`fetch("http://127.0.0.1:.../bundle.js")` 在 messages.html 里报 `Failed to fetch`。可行方式仍是把 bundle 源码内嵌进 Playwright 代码文件，在 `messages.html` frame 里 `new Function(src)()` 执行。
 - **房间的媒体能力不同**：`window.mediaShareRoom` 为 false 的房间（如「空间站」）发点播报文不起播；「练歌房」这类视频分享房可播，且对普通账号（`identity=0`/`rank=4`）开放。
 - **重播用缓存报文本身是有效的**：同曲重发 `m__4` 卡片 + `&1` 报文能让宿站重新起播（用户实测 + 本地复现）。报文缓存按房间落在 `sessionStorage` 的 `imwMediaPayload`，刷新后恢复；命中校验房间与 6 小时有效期。
-
 
 ## 提交纪律
 

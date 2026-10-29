@@ -2,10 +2,13 @@ import { FavoritesStorageService } from "../../storage/FavoritesStorageService";
 import { NetEasePlatform } from "../../platforms/NetEasePlatform";
 import { BilibiliPlatform } from "../../platforms/BilibiliPlatform";
 
+/** 收藏来源筛选：「全部」= 不按平台过滤（story 1 的单来源现场，story 6 接入切换器）。 */
+type FavoritePlatformFilter = "all" | "netease" | "bilibili";
+
 export class FavoritesService {
   /** 最近一次收藏查询条件：云端拉取落地后按同一条件刷新已渲染的列表 */
   private static lastQuery: {
-    platform: "netease" | "bilibili";
+    platform: FavoritePlatformFilter;
     type: "all" | "song" | "album" | "playlist" | "video";
     itemsPerPage: number;
   } | null = null;
@@ -35,18 +38,12 @@ export class FavoritesService {
    */
   public static async loadFavorites(
     ctx: MainAppContainerActionContext,
-    platform: "netease" | "bilibili",
+    platform: FavoritePlatformFilter,
     type: "all" | "song" | "album" | "playlist" | "video",
     itemsPerPage: number = 10,
   ) {
-    const {
-      searchKeyword,
-      favoritesSearchKeyword,
-      favoritesMode,
-      currentPage,
-      requestToken,
-      isCurrentInMultiPage,
-    } = ctx.getState();
+    const { searchKeyword, currentPage, requestToken, isCurrentInMultiPage } =
+      ctx.getState();
 
     // 若当前处于选集/多集状态，阻断外层收藏查询，防止覆盖正在查看的选集列表
     if (isCurrentInMultiPage) {
@@ -55,9 +52,8 @@ export class FavoritesService {
 
     this.lastQuery = { platform, type, itemsPerPage };
 
-    const effectiveKeyword = (
-      favoritesMode ? favoritesSearchKeyword : searchKeyword
-    )?.trim();
+    // 收藏模式有自己的一级现场（关键词按模式保存），过滤词就是当前模式的关键词
+    const effectiveKeyword = searchKeyword?.trim();
 
     const currentRequestToken = requestToken + 1;
     ctx.setState({ updating: true, requestToken: currentRequestToken });

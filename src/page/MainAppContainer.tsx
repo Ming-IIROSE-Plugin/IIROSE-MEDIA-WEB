@@ -1,8 +1,5 @@
 import { setPanelFocus } from "../playback/PanelFocus";
-import { Component } from "preact";
-import { MediaSearchBar } from "./components/mediaContainerBar/MediaSearchBar";
-import { PlatformSelector } from "./components/mediaContainerBar/PlatformSelector";
-import { MediaContainerSubNavBar } from "./components/mediaContainerBar/MediaContainerSubNavBar";
+import { Component, createRef } from "preact";
 import { MediaCard } from "./components/media-card-container/MediaCard";
 import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
 import { NetEasePlatform } from "../platforms/NetEasePlatform";
@@ -23,11 +20,63 @@ import { RadioService } from "./MainAppContainerServices/RadioService";
 import { FavoritesService } from "./MainAppContainerServices/FavoritesService";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { SyncManager } from "../sync/SyncManager";
-import { themedDividerBottom } from "./components/floating-panel/floatingPanel";
+import { PageHeader } from "./components/desk/PageHeader";
+import { SearchBar, type SearchSource } from "./components/desk/SearchBar";
+import { ScopeRow, type ScopeItem } from "./components/desk/ScopeRow";
+import { detectVideoTarget } from "./components/desk/searchIntent";
 import {
-  DEFAULT_BRAND,
-  readableAccent,
-} from "./components/floating-panel/accent";
+  MODE,
+  hasPager,
+  hasScopeRow,
+  hasSearchBar,
+  modeTitle,
+  normalizeMode,
+} from "./components/desk/deskModes";
+import { deskInk, deskPaper } from "./components/floating-panel/tokens";
+
+type ModeMediaData = Promise<{
+  platformData: PlatformData[];
+  totalPage: number;
+}> | null;
+
+/** 一个模式的全部现场：切走时快照、切回时原样恢复（关键词、范围、页码、结果）。 */
+interface ModeSnapshot {
+  searchKeyword: string;
+  PlatformIndex: number;
+  SubNavBarIndex: number;
+  currentPage: number;
+  totalPage: number;
+  mediaData: ModeMediaData;
+  allMediaData: PlatformData[];
+  isCurrentInMultiPage: boolean;
+  oldItems: OldItems | null;
+  settingsData: SettingData[] | null;
+  currentSubNavBarAction: () => void;
+  currentOnDemandPlay: (platformData: PlatformData) => void;
+}
+
+/** 空现场的字段（不取自任何模式）。 */
+function emptyModeState(): ModeSnapshot {
+  return {
+    searchKeyword: "",
+    PlatformIndex: 0,
+    SubNavBarIndex: 0,
+    currentPage: 1,
+    totalPage: 0,
+    mediaData: null,
+    allMediaData: [],
+    isCurrentInMultiPage: false,
+    oldItems: null,
+    settingsData: null,
+    currentSubNavBarAction: () => {},
+    currentOnDemandPlay: () => {},
+  };
+}
+
+/** 手机（≤768px，宿站 iframe 缩放后仍按 `max-[768px]` 判定）：不自动聚焦搜索栏。 */
+function isPhone(): boolean {
+  return window.matchMedia?.("(max-width: 768px)").matches ?? false;
+}
 
 export class MainAppContainer extends Component<
   MainAppContainerProps,
@@ -38,180 +87,64 @@ export class MainAppContainer extends Component<
   bilibiliRefreshCount = 1;
   mediaContainerGesture = new MediaContainerGesture(this.props.ShowOrHideIMC);
 
+  /** 切模式时待提交的关键词（粘贴视频链接要先切到视频模式）。 */
+  private pendingSearch: string | null = null;
+  /** 各模式现场快照；没有 = 该模式首次进入。 */
+  private snapshots = new Map<number, ModeSnapshot>();
+  private searchBarRef = createRef<SearchBar>();
+
   constructor(props: MainAppContainerProps) {
     super(props);
+    const mode = normalizeMode(props.mode);
     this.state = {
-      searchKeyword: "",
+      mode,
+      ...emptyModeState(),
+      updating: false,
+      requestToken: 0,
       searchViewMode:
         PluginSettings.getPluginSetting().searchViewMode || "card",
-      SubNavBarIndex: 0,
-      currentPage: 1,
-      updating: false,
-      totalPage: 0,
-      PlatformIndex: 0,
-      isCurrentInMultiPage: false,
-      mediaData: null as Promise<{
-        platformData: PlatformData[];
-        totalPage: number;
-      }> | null,
-      allMediaData: [] as PlatformData[],
-      oldItems: null as OldItems | null,
-      settingsData: null as SettingData[] | null,
-      requestToken: 0,
-      currentSubNavBarAction: () => {},
-      currentOnDemandPlay: () => {},
-      favoritesMode: false,
-      favoritesSearchKeyword: "",
     };
   }
 
-  private discoveryOldItems: OldItems | null = null;
-
-  /**
-   * 把当前平台品牌色压深后的两份强调色（见 readableAccent）写到主面板根节点：
-   * `--imw-brand`（fill）与 `--imw-brand-ink`（文字/图标）；根节点再按主题解析出
-   * `--imw-accent` / `--imw-accent-ink`（浅色 = 这两色，深色 = sky-500）。
-   */
-  private applyBrandAccent() {
-    // 按原始品牌色缓存：只在平台/分类切换导致品牌色变化时才重新压深与写入
-    const brand = this.currentBrandColor();
-    if (brand === this.appliedBrand) return;
-    const root = document.getElementById("IIROSE_MEDIA_CONTAINER");
-    if (!root) return;
-    const { fill, ink } = readableAccent(brand);
-    root.style.setProperty("--imw-brand", fill);
-    root.style.setProperty("--imw-brand-ink", ink);
-    this.appliedBrand = brand;
-  }
-
-  private appliedBrand: string | null = null;
-
-  private currentBrandColor() {
-    const categories = this.getActiveCategories(this.props.CategoriesIndex);
-    const platform =
-      categories?.platform[this.state.PlatformIndex] || categories?.platform[0];
-    return platform?.color || DEFAULT_BRAND;
-  }
-
   componentDidMount() {
-    this.applyBrandAccent();
     setPanelFocus({
-      category: this.props.CategoriesIndex,
+      category: this.state.mode,
       platform: this.state.PlatformIndex,
     });
     FavoritesStorageService.init();
     // 云端拉取落地后刷新已渲染的收藏列表（外部变更通知，不会反向触发上传）
     FavoritesStorageService.onExternalChange(() => {
-      if (!this.state.favoritesMode) return;
+      if (this.state.mode !== MODE.favorites) return;
       void FavoritesService.reloadLastQuery(this.getActionContext());
     });
     void SyncManager.init();
+    if (this.props.active && !isPhone()) this.searchBarRef.current?.focus();
+    // 首个模式的首个范围：与旧四行顶栏挂载时自执行首项一致
+    this.runCurrentScope();
   }
 
-  sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
+  componentDidUpdate(prevProps: Readonly<MainAppContainerProps>): void {
+    // 面板打开：桌面把焦点放进搜索栏（手机不聚焦）
+    if (!prevProps.active && this.props.active && !isPhone())
+      this.searchBarRef.current?.focus();
 
-  componentDidUpdate(
-    prevProps: Readonly<MainAppContainerProps>,
-    prevState: Readonly<MainAppContainerState>,
-  ): void {
-    this.applyBrandAccent();
-    if (prevProps.CategoriesIndex !== this.props.CategoriesIndex) {
-      setPanelFocus({ category: this.props.CategoriesIndex, platform: 0 });
-      this.discoveryOldItems = null;
-      this.setState({
-        PlatformIndex: 0,
-        SubNavBarIndex: 0,
-        currentPage: 1,
-        allMediaData: [],
-        mediaData: null,
-        favoritesSearchKeyword: "",
-      });
+    // 切模式：先快照当前现场，再恢复目标模式的现场
+    if (prevProps.mode !== this.props.mode) {
+      this.applyMode(normalizeMode(this.props.mode));
       return;
     }
 
-    // 收藏模式切换时不触发任何数据重置逻辑
-    if (prevState.favoritesMode !== this.state.favoritesMode) {
-      return;
+    // 全局搜索词（聊天框 `@` 点歌、外部调用）：切到能承接它的模式再提交
+    if (prevProps.searchKeyword !== this.props.searchKeyword) {
+      const keyword = (this.props.searchKeyword || "").trim();
+      if (keyword && keyword !== this.state.searchKeyword)
+        this.handleExternalKeyword(keyword);
+      else if (!keyword && this.state.searchKeyword)
+        this.controller.runSearch("", { propagate: false });
     }
 
-    const { needOutFromMultiPage, needOutFromSettings } = this.props;
-    const {
-      settingsData,
-      isCurrentInMultiPage,
-      oldItems,
-      mediaData,
-      allMediaData,
-      totalPage,
-    } = this.state;
-    const propsSearchKeyword = this.props.searchKeyword;
-    const prevPropsSearchKeyword = prevProps.searchKeyword;
-
-    if (prevState.SubNavBarIndex !== this.state.SubNavBarIndex) {
-      this.setState({ updating: false });
-    }
-
-    if (prevState.PlatformIndex !== this.state.PlatformIndex) {
-      this.setState({ updating: false });
-    }
-
-    if (prevPropsSearchKeyword !== propsSearchKeyword) {
-      const { SubNavBarIndex, favoritesMode } = this.state;
-      if (favoritesMode) {
-        // 如果在收藏模式下收到外部全局搜索指令（如聊天框 @点歌），退出收藏模式进入全网模式
-        this.discoveryOldItems = null;
-        this.setState(
-          {
-            favoritesMode: false,
-            allMediaData: [],
-            mediaData: null,
-            searchKeyword: propsSearchKeyword || "",
-            currentPage: 1,
-          },
-          () => {
-            const categories = this.categories[this.props.CategoriesIndex];
-            const plat = categories?.platform[this.state.PlatformIndex];
-            plat?.subNavBarItems[this.state.SubNavBarIndex]?.searchAction();
-          },
-        );
-      } else if (propsSearchKeyword === null || propsSearchKeyword === "") {
-        if (SubNavBarIndex === 0) return;
-        this.setState({
-          allMediaData: [],
-          mediaData: null,
-          searchKeyword: "",
-          currentPage: 1,
-        });
-      } else if (propsSearchKeyword !== this.state.searchKeyword) {
-        this.setState(
-          {
-            allMediaData: [],
-            mediaData: null,
-            searchKeyword: propsSearchKeyword,
-            currentPage: 1,
-          },
-          () => {
-            const categories = this.categories[this.props.CategoriesIndex];
-            const plat = categories?.platform[this.state.PlatformIndex];
-            plat?.subNavBarItems[this.state.SubNavBarIndex]?.searchAction();
-          },
-        );
-      }
-    }
-
-    // 退出多页
-    if (needOutFromMultiPage && isCurrentInMultiPage) {
-      this.setState({ isCurrentInMultiPage: false });
-    }
-
-    // 退出设置页面
-    if (needOutFromSettings && settingsData) {
-      this.setState({ settingsData: null });
-    }
-
-    // 储存mediaItems
-    if (isCurrentInMultiPage && !oldItems) {
+    // 进入专辑/歌单/多集内页时保存外层现场（`‹ 返回` 用）
+    if (this.state.isCurrentInMultiPage && !this.state.oldItems) {
       this.setState({
         oldItems: {
           mediaData: this.state.mediaData,
@@ -223,82 +156,52 @@ export class MainAppContainer extends Component<
         },
       });
     }
-
-    // 搜索关键字改变, 重置页面
-    if (
-      prevState.searchKeyword !== this.state.searchKeyword &&
-      prevState.SubNavBarIndex !== this.state.SubNavBarIndex
-    ) {
-      this.setState({
-        totalPage: 0,
-        currentPage: 1,
-        allMediaData: [],
-        mediaData: null,
-      });
-    }
-
-    // 当前页面改变
-    if (!mediaData && allMediaData.length > 0 && totalPage > 0) {
-      this.setState({
-        totalPage: 0,
-        currentPage: 1,
-        allMediaData: [],
-        mediaData: null,
-      });
-    }
   }
 
   render() {
-    const { CategoriesIndex, ShowOrHideIMC, changeSearchKeyword } = this.props;
+    const { ShowOrHideIMC } = this.props;
     const {
+      mode,
       PlatformIndex,
       SubNavBarIndex,
       mediaData,
       settingsData,
       searchKeyword,
-      favoritesSearchKeyword,
       currentPage,
       totalPage,
-      isCurrentInMultiPage,
-      currentOnDemandPlay,
       searchViewMode,
-      favoritesMode,
+      currentOnDemandPlay,
     } = this.state;
-    const {
-      changecurrentPage,
-      updateSubNavBarIndex,
-      updateCurrentSubNavBarAction,
-      updateCurrentInMultiPageStatus,
-      switchPlatform,
-      switchToMultiPage,
-      switchToOutFromMultiPage,
-      toggleSearchViewMode,
-      toggleFavoritesMode,
-      handleSearchKeywordChange,
-    } = this.controller;
-    const currentDisplayKeyword = favoritesMode
-      ? favoritesSearchKeyword
-      : searchKeyword || this.props.searchKeyword || "";
-    const categories = this.getActiveCategories(CategoriesIndex);
-    const categoriesPlatform =
-      categories?.platform[PlatformIndex] || categories.platform[0];
+
+    const categories = this.getActiveCategories();
+    const platform = this.currentPlatform();
+    const scopes: ScopeItem[] = (platform?.subNavBarItems ?? []).map(
+      (item) => ({ title: item.title }),
+    );
+    const sources: SearchSource[] = categories.platform.map((item) => ({
+      label: item.title,
+      short: item.shortTitle ?? item.title,
+      dot: item.sourceKey ?? null,
+    }));
 
     const providerValue = {
-      switchToMultiPage,
+      switchToMultiPage: this.controller.switchToMultiPage,
       currentOnDemandPlay,
-      updateCurrentInMultiPageStatus,
+      updateCurrentInMultiPageStatus:
+        this.controller.updateCurrentInMultiPageStatus,
       ShowOrHideIMC,
     };
+
     return (
       <Provider value={providerValue}>
         <div
-          className="relative overflow-hidden h-full flex justify-center items-center"
+          className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
           onTouchStart={(e) =>
             this.mediaContainerGesture.handleStart(
               e,
               currentPage,
               totalPage,
-              changecurrentPage,
+              this.controller.changecurrentPage,
             )
           }
           onMouseDown={(e) =>
@@ -306,55 +209,61 @@ export class MainAppContainer extends Component<
               e,
               currentPage,
               totalPage,
-              changecurrentPage,
+              this.controller.changecurrentPage,
             )
           }
         >
-          <div className="h-full w-full flex flex-col absolute transition-all duration-250">
-            <div className={`flex flex-col gap-1 pb-1 ${themedDividerBottom}`}>
-              {!settingsData && (
-                <MediaSearchBar
-                  searchKeyword={currentDisplayKeyword}
-                  currentPage={currentPage}
-                  totalPage={totalPage}
-                  isCurrentInMultiPage={isCurrentInMultiPage}
-                  viewMode={searchViewMode}
-                  favoritesMode={favoritesMode}
-                  mediaSearchBarActions={{
-                    changeSearchKeyword: handleSearchKeywordChange,
-                    changecurrentPage,
-                    switchToOutFromMultiPage,
-                    toggleSearchViewMode,
-                    toggleFavoritesMode,
-                  }}
-                />
-              )}
-              <PlatformSelector
-                platform={categories.platform}
-                isCurrentInMultiPage={isCurrentInMultiPage}
-                switchPlatform={switchPlatform}
-                PlatformIndex={PlatformIndex}
-                favoritesMode={favoritesMode}
+          <div
+            className={`flex min-h-0 flex-1 flex-col ${deskPaper} ${deskInk}`}
+          >
+            <PageHeader title={modeTitle(mode)} onClose={ShowOrHideIMC} />
+
+            {hasSearchBar(mode) && (
+              <SearchBar
+                ref={this.searchBarRef}
+                keyword={searchKeyword}
+                placeholder={this.placeholderFor(mode)}
+                placeholderPhone={this.placeholderPhoneFor(mode)}
+                sources={sources}
+                sourceIndex={PlatformIndex}
+                onSelectSource={this.controller.selectSource}
+                onSubmit={this.controller.submitSearch}
               />
-              <MediaContainerSubNavBar
-                platform={categoriesPlatform}
-                searchKeyword={currentDisplayKeyword}
-                categories={categories}
-                isCurrentInMultiPage={isCurrentInMultiPage}
-                PlatformIndex={PlatformIndex}
-                SubNavBarIndex={SubNavBarIndex}
-                favoritesMode={favoritesMode}
-                actions={{
-                  updateCurrentSubNavBarAction,
-                  updateSubNavBarIndex,
-                }}
+            )}
+
+            {hasScopeRow(mode) && scopes.length > 0 && (
+              <ScopeRow
+                items={scopes}
+                activeIndex={SubNavBarIndex}
+                onChange={this.controller.selectScope}
+                viewMode={this.viewToggleMode()}
+                onToggleView={this.controller.toggleSearchViewMode}
+                currentPage={currentPage}
+                totalPage={totalPage}
+                showPager={hasPager(mode)}
+                onPageChange={this.controller.changecurrentPage}
+                label={mode === MODE.radio ? "地区" : "范围"}
+              />
+            )}
+
+            <div className="relative min-h-0 flex-1">
+              {/* 每个模式一个实例：切模式重挂载，避免跨模式残留的列表数据与滚动位置 */}
+              <MediaCard
+                key={mode}
+                mediaData={mediaData}
+                settingsData={settingsData}
+                viewMode={searchViewMode}
               />
             </div>
 
-            <MediaCard
-              mediaData={mediaData}
-              settingsData={settingsData}
-              viewMode={searchViewMode}
+            {/* 底部条 / 迷你条占位：story 3 的挂载点，本 story 不渲染内容 */}
+            <div
+              id="imw-desk-room-deck"
+              className="shrink-0 max-[768px]:hidden"
+            />
+            <div
+              id="imw-desk-mini-deck"
+              className="hidden shrink-0 max-[768px]:block"
             />
           </div>
         </div>
@@ -362,54 +271,226 @@ export class MainAppContainer extends Component<
     );
   }
 
-  private controller = {
-    handleSearchKeywordChange: (keyword: string | null) => {
-      const kw = (keyword || "").trim();
+  private placeholderFor(mode: number): string {
+    switch (mode) {
+      case MODE.video:
+        return "搜索视频、UP 主，或粘贴 BV 号";
+      case MODE.radio:
+        return "过滤电台名";
+      case MODE.favorites:
+        return "过滤收藏";
+      default:
+        return "搜索歌名或歌手";
+    }
+  }
 
-      if (this.state.favoritesMode) {
-        // 收藏模式：仅修改收藏内部的过滤关键词，刷新收藏列表
-        this.setState(
-          {
-            favoritesSearchKeyword: kw,
-            currentPage: 1,
-            allMediaData: [],
-            mediaData: null,
-          },
-          () => {
-            this.state.currentSubNavBarAction();
-          },
-        );
-      } else {
-        // 全网模式：同步清空缓存与重置分页，并发起检索
-        this.state.allMediaData.length = 0;
-        this.setState(
-          {
-            searchKeyword: kw,
-            currentPage: 1,
-            allMediaData: [],
-            mediaData: null,
-          },
-          () => {
-            if (this.props.searchKeyword === kw) {
-              const categories = this.categories[this.props.CategoriesIndex];
-              const plat = categories?.platform[this.state.PlatformIndex];
-              const action =
-                plat?.subNavBarItems[this.state.SubNavBarIndex]?.searchAction;
-              if (action) {
-                action();
-              } else if (this.state.currentSubNavBarAction) {
-                this.state.currentSubNavBarAction();
-              }
-            } else {
-              this.props.changeSearchKeyword(kw);
-            }
-          },
-        );
+  /** 手机占位更短（手机搜索栏只留来源简称 + 输入区）。 */
+  private placeholderPhoneFor(mode: number): string | undefined {
+    return mode === MODE.video ? "搜索或粘贴 BV 号" : undefined;
+  }
+
+  /**
+   * 视图切换只在「该范围有两种视图」时出现：
+   * 音乐的单曲范围可切列表/网格；专辑、歌单只有列表，MV 与视频只有网格（story 2 落地）。
+   */
+  private viewToggleMode(): "card" | "list" | null {
+    if (this.state.mode !== MODE.music || this.state.SubNavBarIndex !== 0)
+      return null;
+    return this.state.searchViewMode;
+  }
+
+  /** 当前模式的下标 → 分类表。 */
+  private getActiveCategories(mode?: number): Categories {
+    const index = mode ?? this.state.mode;
+    return this.categories[index] || this.categories[0];
+  }
+
+  private currentPlatform(): Platform | undefined {
+    const categories = this.getActiveCategories();
+    return (
+      categories.platform[this.state.PlatformIndex] ?? categories.platform[0]
+    );
+  }
+
+  /** 当前模式空现场的默认值：第一个来源的第一个范围。 */
+  private defaultModeState(mode: number): ModeSnapshot {
+    const item = this.getActiveCategories(mode).platform[0]?.subNavBarItems[0];
+    return {
+      ...emptyModeState(),
+      currentSubNavBarAction: item?.searchAction ?? (() => {}),
+    };
+  }
+
+  private takeSnapshot(): ModeSnapshot {
+    const state = this.state;
+    return {
+      searchKeyword: state.searchKeyword,
+      PlatformIndex: state.PlatformIndex,
+      SubNavBarIndex: state.SubNavBarIndex,
+      currentPage: state.currentPage,
+      totalPage: state.totalPage,
+      mediaData: state.mediaData,
+      // 复制一份：分页缓存后续会被追加，快照不能与当前现场共享同一数组
+      allMediaData: [...state.allMediaData],
+      isCurrentInMultiPage: state.isCurrentInMultiPage,
+      oldItems: state.oldItems,
+      settingsData: state.settingsData,
+      currentSubNavBarAction: state.currentSubNavBarAction,
+      currentOnDemandPlay: state.currentOnDemandPlay,
+    };
+  }
+
+  /**
+   * 切模式：快照现场 → 恢复目标现场（无历史用默认）→ 首次进入时执行首个范围。
+   * 设置页的数据是本地读取、且同步状态订阅随离开释放，所以每次回到设置页都重跑一次。
+   */
+  private applyMode(next: number) {
+    const previous = this.state.mode;
+    if (previous === next) return;
+    this.snapshots.set(previous, this.takeSnapshot());
+    if (previous === MODE.settings) SettingsService.release();
+
+    const snapshot = this.snapshots.get(next);
+    const restored: ModeSnapshot = snapshot
+      ? { ...snapshot, allMediaData: [...snapshot.allMediaData] }
+      : this.defaultModeState(next);
+    const pending = this.pendingSearch;
+    this.pendingSearch = null;
+    setPanelFocus({ category: next, platform: restored.PlatformIndex });
+
+    this.setState(
+      {
+        mode: next,
+        ...restored,
+        updating: false,
+        requestToken: this.state.requestToken + 1,
+      },
+      () => {
+        // 待提交的关键词走完整提交：浏览型范围（视频「推荐」）会先落到可搜索的范围
+        if (pending) this.controller.runSearch(pending, { propagate: false });
+        else if (!snapshot || next === MODE.settings) this.runCurrentScope();
+      },
+    );
+  }
+
+  /** 执行当前范围的动作（搜索/筛选/读取设置）。 */
+  private runCurrentScope() {
+    const item =
+      this.currentPlatform()?.subNavBarItems[this.state.SubNavBarIndex];
+    const action = item?.searchAction ?? this.state.currentSubNavBarAction;
+    if (!action) return;
+    this.setState({ currentSubNavBarAction: action }, () => action());
+  }
+
+  /** 外部关键词能落在哪个模式：视频链接→视频，其余在音乐/视频里就地搜，其他模式回音乐。 */
+  private modeForKeyword(keyword: string): number {
+    if (detectVideoTarget(keyword)) return MODE.video;
+    return this.state.mode === MODE.video ? MODE.video : MODE.music;
+  }
+
+  private handleExternalKeyword(keyword: string) {
+    const target = this.modeForKeyword(keyword);
+    if (target === this.state.mode) {
+      this.controller.runSearch(keyword, { propagate: false });
+      return;
+    }
+    this.pendingSearch = keyword;
+    this.props.switchMode(target);
+  }
+
+  private getActionContext(): MainAppContainerActionContext {
+    return {
+      getState: () => this.state,
+      setState: (state) => this.setState(state as MainAppContainerState),
+      pushAllData: this.controller.pushAllData,
+    };
+  }
+
+  private controller = {
+    /**
+     * @description 提交搜索：粘贴或输入的视频链接先切到视频模式再提交
+     */
+    submitSearch: (text: string) => {
+      const keyword = text.trim();
+      const video = detectVideoTarget(keyword);
+      if (video && this.state.mode !== MODE.video) {
+        this.pendingSearch = video;
+        this.props.switchMode(MODE.video);
+        return;
       }
+      this.controller.runSearch(video ?? keyword);
+    },
+
+    /** 真正发起检索：页码归 1、清结果，再交给当前范围的动作。 */
+    runSearch: (text: string, options?: { propagate?: boolean }) => {
+      const keyword = text.trim();
+      // 浏览型范围（视频的「推荐」）不承接关键词：有词时自动落到第一个可搜索的范围
+      const platform = this.currentPlatform();
+      let scope = this.state.SubNavBarIndex;
+      if (keyword && platform?.subNavBarItems[scope]?.class !== "search") {
+        const first = platform?.subNavBarItems.findIndex(
+          (item) => item.class === "search",
+        );
+        if (first !== undefined && first >= 0) scope = first;
+      }
+      this.setState(
+        {
+          SubNavBarIndex: scope,
+          searchKeyword: keyword,
+          currentPage: 1,
+          totalPage: 0,
+          allMediaData: [],
+          mediaData: null,
+          isCurrentInMultiPage: false,
+          oldItems: null,
+          updating: false,
+        },
+        () => {
+          this.runCurrentScope();
+          if (options?.propagate !== false)
+            this.props.changeSearchKeyword(keyword);
+        },
+      );
+    },
+
+    /** 切换来源：页码归 1、回到第一个范围。 */
+    selectSource: (index: number) => {
+      setPanelFocus({ category: this.state.mode, platform: index });
+      this.setState(
+        {
+          PlatformIndex: index,
+          SubNavBarIndex: 0,
+          currentPage: 1,
+          totalPage: 0,
+          allMediaData: [],
+          mediaData: null,
+          isCurrentInMultiPage: false,
+          oldItems: null,
+          updating: false,
+        },
+        () => this.runCurrentScope(),
+      );
+    },
+
+    /** 切换范围：页码归 1、滚到顶部，按当前关键词重取。 */
+    selectScope: (index: number) => {
+      this.setState(
+        {
+          SubNavBarIndex: index,
+          currentPage: 1,
+          totalPage: 0,
+          allMediaData: [],
+          mediaData: null,
+          isCurrentInMultiPage: false,
+          oldItems: null,
+          updating: false,
+        },
+        () => this.runCurrentScope(),
+      );
     },
 
     /**
-     * @description 切换搜索结果视图（卡片/列表），并持久化到 localStorage
+     * @description 切换搜索结果视图（列表/网格），并持久化到 localStorage
      */
     toggleSearchViewMode: () => {
       const searchViewMode = PluginSettings.toggleSearchViewMode();
@@ -417,93 +498,11 @@ export class MainAppContainer extends Component<
     },
 
     /**
-     * @description 切换收藏显示模式（点亮/点暗）
-     */
-    toggleFavoritesMode: async () => {
-      const nextMode = !this.state.favoritesMode;
-
-      if (nextMode) {
-        // 全网 -> 收藏：拍摄全网现场快照（若处于选集模式则直接复用外层 oldItems）
-        const src =
-          this.state.isCurrentInMultiPage && this.state.oldItems
-            ? this.state.oldItems
-            : this.state;
-
-        this.discoveryOldItems = {
-          mediaData: src.mediaData,
-          allMediaData: src.allMediaData,
-          totalPage: src.totalPage,
-          currentPage: src.currentPage,
-          SubNavBarAction:
-            (src as any).SubNavBarAction || this.state.currentSubNavBarAction,
-          OnDemandPlay:
-            (src as any).OnDemandPlay || this.state.currentOnDemandPlay,
-          PlatformIndex: this.state.PlatformIndex,
-          SubNavBarIndex: this.state.SubNavBarIndex,
-          searchKeyword:
-            this.state.searchKeyword || this.props.searchKeyword || "",
-        };
-
-        await this.setState({
-          favoritesMode: true,
-          currentPage: 1,
-          PlatformIndex: 0,
-          SubNavBarIndex: 0,
-          isCurrentInMultiPage: false,
-          oldItems: null,
-          allMediaData: [],
-          mediaData: null,
-        });
-      } else {
-        // 收藏 -> 全网：类似 switchToOutFromMultiPage 恢复全网现场
-        const old = this.discoveryOldItems;
-
-        if (old) {
-          await this.setState({
-            favoritesMode: false,
-            currentPage: old.currentPage,
-            totalPage: old.totalPage,
-            PlatformIndex: old.PlatformIndex ?? 0,
-            SubNavBarIndex: old.SubNavBarIndex ?? 0,
-            isCurrentInMultiPage: false,
-            oldItems: null,
-            searchKeyword: old.searchKeyword ?? "",
-            allMediaData: old.allMediaData,
-            mediaData: old.mediaData,
-            currentSubNavBarAction:
-              old.SubNavBarAction || this.state.currentSubNavBarAction,
-            currentOnDemandPlay:
-              old.OnDemandPlay || this.state.currentOnDemandPlay,
-          });
-        } else {
-          await this.setState({
-            favoritesMode: false,
-            currentPage: 1,
-            PlatformIndex: 0,
-            SubNavBarIndex: 0,
-            isCurrentInMultiPage: false,
-            oldItems: null,
-            allMediaData: [],
-            mediaData: null,
-          });
-        }
-      }
-    },
-
-    /**
      * @description 更新目前的页面
-     * @param page
-     * @returns
      */
     changecurrentPage: async (page: number) => {
-      const {
-        updating,
-        currentSubNavBarAction,
-        isCurrentInMultiPage,
-        allMediaData,
-        totalPage,
-      } = this.state;
-      if (updating) return;
+      const { updating, isCurrentInMultiPage, allMediaData, totalPage } =
+        this.state;
 
       if (isCurrentInMultiPage) {
         const safePage = Math.min(Math.max(1, page), totalPage || 1);
@@ -524,54 +523,20 @@ export class MainAppContainer extends Component<
         return;
       }
 
-      await this.setState({ currentPage: page });
-      currentSubNavBarAction();
-    },
-
-    /**
-     * @description 更新平台的子选项
-     * @param current
-     * @param prev
-     */
-    updateSubNavBarIndex: async (current: number) => {
-      await this.setState({ SubNavBarIndex: current, currentPage: 1 });
-      this.setState({ allMediaData: [] });
-    },
-
-    /**
-     * @description 更新平台的子选项点下去之后会发生什么
-     * @param action
-     */
-    updateCurrentSubNavBarAction: (action: () => void) => {
-      this.setState({ currentSubNavBarAction: action });
+      if (updating) return;
+      await this.setState({ currentPage: Math.max(1, page) });
+      this.runCurrentScope();
     },
 
     /**
      * @description 更新目前是否在多集页面里面
-     * @param status
      */
     updateCurrentInMultiPageStatus: (status: boolean) => {
       this.setState({ isCurrentInMultiPage: status });
     },
 
     /**
-     * 更新平台
-     * @param index
-     */
-    switchPlatform: (index: number) => {
-      setPanelFocus({ category: this.props.CategoriesIndex, platform: index });
-      this.setState({
-        PlatformIndex: index,
-        SubNavBarIndex: 0,
-        currentPage: 1,
-        allMediaData: [],
-      });
-    },
-
-    /**
      * @description 切换到多集页面
-     * @param platformData
-     * @param isCurrentInMultiPage
      */
     switchToMultiPage: async (
       platformData: PlatformData,
@@ -624,50 +589,37 @@ export class MainAppContainer extends Component<
         const multipage = await platformData.multiPage;
         if (!multipage) return;
         if (multipage.platform === "video") {
-          // 1. 获取当前点击资源对应的完整数据（从 state 或直接从传入的 platformData）
-          // 注意：你提供的 JSON 结构显示 playList 已经存在于 platformData 中
           const playList = platformData.playList || [];
-
-          // 2. 将 playList 转换为 PlatformData 数组
           const multiPageDatas: PlatformData[] = playList.map((item) => ({
-            title: `${platformData.title}`, // "第01集"
+            title: `${platformData.title}`,
             coverImg: platformData.coverImg,
             author: item.episode,
-            websiteUrl: item.url, // 视频流地址或详情页
-            multiPage: Promise.resolve(undefined), // 标记为单页
-            playList: [item], // 包含单个播放项
+            websiteUrl: item.url,
+            multiPage: Promise.resolve(undefined),
+            playList: [item],
           }));
 
-          // 3. 计算总页数（假设 itemPerPage 是 10）
-          const itemsPerPage = 10;
-          const totalPage = Math.ceil(multiPageDatas.length / itemsPerPage);
-
-          // 4. 更新 State
+          const totalPage = Math.ceil(
+            multiPageDatas.length / this.itemsPerPage,
+          );
           const VOD = AllVideosPlatform.VOD;
 
           this.setState({
             currentPage: 1,
             totalPage: totalPage,
-            // 将数据包装成 Promise 格式以兼容 MediaCard 的 props
             mediaData: Promise.resolve({
-              platformData: multiPageDatas.slice(0, itemsPerPage),
+              platformData: multiPageDatas.slice(0, this.itemsPerPage),
               totalPage: totalPage,
             }),
-            allMediaData: multiPageDatas, // 存储完整列表供翻页使用
+            allMediaData: multiPageDatas,
             currentOnDemandPlay: VOD,
           });
-
-          console.log(
-            "Video MultiPage 构建完成，总集数:",
-            multiPageDatas.length,
-          );
         }
       }
     },
 
     /**
      * @description 退出多集页面
-     * @returns
      */
     switchToOutFromMultiPage: () => {
       const oldItems = this.state.oldItems;
@@ -687,150 +639,28 @@ export class MainAppContainer extends Component<
       allPlatformData: PlatformData[] | undefined,
       totalPage: number,
     ) => {
-      const { allMediaData } = this.state;
-      if (this.state.requestToken !== currentRequestToken) {
-        return;
-      }
-
-      if (allPlatformData) {
-        allMediaData.push(...allPlatformData);
-        this.setState({ allMediaData: allMediaData, updating: false });
-        this.setState({ totalPage: totalPage });
-      }
+      if (this.state.requestToken !== currentRequestToken) return;
+      if (!allPlatformData) return;
+      this.setState({
+        allMediaData: [...this.state.allMediaData, ...allPlatformData],
+        totalPage,
+        updating: false,
+      });
     },
   };
-  private getActionContext(): MainAppContainerActionContext {
-    return {
-      getState: () => this.state,
-      setState: (state) => this.setState(state as MainAppContainerState),
-      pushAllData: this.controller.pushAllData, // 直接引用已有的 controller 方法
-    };
-  }
 
-  private getActiveCategories(
-    categoriesIndex: number,
-    favoritesMode?: boolean,
-  ): Categories {
-    const isFav =
-      favoritesMode !== undefined ? favoritesMode : this.state.favoritesMode;
-    if (isFav && this.favoritesCategories[categoriesIndex]) {
-      return this.favoritesCategories[categoriesIndex];
-    }
-    return this.categories[categoriesIndex] || this.categories[0];
-  }
-
-  private favoritesCategories: Categories[] = [
+  /** 六种模式各自的来源与范围；下标即模式下标。 */
+  private categories: Categories[] = [
+    // 0 音乐：网易云是唯一来源，范围为 单曲 / 专辑 / 歌单 / MV
     {
-      // 0: 音乐
       platform: [
         {
           title: "网易云音乐",
-          iconsrc:
-            "https://static.codemao.cn/rose/v0/images/system/media/music/NeteaseMusic/logo.png",
-          color: "rgb(221, 28, 4)",
+          shortTitle: "网易云",
+          sourceKey: "netease",
           subNavBarItems: [
-            {
-              title: "全部",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "netease",
-                  "all",
-                  this.itemsPerPage,
-                );
-              },
-            },
             {
               title: "单曲",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "netease",
-                  "song",
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "专辑",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "netease",
-                  "album",
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "歌单",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "netease",
-                  "playlist",
-                  this.itemsPerPage,
-                );
-              },
-            },
-          ],
-        },
-      ],
-    },
-    {
-      // 1: 视频
-      platform: [
-        {
-          title: "哔哩哔哩视频",
-          iconsrc:
-            "https://static.codemao.cn/rose/v0/images/system/media/video/bilibili/ic_launcher.png",
-          color: "rgb(209, 79, 118)",
-          subNavBarItems: [
-            {
-              title: "全部",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "bilibili",
-                  "all",
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "视频",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "bilibili",
-                  "video",
-                  this.itemsPerPage,
-                );
-              },
-            },
-          ],
-        },
-      ],
-    },
-  ];
-
-  private categories: Categories[] = [
-    {
-      platform: [
-        {
-          title: "网易云音乐",
-          iconsrc:
-            "https://static.codemao.cn/rose/v0/images/system/media/music/NeteaseMusic/logo.png",
-          color: "rgb(221, 28, 4)",
-          subNavBarItems: [
-            {
-              title: "搜索音乐",
               class: "search",
               searchAction: () => {
                 NetEaseService.searchMusic(
@@ -840,7 +670,7 @@ export class MainAppContainer extends Component<
               },
             },
             {
-              title: "搜索专辑",
+              title: "专辑",
               class: "search",
               searchAction: () => {
                 NetEaseService.searchAlbum(
@@ -850,17 +680,7 @@ export class MainAppContainer extends Component<
               },
             },
             {
-              title: "搜索MV",
-              class: "search",
-              searchAction: () => {
-                NetEaseService.searchMV(
-                  this.getActionContext(),
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "搜索歌单",
+              title: "歌单",
               class: "search",
               searchAction: () => {
                 NetEaseService.searchPlaylist(
@@ -869,21 +689,13 @@ export class MainAppContainer extends Component<
                 );
               },
             },
-          ],
-        },
-        {
-          title: "无线电广播",
-          iconsrc: "http://r.iirose.com/i/26/3/6/4/3635-UJ.png",
-          color: "rgb(100, 149, 237)",
-          subNavBarItems: [
             {
-              title: "日本",
+              title: "MV",
               class: "search",
               searchAction: () => {
-                RadioService.search(
+                NetEaseService.searchMV(
                   this.getActionContext(),
                   this.itemsPerPage,
-                  "japan",
                 );
               },
             },
@@ -891,16 +703,16 @@ export class MainAppContainer extends Component<
         },
       ],
     },
+    // 1 视频：哔哩哔哩（推荐/视频/直播）与多源剧集（各资源站为范围）
     {
       platform: [
         {
-          title: "哔哩哔哩视频",
-          iconsrc:
-            "https://static.codemao.cn/rose/v0/images/system/media/video/bilibili/ic_launcher.png",
-          color: "rgb(209, 79, 118)",
+          title: "哔哩哔哩",
+          shortTitle: "哔哩哔哩",
+          sourceKey: "bilibili",
           subNavBarItems: [
             {
-              title: "首页推荐",
+              title: "推荐",
               searchAction: () => {
                 const ctx: BilibiliActionContext = {
                   ...this.getActionContext(),
@@ -909,12 +721,11 @@ export class MainAppContainer extends Component<
                     this.bilibiliRefreshCount++;
                   },
                 };
-                // 直接通过静态类调用
                 BilibiliService.snbclickRecommand(ctx);
               },
             },
             {
-              title: "搜索视频",
+              title: "视频",
               class: "search",
               searchAction: () => {
                 BilibiliService.snbclickSearchVideo(
@@ -924,7 +735,7 @@ export class MainAppContainer extends Component<
               },
             },
             {
-              title: "搜索直播",
+              title: "直播",
               class: "search",
               searchAction: () => {
                 BilibiliService.snbclickSearchLive(this.getActionContext());
@@ -933,9 +744,8 @@ export class MainAppContainer extends Component<
           ],
         },
         {
-          title: "多源剧集检索",
-          iconsrc: "http://r.iirose.com/i/26/1/10/8/2516-PN.png",
-          color: "rgb(1, 77, 103)",
+          title: "多源剧集",
+          shortTitle: "多源",
           subNavBarItems: [
             {
               title: "U库资源网",
@@ -977,13 +787,107 @@ export class MainAppContainer extends Component<
         },
       ],
     },
+    // 2 电台：沿用「无线电广播」平台，地区作范围
     {
       platform: [
         {
-          title: "哔哩哔哩视频",
-          iconsrc:
-            "https://static.codemao.cn/rose/v0/images/system/media/video/bilibili/ic_launcher.png",
-          color: "rgb(209, 79, 118)",
+          title: "电台",
+          shortTitle: "电台",
+          sourceKey: "radio",
+          subNavBarItems: [
+            {
+              title: "日本",
+              class: "search",
+              searchAction: () => {
+                RadioService.search(
+                  this.getActionContext(),
+                  this.itemsPerPage,
+                  "japan",
+                );
+              },
+            },
+          ],
+        },
+      ],
+    },
+    // 3 收藏：单来源「全部」，范围为类型（来源筛选与即时过滤在 story 6）
+    {
+      platform: [
+        {
+          title: "全部",
+          shortTitle: "全部",
+          subNavBarItems: [
+            {
+              title: "全部",
+              class: "search",
+              searchAction: () => {
+                FavoritesService.loadFavorites(
+                  this.getActionContext(),
+                  "all",
+                  "all",
+                  this.itemsPerPage,
+                );
+              },
+            },
+            {
+              title: "单曲",
+              class: "search",
+              searchAction: () => {
+                FavoritesService.loadFavorites(
+                  this.getActionContext(),
+                  "all",
+                  "song",
+                  this.itemsPerPage,
+                );
+              },
+            },
+            {
+              title: "专辑",
+              class: "search",
+              searchAction: () => {
+                FavoritesService.loadFavorites(
+                  this.getActionContext(),
+                  "all",
+                  "album",
+                  this.itemsPerPage,
+                );
+              },
+            },
+            {
+              title: "歌单",
+              class: "search",
+              searchAction: () => {
+                FavoritesService.loadFavorites(
+                  this.getActionContext(),
+                  "all",
+                  "playlist",
+                  this.itemsPerPage,
+                );
+              },
+            },
+            {
+              title: "视频",
+              class: "search",
+              searchAction: () => {
+                FavoritesService.loadFavorites(
+                  this.getActionContext(),
+                  "all",
+                  "video",
+                  this.itemsPerPage,
+                );
+              },
+            },
+          ],
+        },
+      ],
+    },
+    // 4 设置：搜索栏隐藏，所以把现有四组设置的全部子分组摊平成范围标签
+    // （story 7 会改成「平台分组作范围标签 + 每组一张设置卡」）
+    {
+      platform: [
+        {
+          title: "设置",
+          shortTitle: "设置",
           subNavBarItems: [
             {
               title: "账号",
@@ -997,41 +901,18 @@ export class MainAppContainer extends Component<
                 SettingsService.showBilibiliVideo(this.getActionContext());
               },
             },
-          ],
-        },
-        {
-          title: "网易云音乐",
-          iconsrc:
-            "https://static.codemao.cn/rose/v0/images/system/media/music/NeteaseMusic/logo.png",
-          color: "rgb(221, 28, 4)",
-          subNavBarItems: [
             {
               title: "音乐设置",
               searchAction: () => {
                 SettingsService.showNetEaseMusic(this.getActionContext());
               },
             },
-          ],
-        },
-        {
-          title: "无线电广播",
-          iconsrc: "http://r.iirose.com/i/26/3/6/4/3635-UJ.png",
-          color: "rgb(100, 149, 237)",
-          subNavBarItems: [
             {
               title: "无线电设置",
               searchAction: () => {
                 SettingsService.showRadio(this.getActionContext());
               },
             },
-          ],
-        },
-        {
-          title: "插件设置",
-          iconsrc:
-            "data:image/png;base64,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",
-          color: "rgb(150,171,188)",
-          subNavBarItems: [
             {
               title: "聊天框",
               searchAction: () => {
@@ -1052,13 +933,12 @@ export class MainAppContainer extends Component<
         },
       ],
     },
+    // 5 关于（手机并入设置的最后一个范围，由 story 7 落地）
     {
       platform: [
         {
           title: "关于这个插件",
-          iconsrc:
-            "data:image/png;base64,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",
-          color: "rgb(100, 149, 237)",
+          shortTitle: "关于",
           subNavBarItems: [
             {
               title: "关于",

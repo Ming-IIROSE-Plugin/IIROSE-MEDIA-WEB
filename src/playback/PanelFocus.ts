@@ -21,8 +21,8 @@ export function resetPanelFocus(): void {
 }
 
 /**
- * 焦点平台映射：音乐分类第 1 个平台是网易云，视频分类第 1 个是 B 站；
- * 无线电广播、多源剧集、设置与关于页没有收藏。
+ * 焦点平台映射：音乐模式第 1 个来源是网易云，视频模式第 1 个是 B 站；
+ * 电台（2）、收藏（3，单来源「全部」）、设置（4）与关于（5）没有单一收藏平台。
  */
 export function platformOf(
   current: PanelFocus | null,

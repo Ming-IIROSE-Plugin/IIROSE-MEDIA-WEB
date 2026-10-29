@@ -1,7 +1,8 @@
 interface MainAppContainerProps {
-  CategoriesIndex: number;
-  needOutFromMultiPage: boolean;
-  needOutFromSettings: boolean;
+  /** 当前模式：0 音乐 1 视频 2 电台 3 收藏 4 设置 5 关于。 */
+  mode: number;
+  /** 由容器发起的模式切换（粘贴视频链接先切到视频模式）。 */
+  switchMode: (mode: number) => void;
   searchKeyword: string;
   active: boolean;
   changeSearchKeyword: (keyword: string | null) => void;
@@ -9,6 +10,7 @@ interface MainAppContainerProps {
 }
 
 interface MainAppContainerState {
+  mode: number;
   PlatformIndex: number;
   searchKeyword: string;
   searchViewMode: "card" | "list";
@@ -27,8 +29,6 @@ interface MainAppContainerState {
   requestToken: number;
   currentSubNavBarAction: () => void;
   currentOnDemandPlay: (platformData: PlatformData) => void;
-  favoritesMode: boolean;
-  favoritesSearchKeyword: string;
 }
 
 interface MainAppContainerActionContext {

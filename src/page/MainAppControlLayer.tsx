@@ -5,10 +5,7 @@ import { closeSidebar } from "../iirose_func/CloseSideBar";
 import { Gesture } from "../listener/Gesture";
 import { SyncManager } from "../sync/SyncManager";
 import { hostIsDark } from "../iirose_func/HostTheme";
-import {
-  accentVar,
-  themeAttr,
-} from "./components/floating-panel/floatingPanel";
+import { themeAttr } from "./components/floating-panel/floatingPanel";
 
 interface MainAppControlLayerState {
   mainAppDisplay: boolean;
@@ -40,7 +37,7 @@ export class MainAppControlLayer extends Component<
     return (
       <div
         id="IIROSE_MEDIA_CONTAINER"
-        class={`IIROSE_MEDIA_CONTAINER ${activeClass} ${accentVar}`}
+        class={`IIROSE_MEDIA_CONTAINER ${activeClass}`}
       >
         {init ? (
           <MainApp
@@ -156,10 +153,9 @@ export class MainAppControlLayer extends Component<
       // 只在关→开时读宿站主题：面板开着期间（如搜索词变化）不跟随
       if (nextState.mainAppDisplay) this.applyTheme();
       this.applyDisplaySideEffects(nextState.mainAppDisplay);
-      // 注意：如果 searchKeyword 没变，我们可以拦截 render
-      if (this.state.searchKeyword === nextState.searchKeyword) {
-        return false;
-      }
+      // 显示状态必须传给 MainApp（`active` 决定打开时是否把焦点放进搜索栏），
+      // 不能像旧版那样在 searchKeyword 未变时拦截 render。
+      return true;
     }
 
     // 3. 业务逻辑检查：如果搜索词变了，必须允许 render 以更新子组件列表

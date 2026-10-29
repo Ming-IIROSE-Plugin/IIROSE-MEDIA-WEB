@@ -497,6 +497,15 @@ export class SettingsService {
   /** 同步状态订阅：离开同步面板时必须释放，避免别处导航后仍被状态变化重绘 */
   private static syncStatusUnsub: (() => void) | null = null;
 
+  /**
+   * 离开设置模式时释放同步状态订阅：否则后台状态变化会把设置卡写进别的模式的结果区。
+   * 重新进入设置模式时由当前范围动作重新订阅。
+   */
+  static release() {
+    this.syncStatusUnsub?.();
+    this.syncStatusUnsub = null;
+  }
+
   static setState = (
     ctx: MainAppContainerActionContext,
     settingsData: SettingData[],

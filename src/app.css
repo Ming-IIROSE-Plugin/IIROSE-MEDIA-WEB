@@ -34,6 +34,20 @@
    其余全部样式已迁移到各组件的 Tailwind 类。
    ============================================================ */
 
+/* story 1 过渡：结果区卡片与设置卡（story 2 / 7 前）仍引用 floatingPanel 的 themed* 类，
+   它们消费 --imw-accent / --imw-accent-ink。品牌强调色已退役、`accentVar` 已删除，
+   这里把两个变量固定为纸/墨令牌，让旧组件退成中性墨色而不是浏览器默认色。
+   story 2 / 7 完成后连同 themed* 一起删除。 */
+.IIROSE_MEDIA_CONTAINER {
+  --imw-accent: #6b655d;
+  --imw-accent-ink: #1c1916;
+}
+
+.IIROSE_MEDIA_CONTAINER[data-imw-theme="dark"] {
+  --imw-accent: #8f887e;
+  --imw-accent-ink: #ede7dd;
+}
+
 /* 独立进度浮窗与随机选择面板不在主面板内，需要自己的盒模型。 */
 #imw-media-progress-root,
 #imw-media-progress-root *,
@@ -314,22 +328,9 @@
 }
 
 /* --- 2. mdi 图标内容表 --- */
-#BackIcon::before,
-#TitleIcon::before,
-#MusicIcon::before,
-#VideoIcon::before,
-#SettingIcon::before,
-#AboutIcon::before,
-.inputIcon::before,
-.paginationIcon::before,
-.returnIcon::before,
-.prevIcon::before,
-.nextIcon::before,
 .containerSpin::before,
 .searchLogo::before,
 .noresultLogo::before,
-.listViewIcon::before,
-.cardViewIcon::before,
 .headphonesIcon::before,
 .playIcon::before,
 .playlistPlusIcon::before,
@@ -342,49 +343,14 @@
 .syncDeleteIcon::before,
 .announceCardIcon::before,
 .announceSilentIcon::before,
-.announceSummaryIcon::before {
+.announceSummaryIcon::before,
+.imwModeMusic::before,
+.imwModeVideo::before,
+.imwModeRadio::before,
+.imwModeFavorites::before,
+.imwModeSettings::before,
+.imwModeAbout::before {
   font-family: "md";
-}
-
-#BackIcon::before,
-.prevIcon::before {
-  content: "\F0141";
-}
-
-#TitleIcon::before {
-  content: "\F0025";
-}
-
-#MusicIcon::before {
-  content: "\F075A";
-}
-
-#VideoIcon::before {
-  content: "\F0381";
-}
-
-#SettingIcon::before {
-  content: "\F0493";
-}
-
-#AboutIcon::before {
-  content: "\F02FD";
-}
-
-.inputIcon::before {
-  content: "\F0349";
-}
-
-.paginationIcon::before {
-  content: "\F14F7";
-}
-
-.returnIcon::before {
-  content: "\F17A7";
-}
-
-.nextIcon::before {
-  content: "\F0142";
 }
 
 .containerSpin::before {
@@ -464,22 +430,32 @@
   content: "\F0CB8"; /* playlist-music */
 }
 
-/* --- 6. 移动端小屏交互增强 --- */
-/* 子分类横滑右侧渐变遮罩提示（仅在 ≤768px 移动视口下生效，提示用户可继续横滑） */
-@media (max-width: 768px) {
-  .subnavbar-mask {
-    mask-image: linear-gradient(
-      to right,
-      black calc(100% - 24px),
-      transparent 100%
-    );
-    -webkit-mask-image: linear-gradient(
-      to right,
-      black calc(100% - 24px),
-      transparent 100%
-    );
-  }
+/* 「插件启动默认页面」选择框图标（宿站弹窗；码点同上，自包含不借宿站 mdi-* 类） */
+.imwModeMusic::before {
+  content: "\F075A"; /* music */
 }
+
+.imwModeVideo::before {
+  content: "\F0381"; /* video */
+}
+
+.imwModeRadio::before {
+  content: "\F02CB"; /* headphones */
+}
+
+.imwModeFavorites::before {
+  content: "\F04CE"; /* star */
+}
+
+.imwModeSettings::before {
+  content: "\F0493"; /* cog */
+}
+
+.imwModeAbout::before {
+  content: "\F02FD"; /* information-outline */
+}
+
+/* --- 6. 移动端小屏交互增强 --- */
 
 /* 隐藏横向滚动条以防撑破移动端行高 */
 .no-scrollbar {

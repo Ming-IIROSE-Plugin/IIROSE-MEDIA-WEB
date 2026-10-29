@@ -157,7 +157,7 @@ export class LocalStorageUtils {
       chatBox: {
         isProxyAtInput: true,
       },
-      defaultPage: 0, // 0 为音乐, 1 为视频
+      defaultPage: 0, // 0 音乐 1 视频 2 电台 3 收藏 4 设置 5 关于
       searchViewMode: "card", // 搜索结果视图：card 卡片网格 / list 列表
       announceMode: "card", // 点播播报模式：card 发卡片 / silent 静默 / summary 批量总结（与 PluginSettings.getPluginSetting 两处一致）
       // 云同步默认值（与 PluginSettings.getPluginSetting 保持两处一致）

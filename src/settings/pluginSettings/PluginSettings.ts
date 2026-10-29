@@ -68,28 +68,39 @@ export class PluginSettings {
   ) {
     const set = (_t: HTMLElement, s: string) => {
       const ps = PluginSettings.getPluginSetting();
-      const inputint = parseInt(s);
       if (ps) {
-        ps.defaultPage = inputint;
+        ps.defaultPage = PluginSettings.normalizeDefaultPage(s);
         localStorage.setItem("imwPluginSetting", JSON.stringify(ps));
       }
 
       if (changeActionTitleAction) {
-        const qualityInText = PluginSettings.parseDefaultPage(inputint);
-        changeActionTitleAction(qualityInText);
+        changeActionTitleAction(
+          PluginSettings.parseDefaultPage(ps.defaultPage),
+        );
       }
     };
 
-    const mdiClass = ["mdi-music", "mdi-video"];
+    const iconClass = [
+      "imwModeMusic",
+      "imwModeVideo",
+      "imwModeRadio",
+      "imwModeFavorites",
+      "imwModeSettings",
+      "imwModeAbout",
+    ];
 
-    const selectOption = [
+    const selectOption: (string | number)[][] = [
       [0, "音乐"],
       [1, "视频"],
+      [2, "电台"],
+      [3, "收藏"],
+      [4, "设置"],
+      [5, "关于"],
     ];
 
     selectOption.forEach((item, index) => {
       item.push(
-        `<div class="${mdiClass[index]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
+        `<div class="${iconClass[index]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
       );
     });
 
@@ -105,13 +116,26 @@ export class PluginSettings {
       () => {},
     );
   }
+
+  /** 启动默认页面：0 音乐、1 视频、2 电台、3 收藏、4 设置、5 关于；非法值回退音乐。 */
+  public static normalizeDefaultPage(raw: unknown): number {
+    const value = Number(raw);
+    return Number.isInteger(value) && value >= 0 && value <= 5 ? value : 0;
+  }
+
   public static parseDefaultPage(page: number): string {
     const selectOption: [number, string][] = [
       [0, "音乐"],
       [1, "视频"],
+      [2, "电台"],
+      [3, "收藏"],
+      [4, "设置"],
+      [5, "关于"],
     ];
 
-    const optionInText = selectOption.find((option) => option[0] === page);
+    const optionInText = selectOption.find(
+      (option) => option[0] === PluginSettings.normalizeDefaultPage(page),
+    );
 
     return optionInText ? optionInText[1] : "音乐";
   }
@@ -206,6 +230,10 @@ export class PluginSettings {
         parsed.announceMode,
       );
       parsed.sync = PluginSettings.normalizeSyncSettings(parsed.sync);
+      // 分类下标扩到 2–5（电台 / 收藏 / 设置 / 关于），非法值回退音乐
+      parsed.defaultPage = PluginSettings.normalizeDefaultPage(
+        parsed.defaultPage,
+      );
       // 已退役的「随机包含专辑/歌单」：随机范围改由面板选择决定，旧值不再生效。
       delete (parsed as { shuffleIncludeCollections?: unknown })
         .shuffleIncludeCollections;
