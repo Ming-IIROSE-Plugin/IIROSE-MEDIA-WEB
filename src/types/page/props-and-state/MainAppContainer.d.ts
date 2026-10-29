@@ -24,6 +24,8 @@ interface MainAppContainerState {
   updating: boolean;
   totalPage: number;
   oldItems: OldItems | null;
+  /** 内页来源（专辑 / 歌单）：内页头显示名称、曲目数与「全部播放」。 */
+  innerCollection: PlatformData | null;
   settingsData: SettingData[] | null;
   isCurrentInMultiPage: boolean;
   requestToken: number;

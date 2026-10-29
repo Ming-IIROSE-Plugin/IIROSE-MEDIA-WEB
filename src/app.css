@@ -34,10 +34,10 @@
    其余全部样式已迁移到各组件的 Tailwind 类。
    ============================================================ */
 
-/* story 1 过渡：结果区卡片与设置卡（story 2 / 7 前）仍引用 floatingPanel 的 themed* 类，
+/* story 1 过渡：设置卡（story 7 前）仍引用 floatingPanel 的 themed* 类，
    它们消费 --imw-accent / --imw-accent-ink。品牌强调色已退役、`accentVar` 已删除，
-   这里把两个变量固定为纸/墨令牌，让旧组件退成中性墨色而不是浏览器默认色。
-   story 2 / 7 完成后连同 themed* 一起删除。 */
+   这里把两个变量固定为纸/墨令牌，让设置卡退成中性墨色而不是浏览器默认色。
+   story 7 完成后连同 themed* 一起删除。 */
 .IIROSE_MEDIA_CONTAINER {
   --imw-accent: #6b655d;
   --imw-accent-ink: #1c1916;
@@ -328,16 +328,8 @@
 }
 
 /* --- 2. mdi 图标内容表 --- */
-.containerSpin::before,
-.searchLogo::before,
-.noresultLogo::before,
 .listViewIcon::before,
 .cardViewIcon::before,
-.headphonesIcon::before,
-.playIcon::before,
-.playlistPlusIcon::before,
-.starOutlineIcon::before,
-.starSolidIcon::before,
 .syncCloudIcon::before,
 .syncKeyIcon::before,
 .syncClockIcon::before,
@@ -355,19 +347,6 @@
   font-family: "md";
 }
 
-.containerSpin::before {
-  content: "\F0772";
-  animation: spin 2s linear infinite;
-}
-
-.searchLogo::before {
-  content: "\F1A7E";
-}
-
-.noresultLogo::before {
-  content: "\F0413";
-}
-
 /* 搜索结果视图切换（卡片/列表），码点对 @mdi/font 7.3.67 核实 */
 .listViewIcon::before {
   content: "\F0572"; /* view-list */
@@ -375,27 +354,6 @@
 
 .cardViewIcon::before {
   content: "\F0570"; /* view-grid */
-}
-
-/* 列表行与卡片动作图标（自包含业务类） */
-.headphonesIcon::before {
-  content: "\F02CB"; /* headphones */
-}
-
-.playIcon::before {
-  content: "\F040A"; /* play */
-}
-
-.playlistPlusIcon::before {
-  content: "\F0411"; /* playlist-plus */
-}
-
-.starOutlineIcon::before {
-  content: "\F04CF"; /* star-outline */
-}
-
-.starSolidIcon::before {
-  content: "\F04CE"; /* star */
 }
 
 /* 云端同步设置卡片图标（码点对 @mdi/font 7.3.67 核实） */

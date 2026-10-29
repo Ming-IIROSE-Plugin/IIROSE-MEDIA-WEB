@@ -21,7 +21,9 @@
 - 宿站交互（WebSocket 媒体、消息）：`src/iirose_func/`。
 - 出网请求走 `src/environment/Environment.ts` 选定的阿里云 CORS 代理（ipinfo.io 判 CN/Global）；改 API 层时注意 fetch 是否需要过代理。
 - 浮窗（播放进度、收藏随机）共用 `src/page/components/floating-panel/` 的样式常量与无状态组件（外框、头部、按钮、拖动手柄、事件隔离）；改两窗外观时改这里，不要在单个浮窗里另写一套。
-- 外观令牌唯一来源是 `src/page/components/floating-panel/tokens.ts`（DESIGN.md frontmatter 的落地）：颜色导出**浅深成对的完整 Tailwind 类串**（如 `deskSheet = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]"`），另有字号/圆角/间距、`deskFocusRing`（2px ink 外圈 + 2px 间隔）与内联 SVG 图标 `DeskIcon`。组件只拼令牌，**不得裸写颜色 / `rgba(` / `themed*` / `accentVar`**；需要新颜色先加令牌。结果区与设置组件仍在用 `floatingPanel` 的 `themed*`（story 2 / 7 之前的存量），不要在新代码里继续引用。
+- 外观令牌唯一来源是 `src/page/components/floating-panel/tokens.ts`（DESIGN.md frontmatter 的落地）：颜色导出**浅深成对的完整 Tailwind 类串**（如 `deskSheet = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]"`），另有字号/圆角/间距、`deskFocusRing`（2px ink 外圈 + 2px 间隔）与内联 SVG 图标 `DeskIcon`。组件只拼令牌，**不得裸写颜色 / `rgba(` / `themed*` / `accentVar`**；需要新颜色先加令牌。结果区（`media-card-container/`）已全部改用令牌；仍在用 `floatingPanel` 的 `themed*` 的只剩设置卡（story 7 之前的存量），不要在新代码里继续引用。
+- 结果区组件键（`src/page/components/media-card-container/`）：曲目表 `TracklistRow` / `TracklistHeader`（桌面七列、手机四列）· 音乐网格 `MusicTile` · 视频卡 `VideoTile`（时长胶囊 / 直播徽章）· 专辑歌单行 `CollectionRow` · 内页头 `CollectionHeader` + 顺序菜单 `OrderMenu` · 收藏星 `FavoriteStar` · 状态 `StateMessage` / `Skeletons` · 容器 `ResultsArea`（Promise 状态机 + 形态派生），共用 `Cover`（https 升级 + onerror 回退）与纯函数 `mediaFormat.ts`。新增结果形态改这些文件，不要回到 `MediaCard`（已删除）。
+- 专辑/歌单的「全部播放」走 `NetEasePlatform.playCollectionAll`（内页头 → 插件自有 `OrderMenu`），**不经宿站 `buildSelect2`**，因而不需要跨弹窗 `setTimeout(300)`。
 - 主面板配色跟随宿站主题：`.IIROSE_MEDIA_CONTAINER` 打开时写 `data-imw-theme="light|dark"`，深色样式用 Tailwind 自定义变体 `imw-dark:`（注册在 `src/app.css`）；点歌台是「纸/墨/蔷薇红」——`paper` 主区、`rail` 竖栏、`sheet` 抬起面，蔷薇红只表示「点播」与「房间正在放」，平台品牌色只做 7px 来源圆点，从不整片铺底。
 - `src/app.css` 只放 Tailwind 无法表达的东西：@keyframes、mdi 图标 `::before` content（反斜杠不能进 class 名）、JS 切换的状态类（`ShowIIROSE_MEDIA_CONTAINER`）、宿站元素选择器、通配过渡；其余样式一律写进组件的 Tailwind 类，**不要新增 SCSS**。
 
@@ -35,7 +37,7 @@
 
 - `react`/`react-dom` 由 tsconfig paths 映射到 `preact/compat`——直接 import 'react' 即可，不要安装真正的 react 包。
 - 样式统一 Tailwind v4 任意值类（如 `max-[768px]:hidden`、`[grid-auto-rows:max-content]`）；移动端响应式断点统一使用 `max-[768px]`；点歌卡片网格行必须保持 `max-content` 自适应，否则按钮会被 `overflow:hidden` 裁掉（曾出过此 bug）。
-- 图标一律自包含方案：点歌台外壳用 `tokens.ts` 的 `DeskIcon`（`currentColor`，DESIGN.md 的 symbol 路径），浮窗（播放进度、收藏随机）用 `floating-panel` 的内联 SVG 组件；仍有 mdi 字形的位置（设置卡、结果区空/加载图形）加 id/类 + `src/app.css` 写 `::before { content:"\F0xxx"; font-family:"md" }`；**不要借用宿站 `mdi-*` 类**（宿站样式表里未必有该类规则，且没有 `font-family:"md"` 兜底会渲染成无字形——关于图标曾因此消失），也不用 emoji。
+- 图标一律自包含方案：点歌台外壳与结果区用 `tokens.ts` 的 `DeskIcon`（`currentColor`，DESIGN.md 的 symbol 路径），浮窗（播放进度、收藏随机）用 `floating-panel` 的内联 SVG 组件；仍有 mdi 字形的位置（设置卡、视图切换）加 id/类 + `src/app.css` 写 `::before { content:"\F0xxx"; font-family:"md" }`；**不要借用宿站 `mdi-*` 类**（宿站样式表里未必有该类规则，且没有 `font-family:"md"` 兜底会渲染成无字形——关于图标曾因此消失），也不用 emoji。
 - 点歌台外壳布局与触控目标约定（取代旧「Row 1–4 顶栏」）：
   - 桌面 >768px：左侧 84px 竖栏（品牌标 + 音乐/视频/电台/收藏 + 弹性空白 + 设置/关于，选中项抬到 sheet 底 + 1px 细线环 + 左缘 3px 蔷薇红竖条）+ 主列（页头 → 搜索栏 → 范围行 → 结果区 → 底部条）。页头、搜索栏、范围行用 36px 左右边距。
   - 手机 ≤768px（`max-[768px]`）：单列——页头 → 搜索栏 → 范围行 → 列表 → 迷你条 → 五项底部标签栏（音乐/视频/电台/收藏/设置，关于并入设置）；搜索栏与列表左右 16px，页头与范围行 20px。

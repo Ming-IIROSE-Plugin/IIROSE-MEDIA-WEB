@@ -687,16 +687,74 @@ export class NetEasePlatform extends Platform {
   };
 
   /**
+   * @description 整张点播（专辑 / 歌单）：按所选顺序批量点播全部曲目。
+   * 宿站弹窗入口（`MLOD` / `AOD` 的 select 0/1）与内页头「全部播放」共用本入口，
+   * 因而不需要 `buildSelect2`，也不需要跨弹窗的 300ms 延迟。
+   */
+  public static playCollectionAll = async (
+    platformData: PlatformData,
+    order: "asc" | "shuffle",
+  ) => {
+    try {
+      if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
+      const id = platformData.neteaseMusic.id;
+
+      if (platformData.neteaseMusic.isSongList) {
+        const songListDetail = await NeteaseMusicAPI.getSongListDetail(id);
+        // 失败提示已由统一入口发出，这里静默结束本次点播
+        if (!songListDetail) return;
+        let trackID = songListDetail.playlist.trackIds.map((item) => item.id);
+        if (order === "shuffle") {
+          trackID = trackID.sort(() => Math.random() - 0.5);
+        }
+        void Announce.runBatchAnnounce(
+          songListDetail.playlist.name,
+          trackID.length,
+          () => NetEasePlatform.finalODSONG(trackID),
+          songListDetail.playlist.description,
+        );
+        return;
+      }
+
+      if (platformData.neteaseMusic.isAlbum) {
+        const albumDetails = await NeteaseMusicAPI.getAlbumDetail(id);
+        if (!albumDetails) return;
+        let songsID = albumDetails.songs.map((item) => item.id);
+        if (order === "shuffle") {
+          songsID = songsID.sort(() => Math.random() - 0.5);
+        }
+        void Announce.runBatchAnnounce(
+          albumDetails.album.name,
+          songsID.length,
+          () => NetEasePlatform.finalODSONG(songsID),
+          albumDetails.album.description,
+        );
+        return;
+      }
+
+      throw new Error("这不是专辑或歌单");
+    } catch (error) {
+      ShowMessage.show((error as Error).message);
+    }
+  };
+
+  /**
    * @description 点播歌单
    * @param platformData
    */
   public static MLOD = (platformData: PlatformData) => {
     const MLODACTION = async (select: number) => {
-      const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
+      // 整单正序 / 乱序：与内页头「全部播放」同一入口
+      if (select === 0 || select === 1) {
+        await NetEasePlatform.playCollectionAll(
+          platformData,
+          select === 0 ? "asc" : "shuffle",
+        );
+        return;
+      }
 
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
-      const neteaseAPI = neteaseSetting.api;
       let songListDetail: SongList | null = null;
 
       songListDetail = await NeteaseMusicAPI.getSongListDetail(id);
@@ -705,24 +763,9 @@ export class NetEasePlatform extends Platform {
       if (!songListDetail) return;
 
       const trackIds = songListDetail.playlist.trackIds;
-      let trackID = trackIds.map((item) => item.id);
+      const trackID = trackIds.map((item) => item.id);
 
-      if (select === 0) {
-        void Announce.runBatchAnnounce(
-          songListDetail.playlist.name,
-          trackID.length,
-          () => NetEasePlatform.finalODSONG(trackID),
-          songListDetail.playlist.description,
-        );
-      } else if (select === 1) {
-        trackID = trackID.sort(() => Math.random() - 0.5);
-        void Announce.runBatchAnnounce(
-          songListDetail.playlist.name,
-          trackID.length,
-          () => NetEasePlatform.finalODSONG(trackID),
-          songListDetail.playlist.description,
-        );
-      } else if (select === 2) {
+      if (select === 2) {
         // 选集多选点播
         const tracks = songListDetail.playlist.tracks || [];
         const playlistCover =
@@ -801,11 +844,17 @@ export class NetEasePlatform extends Platform {
    */
   public static AOD = (platformData: PlatformData) => {
     const AODACTION = async (select: number) => {
-      const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
+      // 整单正序 / 乱序：与内页头「全部播放」同一入口
+      if (select === 0 || select === 1) {
+        await NetEasePlatform.playCollectionAll(
+          platformData,
+          select === 0 ? "asc" : "shuffle",
+        );
+        return;
+      }
 
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
-      const neteaseAPI = neteaseSetting.api;
       let albumDetails: AlbumData | null = null;
 
       albumDetails = await NeteaseMusicAPI.getAlbumDetail(id);
@@ -813,24 +862,8 @@ export class NetEasePlatform extends Platform {
       if (!albumDetails) return;
 
       const Songs = albumDetails.songs;
-      let songsID = Songs.map((item) => item.id);
 
-      if (select === 0) {
-        void Announce.runBatchAnnounce(
-          albumDetails.album.name,
-          songsID.length,
-          () => NetEasePlatform.finalODSONG(songsID),
-          albumDetails.album.description,
-        );
-      } else if (select === 1) {
-        songsID = songsID.sort(() => Math.random() - 0.5);
-        void Announce.runBatchAnnounce(
-          albumDetails.album.name,
-          songsID.length,
-          () => NetEasePlatform.finalODSONG(songsID),
-          albumDetails.album.description,
-        );
-      } else if (select === 2) {
+      if (select === 2) {
         // 专辑选集多选点播
         const albumCover =
           albumDetails.album.picUrl || (await platformData.coverImg) || "";

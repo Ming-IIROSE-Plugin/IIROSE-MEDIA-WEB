@@ -1,0 +1,149 @@
+// 视频卡（DESIGN.md `video-tile`）：16:9 缩略图、无卡片框；右下角等宽时长胶囊，
+// 直播换「直播」徽章且不显示时长；悬停 / 键盘聚焦 / 无悬停宽屏点按选中时覆遮罩并出现
+// 「点播到房间」胶囊。MV、B 站视频、多源剧集与直播共用本组件。
+import { useEffect, useState } from "preact/hooks";
+import { Cover } from "./Cover";
+import {
+  formatDuration,
+  hasMultiPage,
+  isLiveItem,
+  isPhoneLayout,
+  isTapToReveal,
+} from "./mediaFormat";
+import {
+  deskDurationPill,
+  deskFocusRingOnRose,
+  deskInk,
+  deskInk3,
+  deskOnRose,
+  deskRoseSolid,
+  deskSelectedRing,
+  deskVideoScrim,
+  roundedLg,
+  roundedXs,
+  typeLabelStrong,
+  typeMonoPill,
+  typeVideoMeta,
+  typeVideoTitle,
+} from "../floating-panel/tokens";
+
+export interface VideoTileProps {
+  platformData: PlatformData;
+  supported?: boolean;
+  revealed?: boolean;
+  onReveal?: () => void;
+  onPlay: () => void;
+  onActivate?: () => void;
+  onSelectEpisodes?: () => void;
+}
+
+export function VideoTile({
+  platformData,
+  supported = true,
+  revealed = false,
+  onReveal,
+  onPlay,
+  onActivate,
+  onSelectEpisodes,
+}: VideoTileProps) {
+  const [multipage, setMultipage] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void hasMultiPage(platformData).then((value) => {
+      if (alive) setMultipage(value);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [platformData]);
+
+  const live = isLiveItem(platformData);
+  const duration = formatDuration(platformData.duration);
+
+  const handleBodyClick = (event: MouseEvent) => {
+    event.stopPropagation();
+    if (isTapToReveal()) {
+      if (!revealed) onReveal?.();
+      return;
+    }
+    if (isPhoneLayout()) {
+      onActivate?.();
+      return;
+    }
+    onPlay();
+  };
+
+  const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
+  const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto`;
+
+  return (
+    <div
+      className="group min-w-0"
+      data-imw-tile={live ? "live" : "video"}
+      data-revealed={revealed ? "true" : undefined}
+    >
+      <div
+        className={`relative overflow-hidden ${roundedLg} ${revealed ? deskSelectedRing : ""}`}
+      >
+        <Cover
+          src={platformData.coverImg}
+          icon="film"
+          rounded={roundedLg}
+          className="aspect-video w-full"
+          alt={platformData.title}
+        />
+
+        <button
+          type="button"
+          aria-label={`点播 ${platformData.title}`}
+          className="absolute inset-0 block h-full w-full cursor-pointer border-0 bg-transparent p-0"
+          onClick={handleBodyClick}
+        />
+
+        {/* 右下角：直播徽章占时长胶囊的位置，直播卡不显示时长 */}
+        {(live || duration) && (
+          <span
+            className={`pointer-events-none absolute bottom-2 right-2 flex items-center ${roundedXs} px-1.5 py-0.5 ${typeMonoPill} ${live ? `${deskRoseSolid} ${deskOnRose}` : `${deskDurationPill} ${deskOnRose}`}`}
+          >
+            {live ? "直播" : duration}
+          </span>
+        )}
+
+        <div
+          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 ${deskVideoScrim} ${overlayVisibility}`}
+        >
+          <button
+            type="button"
+            className={`flex h-[38px] items-center justify-center rounded-full border-0 px-5 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onPlay();
+            }}
+          >
+            点播到房间
+          </button>
+          {multipage && onSelectEpisodes && (
+            <button
+              type="button"
+              className={`border-0 bg-transparent p-0 ${deskOnRose} ${typeLabelStrong} underline ${overlayHit}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectEpisodes();
+              }}
+            >
+              选集
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className={`mt-2 line-clamp-2 ${typeVideoTitle} ${deskInk}`}>
+        {platformData.title}
+      </div>
+      <div className={`mt-0.5 truncate ${typeVideoMeta} ${deskInk3}`}>
+        {platformData.author}
+      </div>
+    </div>
+  );
+}

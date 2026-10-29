@@ -40,6 +40,29 @@ export const deskRoseSolid = "bg-[#B42F3E] imw-dark:bg-[#BA4F59]";
 /** 蔷薇红实底上的字色（on-rose）。 */
 export const deskOnRose = "text-[#FFFFFF]";
 
+/** 已收藏星标（star-on；浅色压暗到达标）。 */
+export const deskStarOn = "text-[#A17822] imw-dark:text-[#C9962B]";
+
+/** on-rose 实色（时长胶囊上的音柱等白图形）。 */
+export const deskOnRoseFill = "bg-[#FFFFFF]";
+
+/** 骨架条 / 骨架块（skeleton，与 thumb 同值）。 */
+export const deskSkeleton = "bg-[#E6E0D6] imw-dark:bg-[#262320]";
+
+/** 封面 / 缩略图内环（cover-ring）：防止浅色封面与纸色融在一起。 */
+export const deskCoverRing =
+  "shadow-[inset_0_0_0_1px_#0000000F] imw-dark:shadow-[inset_0_0_0_1px_#FFFFFF0A]";
+
+/** 视频时长胶囊底（duration-pill），字色取 on-rose；不随主题变化。 */
+export const deskDurationPill = "bg-[#0C0B0AB8] imw-dark:bg-[#0C0B0AB8]";
+
+/** 视频悬停遮罩（video-scrim）；不随主题变化。 */
+export const deskVideoScrim = "bg-[#0A090861] imw-dark:bg-[#0A090861]";
+
+/** 正在播放 / 已选中：缩略图外 2px ink 描边（与焦点环同色）。 */
+export const deskSelectedRing =
+  "shadow-[0_0_0_2px_#1C1916] imw-dark:shadow-[0_0_0_2px_#EDE7DD]";
+
 /** 分隔线与描边（rule）。 */
 export const deskRule = "border-[#E2DCD1] imw-dark:border-[#2B2825]";
 /** 用底色画的分隔线（rule）。 */
@@ -62,6 +85,20 @@ export const deskPaperText = "text-[#F5F2EC] imw-dark:text-[#141312]";
 /** 悬停底与按压底（透明底控件用）。 */
 export const deskPressTone =
   "hov:hover:bg-[#EFEBE3] active:bg-[#E6E0D6] imw-dark:hov:hover:bg-[#201E1C] imw-dark:active:bg-[#262320]";
+
+/**
+ * 曲目行悬停（`hov:` 门控后整体换底，外扩与底线隐去由行组件补）：
+ * 悬停底 + 行圆角 + 底线让位（DESIGN.md `tracklist-row-hover`）。
+ */
+export const deskRowHover =
+  "hov:hover:bg-[#EFEBE3] hov:hover:rounded-[12px] hov:hover:border-transparent imw-dark:hov:hover:bg-[#201E1C]";
+
+/**
+ * 点播胶囊的悬停实心态（悬停在整行/整卡上时点亮）：
+ * 浅色 rose、深色 rose-fill-dark（承载白字的实底）；禁用态不拼这段类。
+ */
+export const deskSendHover =
+  "hov:group-hover:bg-[#B42F3E] hov:group-hover:border-[#B42F3E] hov:group-hover:text-[#FFFFFF] imw-dark:hov:group-hover:bg-[#BA4F59] imw-dark:hov:group-hover:border-[#BA4F59]";
 
 /** 搜索栏几乎不可见的抬升线（DESIGN.md Elevation & Depth，不承载信息）。 */
 export const deskSearchShadow = "shadow-[0_1px_0_#00000005]";
@@ -96,8 +133,23 @@ export const typeNavLabel = `${fontSans} text-[11.5px] tracking-[0.04em]`;
 export const typeNavLabelTab = `${fontSans} text-[11px] tracking-[0.04em]`;
 /** 等宽数字（序号、时长、页码；tabular-nums 保证列对齐）。 */
 export const typeMonoNum = `${fontMono} text-[13px] tabular-nums`;
+/** 等宽小字（手机时长、进度时间）。 */
+export const typeMonoNumSm = `${fontMono} text-[12px] tabular-nums`;
+/** 等宽胶囊字（视频时长胶囊、「直播」徽章）。 */
+export const typeMonoPill = `${fontMono} text-[11.5px] tabular-nums`;
 /** 等宽小字（表头、结果计数、键位提示）。 */
 export const typeMonoCaption = `${fontMono} text-[11px] tracking-[0.14em] tabular-nums`;
+
+/** 曲目行标题（15px medium）。 */
+export const typeRowTitle = `${fontSans} text-[15px] font-medium`;
+/** 曲目行歌手行（12.5px）。 */
+export const typeRowMeta = `${fontSans} text-[12.5px]`;
+/** 曲目表出处列（13px）。 */
+export const typeRowMetaSource = `${fontSans} text-[13px]`;
+/** 视频卡标题（桌面 14 / 手机 13，最多两行）。 */
+export const typeVideoTitle = `${fontSans} text-[14px] font-medium leading-[1.45] max-[768px]:text-[13px]`;
+/** 视频卡副行（桌面 12 / 手机 11）。 */
+export const typeVideoMeta = `${fontSans} text-[12px] max-[768px]:text-[11px]`;
 
 /** 等宽小字但无字距（键位提示 kbd，DESIGN.md mono-caption 注）。 */
 export const typeKeyHint = `${fontMono} text-[11px] tabular-nums`;
@@ -109,6 +161,12 @@ export const roundedMd = "rounded-[10px]";
 export const roundedLg = "rounded-[12px]";
 export const roundedXl = "rounded-[16px]";
 
+/** 曲目表封面：桌面 xs、手机 sm（DESIGN.md `tracklist-row` / `tracklist-row-phone`）。 */
+export const roundedTrackCover = `${roundedXs} max-[768px]:rounded-[8px]`;
+
+/** 点播钮：桌面描边胶囊（满宽 96px 列）、手机 40px 圆角方钮。 */
+export const roundedRequestButton = "rounded-full max-[768px]:rounded-[12px]";
+
 // ---------------------------------------------------------------- 间距
 /** 桌面页头 / 搜索栏 / 范围行 / 内容区左右边距。 */
 export const deskGutter = "px-[36px] max-[768px]:px-[16px]";
@@ -118,6 +176,9 @@ export const deskGutterWide = "px-[36px] max-[768px]:px-[20px]";
 export const deskRailWidth = "w-[84px]";
 /** 手机端所有可点目标的最小点击区。 */
 export const touchMin = "min-h-[44px] min-w-[44px]";
+
+/** 文字钮（「重试」「清除搜索」「‹ 返回」）：无底色、无描边，悬停下划线。 */
+export const deskTextButton = `cursor-pointer border-0 bg-transparent p-0 ${typeLabelStrong} ${deskRose} hov:hover:underline`;
 
 // ---------------------------------------------------------------- 焦点环
 // 2px ink 外圈、2px 间隔；仅 :focus-visible 显示（DESIGN.md components.focus-ring）。
@@ -149,7 +210,9 @@ export type DeskIconName =
   | "close"
   | "mark"
   | "list"
-  | "grid";
+  | "grid"
+  | "sort"
+  | "shuffle";
 
 const ICON_INNER: Record<DeskIconName, string> = {
   note: '<path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="16.5" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/>',
@@ -173,6 +236,9 @@ const ICON_INNER: Record<DeskIconName, string> = {
   mark: '<path d="M12 4.5c2.2 1.6 3.4 3.6 3.4 5.6 0 1.9-1.5 3.4-3.4 3.4s-3.4-1.5-3.4-3.4c0-2 1.2-4 3.4-5.6zM12 13.5v6M12 17c-1.8-1.6-3.6-2-5-1.6M12 17c1.8-1.6 3.6-2 5-1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   list: '<path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   grid: '<rect x="4.5" y="4.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13.5" y="4.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="4.5" y="13.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13.5" y="13.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',
+  sort: '<path d="M5 7h8M5 12h6M5 17h4M17 6v12M17 18l-2.5-2.5M17 18l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  shuffle:
+    '<path d="M4 17h3.2c1.2 0 2.1-.6 2.8-1.6l4-5.8c.7-1 1.6-1.6 2.8-1.6H20M4 7h3.2c1.2 0 2.1.6 2.8 1.6l.6.9M13.6 15l.6.9c.7 1 1.6 1.6 2.8 1.6H20M18 4l2 2-2 2M18 14l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
 /** 外壳图标：`currentColor` 着色，随宿主字号/字色走。 */

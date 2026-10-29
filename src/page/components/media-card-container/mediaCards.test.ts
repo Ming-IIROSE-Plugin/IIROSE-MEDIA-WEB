@@ -1,313 +1,901 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { h, render, type VNode } from "preact";
+import { h, render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
-import { MediaCardImg, isVideoCover } from "./MediaCardImg";
-import { MediaCardInfo } from "./MediaCardInfo";
-import { MediaCardButton } from "./MediaCardButton";
-import { MediaCardMessage } from "./MediaCardMessage";
-import { MediaListRow } from "./MediaListRow";
-import { MediaCard } from "./MediaCard";
-import { Provider } from "../media-container-context/MediaContainerContext";
-import { themedCard } from "../floating-panel/floatingPanel";
-import { FavoriteStarButton } from "./FavoriteStarButton";
-import { FavoritesStorageService } from "../../../storage/FavoritesStorageService";
+import * as tokens from "../floating-panel/tokens";
+import { MediaContainerContext } from "../media-container-context/MediaContainerContext";
+import { MODE } from "../desk/deskModes";
+import { ShowMessage } from "../../../iirose_func/ShowMessage";
+import { NetEasePlatform } from "../../../platforms/NetEasePlatform";
+import { Cover, upgradeCoverUrl } from "./Cover";
+import { CollectionHeader } from "./CollectionHeader";
+import { CollectionRow } from "./CollectionRow";
+import { MusicTile } from "./MusicTile";
+import { ResultsArea, shapeOf } from "./ResultsArea";
+import { SkeletonRows, SkeletonTiles } from "./Skeletons";
+import {
+  NowPlayingBars,
+  RequestButton,
+  TracklistHeader,
+  TracklistRow,
+} from "./TracklistRow";
+import { VideoTile } from "./VideoTile";
+import {
+  formatDuration,
+  isCollectionItem,
+  isLiveItem,
+  isTapToReveal,
+  trackCountLabel,
+} from "./mediaFormat";
+import { isNowPlayingTitle } from "./nowPlaying";
+import { notifyRoomUnsupported, roomSupportsRequest } from "./roomSupport";
+import collectionHeaderSrc from "./CollectionHeader.tsx?raw";
+import collectionRowSrc from "./CollectionRow.tsx?raw";
+import coverSrc from "./Cover.tsx?raw";
+import favoriteStarSrc from "./FavoriteStar.tsx?raw";
+import musicTileSrc from "./MusicTile.tsx?raw";
+import orderMenuSrc from "./OrderMenu.tsx?raw";
+import resultsAreaSrc from "./ResultsArea.tsx?raw";
+import skeletonsSrc from "./Skeletons.tsx?raw";
+import stateMessageSrc from "./StateMessage.tsx?raw";
+import tracklistSrc from "./TracklistRow.tsx?raw";
+import videoTileSrc from "./VideoTile.tsx?raw";
 
-// 结果卡片、列表行、空状态与加载（spec-main-panel-visual-unify story 2）：
-// 浅色白卡片/深色次级表面、封面裁切（视频 16:9、音乐方形）、时长胶囊、强调色按钮。
+// 结果区（spec-media-desk-redesign story 2）：令牌纪律、封面、曲目表、网格卡、
+// 专辑/歌单行与内页头、顺序菜单、状态与重试。断言覆盖 story 的 I/O 矩阵。
 let host: HTMLDivElement;
-const classesOf = (el: Element) => el.className.split(/\s+/);
 
-beforeEach(() => {
-  host = document.createElement("div");
-  document.body.append(host);
-});
-afterEach(() => {
-  render(null, host);
-  host.remove();
-});
+const classesOf = (el: Element) =>
+  (el.getAttribute("class") ?? "").split(/\s+/).filter(Boolean);
+const allClasses = () =>
+  Array.from(host.querySelectorAll("*"))
+    .map((el) => el.getAttribute("class") ?? "")
+    .join(" ");
 
 const song = {
   title: "晴天",
   author: "周杰伦",
   coverImg: "https://example.com/a.jpg",
-  websiteUrl: "https://music.163.com/song?id=1",
+  websiteUrl: "https://music.163.com/#/song?id=1",
   duration: 269,
   neteaseMusic: { id: 1, fee: 0 },
 } as unknown as PlatformData;
 
+const secondSong = {
+  ...song,
+  title: "鱼",
+  neteaseMusic: { id: 2, fee: 0 },
+} as unknown as PlatformData;
+
 const video = {
-  title: "视频",
-  author: "UP",
+  title: "某视频",
+  author: "某 UP",
   coverImg: "https://example.com/b.jpg",
   websiteUrl: "https://www.bilibili.com/video/BV1",
   duration: 65,
   bilibili: { bvid: "BV1" },
 } as unknown as PlatformData;
 
-const ctx = {
-  switchToMultiPage: () => {},
+const live = {
+  title: "正在直播",
+  author: "主播",
+  coverImg: "https://example.com/c.jpg",
+  websiteUrl: "https://live.bilibili.com/1",
+  bilibiliLive: { roomid: 1 },
+} as unknown as PlatformData;
+
+const album = {
+  title: "华丽的冒险",
+  author: "陈绮贞",
+  coverImg: "https://example.com/a.jpg",
+  websiteUrl: "https://music.163.com/#/album?id=3",
+  trackCount: "24",
+  multiPage: Promise.resolve({ platform: "neteasemusic" }),
+  neteaseMusic: { id: 3, fee: 0, isAlbum: true },
+} as unknown as PlatformData;
+
+const context = () => ({
+  switchToMultiPage: vi.fn(),
+  switchToOutFromMultiPage: vi.fn(),
   currentOnDemandPlay: vi.fn(),
-  updateCurrentInMultiPageStatus: () => {},
+  updateCurrentInMultiPageStatus: vi.fn(),
+  onRowActivate: vi.fn(),
   ShowOrHideIMC: vi.fn(),
+});
+
+let ctx: ReturnType<typeof context>;
+
+const withCtx = (child: ComponentChild) =>
+  h(MediaContainerContext.Provider, { value: ctx }, child);
+
+/** 挂载并把组件内部的 effect / 状态更新冲干净；给了 settle 时等数据落地。 */
+const mount = async (node: ComponentChild, settle?: Promise<unknown>) => {
+  await act(async () => {
+    render(node, host);
+  });
+  await act(async () => {
+    await settle;
+  });
 };
-const withCtx = (child: VNode<any>) => h(Provider, { value: ctx }, child);
 
-describe("卡片表面令牌", () => {
-  it("浅色白底 + black/8 描边 + 轻阴影；深色次级表面 + white/10 描边、无阴影", () => {
-    expect(themedCard.split(" ")).toEqual(
-      expect.arrayContaining([
-        "bg-white",
-        "border-black/8",
-        "imw-dark:bg-white/[0.04]",
-        "imw-dark:border-white/10",
-        "imw-dark:shadow-none",
-      ]),
+const ready = (platformData: PlatformData[], totalPage = 1) =>
+  Promise.resolve({ platformData, totalPage });
+
+const results = (props: Record<string, unknown>) =>
+  withCtx(h(ResultsArea, props as never));
+
+const resultsBase = {
+  settingsData: null,
+  viewMode: "list" as const,
+  mode: MODE.music,
+  scopeIndex: 0,
+  keyword: "",
+  onRetry: () => {},
+  onClearSearch: () => {},
+};
+
+beforeEach(() => {
+  host = document.createElement("div");
+  document.body.append(host);
+  ctx = context();
+  delete (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom;
+  document.getElementById("shareMediaSongName")?.remove();
+});
+
+afterEach(() => {
+  render(null, host);
+  host.remove();
+  document.getElementById("shareMediaSongName")?.remove();
+  vi.unstubAllGlobals();
+});
+
+describe("纯函数派生", () => {
+  it("时长 mm:ss、曲目数「N 首」", () => {
+    expect(formatDuration(269)).toBe("04:29");
+    expect(formatDuration(65)).toBe("01:05");
+    expect(formatDuration(undefined)).toBe("");
+    expect(trackCountLabel("24")).toBe("24 首");
+    expect(trackCountLabel(undefined)).toBe("");
+  });
+
+  it("专辑 / 歌单与直播条目可识别", () => {
+    expect(isCollectionItem(album)).toBe(true);
+    expect(isCollectionItem(song)).toBe(false);
+    expect(isLiveItem(live)).toBe(true);
+    expect(isLiveItem(video)).toBe(false);
+  });
+
+  it("形态由模式 / 范围 / 视图 / 内页派生", () => {
+    const base = {
+      mode: MODE.music,
+      scopeIndex: 0,
+      viewMode: "list" as const,
+      isInnerPage: false,
+    };
+    expect(shapeOf(base)).toBe("tracklist");
+    expect(shapeOf({ ...base, viewMode: "card" })).toBe("musicGrid");
+    expect(shapeOf({ ...base, scopeIndex: 1 })).toBe("collections");
+    expect(shapeOf({ ...base, scopeIndex: 2 })).toBe("collections");
+    expect(shapeOf({ ...base, scopeIndex: 3 })).toBe("videoGrid");
+    expect(shapeOf({ ...base, isInnerPage: true, scopeIndex: 3 })).toBe(
+      "tracklist",
     );
+    // 视频：列表 / 网格都跟着视图切换走（音乐 MV 只有网格）
+    expect(shapeOf({ ...base, mode: MODE.video })).toBe("tracklist");
+    expect(shapeOf({ ...base, mode: MODE.video, viewMode: "card" })).toBe(
+      "videoGrid",
+    );
+    expect(shapeOf({ ...base, mode: MODE.radio })).toBe("radio");
+    expect(shapeOf({ ...base, mode: MODE.favorites })).toBe("favorites");
+    expect(shapeOf({ ...base, mode: MODE.settings })).toBe("settings");
+  });
+
+  it("无悬停宽屏才点按选中；jsdom 无 matchMedia 时按有悬停处理", () => {
+    expect(isTapToReveal()).toBe(false);
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("hover"),
+    }));
+    expect(isTapToReveal()).toBe(true);
   });
 });
 
-describe("封面", () => {
-  it("视频来源 16:9、音乐方形，均 object-cover 无黑底", () => {
-    expect(isVideoCover(video)).toBe(true);
-    expect(
-      isVideoCover({
-        ...song,
-        neteaseMusic: { id: 2, fee: 0, isMV: true },
-      } as PlatformData),
-    ).toBe(true);
-    expect(
-      isVideoCover({ ...song, playList: [{}] } as unknown as PlatformData),
-    ).toBe(true);
-    expect(
-      isVideoCover({ ...song, playList: [] } as unknown as PlatformData),
-    ).toBe(false);
-    expect(
-      isVideoCover({
-        ...song,
-        neteaseMusic: undefined,
-        bilibiliLive: { roomid: 1 },
-      } as unknown as PlatformData),
-    ).toBe(true);
-    expect(isVideoCover(song)).toBe(false);
-
-    render(h(MediaCardImg, { src: video.coverImg, platformData: video }), host);
-    expect(classesOf(host.firstElementChild!)).toContain("aspect-video");
-    const img = host.querySelector("img")!;
-    expect(classesOf(img)).toContain("object-cover");
-    expect(classesOf(img)).not.toContain("object-contain");
-    expect(img.style.backgroundColor).toBe("");
-
-    render(h(MediaCardImg, { src: song.coverImg, platformData: song }), host);
-    expect(classesOf(host.firstElementChild!)).toContain("aspect-square");
+describe("令牌纪律", () => {
+  it("新补的令牌成对（浅 / 深各一份）", () => {
+    const singleTheme = new Set([
+      "deskOnRose",
+      "deskOnRoseFill",
+      "deskDurationPill",
+      "deskVideoScrim",
+      "deskSearchShadow",
+    ]);
+    for (const [name, value] of Object.entries(tokens)) {
+      if (typeof value !== "string" || singleTheme.has(name)) continue;
+      if (!/(bg|text|border|caret|outline|shadow)-\[#/.test(value)) continue;
+      expect(`${name}: ${value}`).toContain("imw-dark:");
+    }
   });
 
-  it("时长为右下角深色半透明胶囊；空值不渲染", () => {
-    render(h(MediaCardImg, { src: video.coverImg, platformData: video }), host);
-    const chip = host.firstElementChild!.lastElementChild!;
-    expect(chip.textContent).toBe("视频 / 01:05");
-    expect(classesOf(chip)).toEqual(
-      expect.arrayContaining([
-        "absolute",
-        "bottom-2",
-        "right-2",
-        "rounded-full",
-        "bg-black/60",
-        "text-white",
-      ]),
+  it("渲染结果不含 themed / accentVar / rgba，悬停类都以 hov: 开头", async () => {
+    await mount(
+      withCtx(
+        h(TracklistRow, { platformData: song, index: 1, onPlay: () => {} }),
+      ),
     );
-    const bare = {
-      title: "x",
-      author: "",
-      coverImg: "https://e/x.jpg",
-      websiteUrl: "",
-    } as unknown as PlatformData;
-    render(h(MediaCardImg, { src: bare.coverImg, platformData: bare }), host);
-    expect(host.firstElementChild!.querySelectorAll("div")).toHaveLength(0);
+    const rendered = allClasses();
+    expect(rendered).not.toContain("themed");
+    expect(rendered).not.toContain("accentVar");
+    expect(rendered).not.toContain("rgba(");
+    // 悬停类：含 hover: 的类必须带 hov: 前缀（触屏不触发、不残留）
+    for (const cls of rendered.split(/\s+/).filter((c) => c.includes("hover:")))
+      expect(cls).toContain("hov:");
   });
 
-  it("点击封面与胶囊仍打开网页", () => {
-    const open = vi.spyOn(window, "open").mockImplementation(() => null);
-    render(h(MediaCardImg, { src: video.coverImg, platformData: video }), host);
-    (host.querySelector("img") as HTMLElement).click();
-    (host.firstElementChild!.lastElementChild as HTMLElement).click();
-    expect(open).toHaveBeenCalledTimes(2);
-    expect(open).toHaveBeenCalledWith(video.websiteUrl);
-  });
-
-  it("列表小图仍为固定尺寸并裁切", () => {
-    render(
-      h(MediaCardImg, {
-        src: song.coverImg,
-        platformData: song,
-        compact: true,
-      }),
-      host,
-    );
-    expect(classesOf(host.firstElementChild!)).toEqual(
-      expect.arrayContaining(["w-[72px]", "h-[72px]", "max-[768px]:w-[56px]"]),
-    );
-    expect(classesOf(host.querySelector("img")!)).toContain("object-cover");
-  });
-});
-
-describe("卡片文字", () => {
-  it("标题 14px semibold、作者 12px 次要色，颜色随面板主题继承", () => {
-    render(h(MediaCardInfo, { platformData: song }), host);
-    const root = host.firstElementChild!;
-    expect(root.className).not.toMatch(/text-\[rgba/);
-    expect(classesOf(root)).toContain("grow");
-    const title = root.firstElementChild!;
-    expect(classesOf(title)).toContain("font-semibold");
-    expect(classesOf(title.firstElementChild!)).toContain("text-[14px]");
-    const author = root.lastElementChild!;
-    expect(author.textContent).toBe("周杰伦");
-    expect(classesOf(author)).toEqual(
-      expect.arrayContaining(["text-[12px]", "opacity-65"]),
-    );
-  });
-});
-
-describe("播放按钮", () => {
-  it("播放为强调色实心白字、44px 高，无行内品牌色；点击照常点播", async () => {
-    render(withCtx(h(MediaCardButton, { platformData: song })), host);
-    await act(async () => {});
-    const play = host.querySelector(".MediaCardButtonContainer") as HTMLElement;
-    expect(classesOf(play)).toEqual(
-      expect.arrayContaining([
-        "bg-(color:--imw-accent)",
-        "text-white",
-        "h-11",
-        "rounded-lg",
-      ]),
-    );
-    expect(play.getAttribute("style")).toBeNull();
-    play.click();
-    expect(ctx.ShowOrHideIMC).toHaveBeenCalled();
-    expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(song);
-  });
-
-  it("有选集时第二钮为强调色描边次要钮", async () => {
-    const multi = {
-      ...video,
-      multiPage: Promise.resolve({ platform: "bilibili" }),
-    } as unknown as PlatformData;
-    render(withCtx(h(MediaCardButton, { platformData: multi })), host);
-    await act(async () => {
-      await multi.multiPage;
-    });
-    const buttons = host.querySelectorAll(".MediaCardButtonContainer");
-    expect(buttons).toHaveLength(2);
-    expect(buttons[1].textContent).toBe("选集");
-    expect(classesOf(buttons[1])).toEqual(
-      expect.arrayContaining([
-        "border-(color:--imw-accent)/45",
-        "text-(color:--imw-accent-ink)",
-        "bg-transparent",
-      ]),
-    );
-  });
-
-  it("列表行内联按钮：强调色淡底与图标，无行内品牌色", async () => {
-    render(
-      withCtx(h(MediaCardButton, { platformData: song, variant: "compact" })),
-      host,
-    );
-    await act(async () => {});
-    const group = host.firstElementChild!;
-    expect(classesOf(group)).toEqual(
-      expect.arrayContaining([
-        "bg-(color:--imw-accent)/10",
-        "text-(color:--imw-accent-ink)",
-        "h-[72px]",
-      ]),
-    );
-    expect(host.querySelectorAll("[style]")).toHaveLength(0);
-  });
-});
-
-describe("列表行", () => {
-  it("与卡片同表面令牌，文字继承主题色", async () => {
-    render(withCtx(h(MediaListRow, { platformData: song })), host);
-    await act(async () => {});
-    const row = host.firstElementChild!;
-    for (const c of themedCard.split(" ")) expect(classesOf(row)).toContain(c);
-    expect(row.className).not.toMatch(/bg-white\/50|text-\[rgba/);
-    expect(row.textContent).toContain("晴天");
-  });
-});
-
-describe("结果网格", () => {
-  it("卡片用表面令牌，网格行保持 max-content", async () => {
-    const data = Promise.resolve({ platformData: [song, video], totalPage: 1 });
-    const draw = (mediaData: typeof data | null) =>
-      render(
-        withCtx(
-          h(MediaCard, { mediaData, settingsData: null, viewMode: "card" }),
-        ),
-        host,
-      );
-    // 数据经 componentDidUpdate 载入（与面板实际流程一致）
-    draw(null);
-    await act(async () => {
-      draw(data);
-      await data;
-    });
-    const grid = host.firstElementChild!;
-    expect(classesOf(grid)).toContain("[grid-auto-rows:max-content]");
-    expect(grid.children).toHaveLength(2);
-    for (const card of Array.from(grid.children)) {
-      expect(classesOf(card)).toEqual(
-        expect.arrayContaining([
-          "rounded-xl",
-          "bg-white",
-          "imw-dark:bg-white/[0.04]",
-        ]),
-      );
-      expect(card.className).not.toMatch(/backdrop-blur|bg-white\/50/);
+  it("星标、骨架、封面内环、时长胶囊、视频遮罩都用令牌", () => {
+    for (const token of [
+      tokens.deskStarOn,
+      tokens.deskSkeleton,
+      tokens.deskCoverRing,
+      tokens.deskDurationPill,
+      tokens.deskVideoScrim,
+      tokens.deskRowHover,
+      tokens.deskSendHover,
+    ]) {
+      expect(token).not.toContain("rgba(");
     }
   });
 });
 
-describe("空状态与加载", () => {
-  it.each([0, 1, 2])(
-    "message=%i 用强调色（浅色品牌、深色天蓝），无行内品牌色",
-    (message) => {
-      render(withCtx(h(MediaCardMessage, { message })), host);
-      const wrapper = host.firstElementChild!;
-      // 图形与转圈用 fill，说明文字用 ink
-      expect(classesOf(wrapper)).toContain("text-(color:--imw-accent)");
-      const caption = wrapper.querySelector(".font-bold");
-      if (caption)
-        expect(classesOf(caption)).toContain("text-(color:--imw-accent-ink)");
-      expect(wrapper.getAttribute("style")).toBeNull();
-    },
-  );
-});
-
-describe("列表行内联收藏星标", () => {
-  const draw = async (favorited: boolean) => {
-    vi.spyOn(FavoritesStorageService, "init").mockResolvedValue(null);
-    vi.spyOn(FavoritesStorageService, "isFavorited").mockReturnValue(favorited);
-    render(
-      h(FavoriteStarButton, { platformData: song, variant: "inline" }),
-      host,
-    );
-    await act(async () => {});
-    return host.querySelector(`[title]`)!.firstElementChild!;
+describe("组件源码的令牌纪律", () => {
+  const sources: Record<string, string> = {
+    "CollectionHeader.tsx": collectionHeaderSrc,
+    "CollectionRow.tsx": collectionRowSrc,
+    "Cover.tsx": coverSrc,
+    "FavoriteStar.tsx": favoriteStarSrc,
+    "MusicTile.tsx": musicTileSrc,
+    "OrderMenu.tsx": orderMenuSrc,
+    "ResultsArea.tsx": resultsAreaSrc,
+    "Skeletons.tsx": skeletonsSrc,
+    "StateMessage.tsx": stateMessageSrc,
+    "TracklistRow.tsx": tracklistSrc,
+    "VideoTile.tsx": videoTileSrc,
   };
 
-  it("已收藏：金色星标，无行内样式", async () => {
-    const icon = await draw(true);
-    expect(classesOf(icon)).toContain("text-[#fbc02d]");
-    expect(icon.getAttribute("style")).toBeNull();
+  it("不裸写颜色、不引 themed / accentVar（颜色只从令牌来）", () => {
+    for (const [name, source] of Object.entries(sources)) {
+      expect(`${name} themed: ${/themed|accentVar/.test(source)}`).toBe(
+        `${name} themed: false`,
+      );
+      expect(`${name} rgba: ${/rgba\(/.test(source)}`).toBe(
+        `${name} rgba: false`,
+      );
+      expect(`${name} hex: ${/(bg|text|border)-\[#/.test(source)}`).toBe(
+        `${name} hex: false`,
+      );
+    }
   });
 
-  it("未收藏：浅色 black/45、深色 white/55，无行内样式", async () => {
-    const icon = await draw(false);
-    expect(classesOf(icon)).toEqual(
-      expect.arrayContaining(["text-black/45", "imw-dark:text-white/55"]),
+  it("悬停效果一律在 hov: 下：没有裸 hover:，group-hover 只出现在 hov: 之后", () => {
+    for (const [name, source] of Object.entries(sources)) {
+      // 允许的两种形态剥掉后，任何残留的 `hover:` 都是漏了 hov: 门控
+      const stripped = source
+        .split("hov:group-hover:")
+        .join("")
+        .split("hov:hover:")
+        .join("");
+      expect(`${name}: ${stripped.includes("hover:")}`).toBe(`${name}: false`);
+    }
+  });
+});
+
+describe("封面", () => {
+  it("http 升级为 https，裁切填满并挂内环", async () => {
+    expect(upgradeCoverUrl("http://a/b.jpg")).toBe("https://a/b.jpg");
+    expect(upgradeCoverUrl("https://a/b.jpg")).toBe("https://a/b.jpg");
+
+    await mount(h(Cover, { src: "http://a/b.jpg" }));
+    const img = host.querySelector("img")!;
+    expect(img.getAttribute("src")).toBe("https://a/b.jpg");
+    expect(classesOf(img)).toContain("object-cover");
+    expect(host.firstElementChild!.getAttribute("class")).toContain(
+      "shadow-[inset_0_0_0_1px_#0000000F]",
     );
-    expect(classesOf(icon)).not.toContain("text-[#fbc02d]");
-    expect(icon.getAttribute("style")).toBeNull();
+  });
+
+  it("加载失败回退 thumb 底 + 自包含图标，不留破图", async () => {
+    await mount(h(Cover, { src: "https://a/b.jpg", icon: "note" }));
+    const img = host.querySelector("img")!;
+    await act(async () => {
+      img.dispatchEvent(new Event("error"));
+    });
+    expect(host.querySelector("img")).toBeNull();
+    const fallback = host.querySelector("[data-imw-cover-fallback]")!;
+    expect(fallback.querySelector("svg")).not.toBeNull();
+    expect(host.firstElementChild!.getAttribute("class")).toContain(
+      "bg-[#E6E0D6]",
+    );
+  });
+});
+
+describe("曲目表", () => {
+  it("桌面七列 / 手机四列；表头仅桌面", async () => {
+    await mount(
+      withCtx(
+        h("div", {}, [
+          h(TracklistHeader, { durationLabel: "时长" }),
+          h(TracklistRow, { platformData: song, index: 1, onPlay: () => {} }),
+        ]),
+      ),
+    );
+    const header = host.querySelector("[data-imw-tracklist-header]")!;
+    expect(classesOf(header)).toEqual(
+      expect.arrayContaining([
+        "grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px]",
+        "max-[768px]:grid-cols-[48px_1fr_auto_40px]",
+        "h-[34px]",
+        "max-[768px]:hidden",
+      ]),
+    );
+    expect(header.textContent).toContain("#");
+    expect(header.textContent).toContain("标题");
+    expect(header.textContent).toContain("出处");
+    expect(header.textContent).toContain("时长");
+
+    const row = host.querySelector("[data-imw-tracklist-row]")!;
+    expect(classesOf(row)).toEqual(
+      expect.arrayContaining([
+        "grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px]",
+        "max-[768px]:grid-cols-[48px_1fr_auto_40px]",
+      ]),
+    );
+    expect(row.textContent).toContain("01");
+    expect(row.textContent).toContain("晴天");
+    expect(row.textContent).toContain("周杰伦");
+    expect(row.textContent).toContain("网易云");
+    expect(row.textContent).toContain("04:29");
+    // 手机隐藏序号、出处、星标
+    const hidden = Array.from(row.children).filter((el) =>
+      classesOf(el).includes("max-[768px]:hidden"),
+    );
+    expect(hidden.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("房间正在播放：三根音柱替换序号、标题蔷薇红、歌手后缀", async () => {
+    await mount(
+      withCtx(
+        h(TracklistRow, {
+          platformData: song,
+          index: 1,
+          nowPlaying: true,
+          onPlay: () => {},
+        }),
+      ),
+    );
+    const row = host.querySelector("[data-imw-tracklist-row]")!;
+    expect(row.getAttribute("data-now-playing")).toBe("true");
+    const bars = row.querySelectorAll("[data-imw-now-playing]");
+    expect(bars).toHaveLength(1);
+    expect(bars[0].children).toHaveLength(3);
+    expect(row.textContent).toContain("· 房间正在播放");
+    expect(row.textContent).not.toContain("01");
+    expect(row.innerHTML).toContain("text-[#B42F3E]");
+  });
+
+  it("标题缺失时不误标正在播放", () => {
+    expect(isNowPlayingTitle("", song)).toBe(false);
+    expect(
+      isNowPlayingTitle("晴天", { ...song, title: "" } as PlatformData),
+    ).toBe(false);
+    expect(isNowPlayingTitle("晴天", song)).toBe(true);
+  });
+
+  it("点播按钮：房间支持时调 onPlay，房间不支持时灰化并提示", async () => {
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    const onPlay = vi.fn();
+    await mount(withCtx(h(RequestButton, { onPlay })));
+    const button = host.querySelector("button")!;
+    expect(button.getAttribute("aria-disabled")).toBe("false");
+    expect(button.getAttribute("title")).toBe("点播到房间");
+    expect(classesOf(button)).toEqual(
+      expect.arrayContaining(["h-8", "rounded-full"]),
+    );
+    expect(classesOf(button)).toContain("hov:group-hover:bg-[#B42F3E]");
+    button.click();
+    expect(onPlay).toHaveBeenCalledOnce();
+
+    render(null, host);
+    await mount(withCtx(h(RequestButton, { supported: false, onPlay })));
+    const disabled = host.querySelector("button")!;
+    expect(disabled.getAttribute("aria-disabled")).toBe("true");
+    expect(disabled.getAttribute("title")).toBe("这个房间不支持点播");
+    expect(classesOf(disabled)).toContain("opacity-40");
+    expect(classesOf(disabled)).not.toContain("hov:group-hover:bg-[#B42F3E]");
+    disabled.click();
+    expect(show).toHaveBeenCalledWith("这个房间不支持点播");
+    expect(onPlay).toHaveBeenCalledOnce();
+  });
+
+  it("房间不支持点播：roomSupportsRequest / notifyRoomUnsupported 是唯一出口", () => {
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    expect(roomSupportsRequest()).toBe(true);
+    (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom = false;
+    expect(roomSupportsRequest()).toBe(false);
+    notifyRoomUnsupported();
+    expect(show).toHaveBeenCalledWith("这个房间不支持点播");
+  });
+
+  it("电台行没有序号、出处与星标", async () => {
+    await mount(
+      withCtx(
+        h(TracklistRow, {
+          platformData: {
+            title: "某电台",
+            author: "",
+            coverImg: "",
+            websiteUrl: "",
+            radio: { isradio: true, id: 1 },
+          } as unknown as PlatformData,
+          index: 1,
+          variant: "radio",
+          onPlay: () => {},
+        }),
+      ),
+    );
+    const row = host.querySelector("[data-imw-tracklist-row]")!;
+    expect(row.querySelectorAll('button[aria-label="收藏"]')).toHaveLength(0);
+    expect(row.querySelectorAll("button")).toHaveLength(1);
+    expect(row.textContent).not.toContain("01");
+    expect(row.textContent).not.toContain("网易云");
+  });
+});
+
+describe("音乐网格卡", () => {
+  it("1:1 封面、单行标题、歌手 · 等宽时长、桌面右端收藏星", async () => {
+    await mount(
+      withCtx(
+        h(MusicTile, {
+          platformData: song,
+          onPlay: () => {},
+          onActivate: () => {},
+        }),
+      ),
+    );
+    expect(host.querySelector(".aspect-square")).not.toBeNull();
+    expect(host.textContent).toContain("晴天");
+    expect(host.textContent).toContain("04:29");
+    const star = host.querySelector('button[aria-label="收藏"]')!;
+    expect(star.parentElement!.getAttribute("class")).toContain(
+      "max-[768px]:hidden",
+    );
+  });
+
+  it("悬停遮罩与「点播」胶囊只在 hov: 下出现，键盘聚焦同样显示", async () => {
+    await mount(
+      withCtx(h(MusicTile, { platformData: song, onPlay: () => {} })),
+    );
+    const overlay = host.querySelector(".bg-\\[\\#0A090861\\]")!;
+    expect(overlay.getAttribute("class")).toContain(
+      "hov:group-hover:opacity-100",
+    );
+    expect(overlay.getAttribute("class")).toContain(
+      "group-focus-within:opacity-100",
+    );
+    const capsule = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "点播",
+    )!;
+    expect(capsule.getAttribute("class")).toContain(
+      "hov:group-hover:pointer-events-auto",
+    );
+  });
+});
+
+describe("视频卡", () => {
+  it("16:9 缩略图 + 右下等宽时长胶囊", async () => {
+    await mount(
+      withCtx(h(VideoTile, { platformData: video, onPlay: () => {} })),
+    );
+    expect(host.querySelector(".aspect-video")).not.toBeNull();
+    const pill = host.querySelector(
+      ".pointer-events-none.absolute.bottom-2.right-2",
+    )!;
+    expect(pill.textContent).toBe("01:05");
+    expect(pill.getAttribute("class")).toContain("bg-[#0C0B0AB8]");
+  });
+
+  it("直播卡换「直播」徽章、不显示时长", async () => {
+    await mount(
+      withCtx(h(VideoTile, { platformData: live, onPlay: () => {} })),
+    );
+    const badge = host.querySelector(
+      ".pointer-events-none.absolute.bottom-2.right-2",
+    )!;
+    expect(badge.textContent).toBe("直播");
+    expect(badge.getAttribute("class")).toContain("bg-[#B42F3E]");
+    expect(host.textContent).not.toContain("00:00");
+  });
+
+  it("无悬停宽屏：第一次点按只选中（描边），再点按钮才点播", async () => {
+    const onReveal = vi.fn();
+    const onPlay = vi.fn();
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("hover"),
+    }));
+
+    await mount(
+      withCtx(h(VideoTile, { platformData: video, onReveal, onPlay })),
+    );
+    const body = host.querySelector('button[aria-label="点播 某视频"]')!;
+    (body as HTMLElement).click();
+    expect(onReveal).toHaveBeenCalledOnce();
+    expect(onPlay).not.toHaveBeenCalled();
+
+    render(null, host);
+    await mount(
+      withCtx(h(VideoTile, { platformData: video, revealed: true, onPlay })),
+    );
+    expect(
+      host.querySelector(".shadow-\\[0_0_0_2px_\\#1C1916\\]"),
+    ).not.toBeNull();
+    const overlay = host.querySelector(".bg-\\[\\#0A090861\\]")!;
+    expect(overlay.getAttribute("class")).toContain("opacity-100");
+    const capsule = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "点播到房间",
+    )!;
+    capsule.click();
+    expect(onPlay).toHaveBeenCalledOnce();
+  });
+});
+
+describe("专辑 / 歌单行与内页头", () => {
+  it("整行可点进入内页，行末是右向箭头而不是点播钮", async () => {
+    const onOpen = vi.fn();
+    await mount(
+      withCtx(h(CollectionRow, { platformData: album, index: 1, onOpen })),
+    );
+    const row = host.querySelector("[data-imw-collection-row]")!;
+    expect(row.textContent).toContain("24 首");
+    expect(row.querySelector('button[aria-label^="点播"]')).toBeNull();
+    (row as HTMLElement).click();
+    expect(onOpen).toHaveBeenCalledOnce();
+    const arrow = host.querySelector<HTMLElement>(
+      'button[aria-label="查看 华丽的冒险"]',
+    )!;
+    arrow.click();
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
+  it("内页头：返回、名称、曲目数与「全部播放」", async () => {
+    const onBack = vi.fn();
+    await mount(
+      withCtx(
+        h(CollectionHeader, {
+          title: album.title,
+          trackCount: album.trackCount,
+          onBack,
+          onPlayAll: () => {},
+        }),
+      ),
+    );
+    expect(host.textContent).toContain("华丽的冒险");
+    expect(host.textContent).toContain("24 首");
+    const back = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "返回",
+    )!;
+    back.click();
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(host.textContent).toContain("全部播放");
+  });
+
+  it("顺序菜单：正序 / 乱序；Esc 与点外侧只取消，不点播，也不碰 buildSelect2", async () => {
+    const buildSelect = vi.spyOn(NetEasePlatform, "buildSelect");
+    const onPlayAll = vi.fn();
+    await mount(
+      withCtx(
+        h(CollectionHeader, {
+          title: album.title,
+          trackCount: album.trackCount,
+          onBack: () => {},
+          onPlayAll,
+        }),
+      ),
+    );
+    const trigger = Array.from(host.querySelectorAll("button")).find((el) =>
+      el.textContent?.includes("全部播放"),
+    )!;
+    await act(async () => {
+      trigger.click();
+    });
+
+    const menu = document.querySelector<HTMLElement>("[data-imw-order-menu]")!;
+    expect(menu).not.toBeNull();
+    expect(menu.querySelector('[role="menu"]')).not.toBeNull();
+    const items = menu.querySelectorAll('[role="menuitem"]');
+    expect(Array.from(items).map((el) => el.textContent)).toEqual([
+      "正序播放",
+      "乱序播放",
+    ]);
+
+    // Esc：只关菜单
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    expect(document.querySelector("[data-imw-order-menu]")).toBeNull();
+    expect(onPlayAll).not.toHaveBeenCalled();
+
+    // 点外侧：取消
+    await act(async () => {
+      trigger.click();
+    });
+    await act(async () => {
+      (document.querySelector("[data-imw-order-menu]") as HTMLElement).click();
+    });
+    expect(document.querySelector("[data-imw-order-menu]")).toBeNull();
+    expect(onPlayAll).not.toHaveBeenCalled();
+
+    // 选定乱序：按该顺序整张点播
+    await act(async () => {
+      trigger.click();
+    });
+    await act(async () => {
+      const shuffle = Array.from(
+        document.querySelectorAll('[role="menuitem"]'),
+      ).find((el) => el.textContent === "乱序播放") as HTMLElement;
+      shuffle.click();
+    });
+    expect(onPlayAll).toHaveBeenCalledWith("shuffle");
+    expect(document.querySelector("[data-imw-order-menu]")).toBeNull();
+    expect(buildSelect).not.toHaveBeenCalled();
+  });
+
+  it("房间不支持点播时「全部播放」灰化并提示", async () => {
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom = false;
+    await mount(
+      withCtx(
+        h(CollectionHeader, {
+          title: album.title,
+          trackCount: album.trackCount,
+          onBack: () => {},
+          onPlayAll: () => {},
+        }),
+      ),
+    );
+    const trigger = Array.from(host.querySelectorAll("button")).find((el) =>
+      el.textContent?.includes("全部播放"),
+    )!;
+    expect(trigger.getAttribute("aria-disabled")).toBe("true");
+    expect(classesOf(trigger)).toContain("opacity-40");
+    await act(async () => {
+      trigger.click();
+    });
+    expect(show).toHaveBeenCalledWith("这个房间不支持点播");
+    expect(document.querySelector("[data-imw-order-menu]")).toBeNull();
+  });
+});
+
+describe("结果区状态机", () => {
+  it("音乐首屏（未搜索）显示引导文案", async () => {
+    await mount(results({ ...resultsBase, mediaData: null }));
+    expect(host.textContent).toContain("搜索歌名或歌手，点播到房间。");
+  });
+
+  it("收藏为空显示引导；有关键词时是「没有匹配的收藏」+「清除搜索」", async () => {
+    const empty = ready([]);
+    await mount(
+      results({ ...resultsBase, mode: MODE.favorites, mediaData: empty }),
+      empty,
+    );
+    expect(host.textContent).toContain("还没有收藏。在曲目旁点星标即可收藏。");
+
+    render(null, host);
+    const onClearSearch = vi.fn();
+    const filtered = ready([]);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.favorites,
+        keyword: "abc",
+        onClearSearch,
+        mediaData: filtered,
+      }),
+      filtered,
+    );
+    expect(host.textContent).toContain("没有匹配的收藏");
+    const clear = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "清除搜索",
+    )!;
+    clear.click();
+    expect(onClearSearch).toHaveBeenCalledOnce();
+  });
+
+  it("电台过滤无结果文案", async () => {
+    const empty = ready([]);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.radio,
+        keyword: "abc",
+        mediaData: empty,
+      }),
+      empty,
+    );
+    expect(host.textContent).toContain("没有匹配的电台");
+  });
+
+  it("搜索无结果文案", async () => {
+    const empty = ready([]);
+    await mount(
+      results({ ...resultsBase, keyword: "abc", mediaData: empty }),
+      empty,
+    );
+    expect(host.textContent).toContain("没有找到结果。换个关键词试试。");
+  });
+
+  it("加载中是静态骨架（列表骨架行 / 网格骨架瓦片）", async () => {
+    const pending = new Promise<never>(() => {});
+    await mount(results({ ...resultsBase, mediaData: pending }));
+    expect(
+      host.querySelectorAll("[data-imw-skeleton-row]").length,
+    ).toBeGreaterThan(0);
+
+    render(null, host);
+    await mount(
+      results({ ...resultsBase, viewMode: "card", mediaData: pending }),
+    );
+    expect(
+      host.querySelectorAll("[data-imw-skeleton-tile]").length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("失败显示「加载失败」+「重试」，点重试回调外层", async () => {
+    const onRetry = vi.fn();
+    const failing = Promise.reject(new Error("x"));
+    failing.catch(() => {});
+    await mount(
+      results({ ...resultsBase, onRetry, mediaData: failing }),
+      failing.catch(() => {}),
+    );
+    expect(host.textContent).toContain("加载失败");
+    const retry = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "重试",
+    )!;
+    retry.click();
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("结果按范围出形态：音乐列表出七列表头，网格出瓦片，专辑出专辑行", async () => {
+    const songs = ready([song, secondSong]);
+    await mount(results({ ...resultsBase, mediaData: songs }), songs);
+    expect(host.querySelectorAll("[data-imw-tracklist-row]")).toHaveLength(2);
+    expect(host.querySelector("[data-imw-tracklist-header]")).not.toBeNull();
+
+    render(null, host);
+    const oneSong = ready([song]);
+    await mount(
+      results({ ...resultsBase, viewMode: "card", mediaData: oneSong }),
+      oneSong,
+    );
+    expect(host.querySelectorAll("[data-imw-tile]")).toHaveLength(1);
+
+    render(null, host);
+    const collection = ready([album]);
+    await mount(
+      results({ ...resultsBase, scopeIndex: 1, mediaData: collection }),
+      collection,
+    );
+    expect(host.querySelectorAll("[data-imw-collection-row]")).toHaveLength(1);
+    expect(host.textContent).toContain("曲目数");
+  });
+
+  it("点播走 currentOnDemandPlay；房间不支持时只提示不发报文", async () => {
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    const songs = ready([song]);
+    await mount(results({ ...resultsBase, mediaData: songs }), songs);
+    (host.querySelector('button[aria-label="点播"]') as HTMLElement).click();
+    expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(song);
+
+    render(null, host);
+    (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom = false;
+    const again = ready([song]);
+    await mount(results({ ...resultsBase, mediaData: again }), again);
+    const disabled = host.querySelector('button[aria-label="点播"]')!;
+    expect(disabled.getAttribute("aria-disabled")).toBe("true");
+    (disabled as HTMLElement).click();
+    expect(show).toHaveBeenCalledWith("这个房间不支持点播");
+    expect(ctx.currentOnDemandPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it("专辑行进入内页：先标记内页再载入集合", async () => {
+    const collection = ready([album]);
+    await mount(
+      results({ ...resultsBase, scopeIndex: 1, mediaData: collection }),
+      collection,
+    );
+    await act(async () => {
+      (host.querySelector("[data-imw-collection-row]") as HTMLElement).click();
+    });
+    expect(ctx.updateCurrentInMultiPageStatus).toHaveBeenCalledWith(true);
+    expect(ctx.switchToMultiPage).toHaveBeenCalledWith(album);
+  });
+
+  it("房间正在播放：标题匹配的行显示音柱", async () => {
+    const name = document.createElement("div");
+    name.id = "shareMediaSongName";
+    name.textContent = "鱼";
+    document.body.append(name);
+    const songs = ready([song, secondSong]);
+    await mount(results({ ...resultsBase, mediaData: songs }), songs);
+    const rows = host.querySelectorAll("[data-imw-tracklist-row]");
+    expect(rows[0].getAttribute("data-now-playing")).toBeNull();
+    expect(rows[1].getAttribute("data-now-playing")).toBe("true");
+  });
+
+  it("内页进出保留外层滚动位置（返回同一份外层结果时）", async () => {
+    const outer = ready([song]);
+    await mount(results({ ...resultsBase, mediaData: outer }), outer);
+    const scroller = host.querySelector<HTMLElement>("[data-imw-results]")!;
+    scroller.scrollTop = 120;
+    scroller.dispatchEvent(new Event("scroll"));
+
+    const inner = ready([song]);
+    await mount(
+      results({ ...resultsBase, isInnerPage: true, mediaData: inner }),
+      inner,
+    );
+    expect(scroller.scrollTop).toBe(0);
+
+    // 返回：容器把外层那份数据承诺原样放回 → 还原位置
+    await mount(
+      results({ ...resultsBase, isInnerPage: false, mediaData: outer }),
+      outer,
+    );
+    expect(scroller.scrollTop).toBe(120);
+
+    // 内页里发起新搜索（数据承诺变了）→ 回到顶部，不还原旧位置
+    const searched = ready([song]);
+    await mount(
+      results({ ...resultsBase, isInnerPage: false, mediaData: searched }),
+      searched,
+    );
+    expect(scroller.scrollTop).toBe(0);
+  });
+
+  it("设置数据走设置卡网格", async () => {
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.settings,
+        mediaData: null,
+        settingsData: [
+          {
+            key: "a",
+            title: "画质",
+            actionTitle: "1080P",
+            icon: "",
+            action: () => {},
+          },
+        ],
+      }),
+    );
+    expect(host.querySelector(".IMW-SettingCard")).not.toBeNull();
+  });
+});
+
+describe("骨架与音柱小组件", () => {
+  it("骨架行与瓦片是静态色块，无动画", async () => {
+    await mount(h(SkeletonRows, { count: 2 }));
+    expect(host.querySelectorAll("[data-imw-skeleton-row]")).toHaveLength(2);
+    expect(allClasses()).not.toContain("animate-");
+    render(null, host);
+    await mount(h(SkeletonTiles, { count: 2, aspect: "square" }));
+    expect(host.querySelectorAll("[data-imw-skeleton-tile]")).toHaveLength(2);
+    expect(host.querySelectorAll(".aspect-square")).toHaveLength(2);
+  });
+
+  it("音柱三根、可换色（时长胶囊上用 on-rose）", async () => {
+    await mount(h(NowPlayingBars, { tone: tokens.deskOnRoseFill }));
+    const bars = host.querySelectorAll("span");
+    expect(bars).toHaveLength(4); // 容器 + 三根
+    expect(host.innerHTML).toContain("bg-[#FFFFFF]");
   });
 });

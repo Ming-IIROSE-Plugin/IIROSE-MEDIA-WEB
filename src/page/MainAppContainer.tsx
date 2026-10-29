@@ -1,6 +1,8 @@
 import { setPanelFocus } from "../playback/PanelFocus";
 import { Component, createRef } from "preact";
-import { MediaCard } from "./components/media-card-container/MediaCard";
+import { ResultsArea } from "./components/media-card-container/ResultsArea";
+import { CollectionHeader } from "./components/media-card-container/CollectionHeader";
+import type { PlayOrder } from "./components/media-card-container/OrderMenu";
 import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
 import { NetEasePlatform } from "../platforms/NetEasePlatform";
 import { AllVideosPlatform } from "../platforms/AllVideosPlatform";
@@ -50,6 +52,7 @@ interface ModeSnapshot {
   allMediaData: PlatformData[];
   isCurrentInMultiPage: boolean;
   oldItems: OldItems | null;
+  innerCollection: PlatformData | null;
   settingsData: SettingData[] | null;
   currentSubNavBarAction: () => void;
   currentOnDemandPlay: (platformData: PlatformData) => void;
@@ -67,6 +70,7 @@ function emptyModeState(): ModeSnapshot {
     allMediaData: [],
     isCurrentInMultiPage: false,
     oldItems: null,
+    innerCollection: null,
     settingsData: null,
     currentSubNavBarAction: () => {},
     currentOnDemandPlay: () => {},
@@ -89,6 +93,8 @@ export class MainAppContainer extends Component<
 
   /** 切模式时待提交的关键词（粘贴视频链接要先切到视频模式）。 */
   private pendingSearch: string | null = null;
+  /** 内页的来源条目：重试时按它重新载入内页。 */
+  private innerPageSource: PlatformData | null = null;
   /** 各模式现场快照；没有 = 该模式首次进入。 */
   private snapshots = new Map<number, ModeSnapshot>();
   private searchBarRef = createRef<SearchBar>();
@@ -119,8 +125,14 @@ export class MainAppContainer extends Component<
     });
     void SyncManager.init();
     if (this.props.active && !isPhone()) this.searchBarRef.current?.focus();
+    // 内页（专辑/歌单）里按 Esc 先返回外层结果，再按一次才关面板（story 4 统一为层级栈）
+    document.addEventListener("keydown", this.handleInnerPageEscape, true);
     // 首个模式的首个范围：与旧四行顶栏挂载时自执行首项一致
     this.runCurrentScope();
+  }
+
+  componentWillUnmount() {
+    document.removeEventListener("keydown", this.handleInnerPageEscape, true);
   }
 
   componentDidUpdate(prevProps: Readonly<MainAppContainerProps>): void {
@@ -158,6 +170,44 @@ export class MainAppContainer extends Component<
     }
   }
 
+  /**
+   * 内页的 `Esc`：顺序菜单自己关（它先接管并阻止冒泡），否则回到外层结果。
+   * story 4 会把这里换成统一的逐层关闭（捕获阶段 + 层级栈）。
+   */
+  private handleInnerPageEscape = (event: KeyboardEvent) => {
+    if (!this.props.active) return;
+    if (event.key !== "Escape") return;
+    if (document.querySelector("[data-imw-order-menu]")) return;
+    if (!this.state.isCurrentInMultiPage) return;
+    this.controller.switchToOutFromMultiPage();
+    event.stopPropagation();
+  };
+
+  /** 手机操作条的挂点：story 4 在这里打开操作条，本 story 只保证行体点击有落点。 */
+  private handleRowActivate = (_platformData: PlatformData) => {};
+
+  /** 重试：内页重载内页，否则重发当前范围。 */
+  private handleRetry = () => {
+    const source = this.innerPageSource ?? this.state.innerCollection;
+    if (this.state.isCurrentInMultiPage && source) {
+      void this.controller.switchToMultiPage(source);
+      return;
+    }
+    this.runCurrentScope();
+  };
+
+  /** 收藏 / 电台过滤无结果时的「清除搜索」：清空关键词后按当前范围重取（回到全量）。 */
+  private handleClearSearch = () => {
+    this.controller.runSearch("", { reloadEmpty: true });
+  };
+
+  /** 内页头「全部播放」：按所选顺序批量点播整张（不走宿站 `buildSelect2`）。 */
+  private playCollectionAll = (order: PlayOrder) => {
+    const collection = this.state.innerCollection;
+    if (!collection) return;
+    void NetEasePlatform.playCollectionAll(collection, order);
+  };
+
   render() {
     const { ShowOrHideIMC } = this.props;
     const {
@@ -186,11 +236,17 @@ export class MainAppContainer extends Component<
 
     const providerValue = {
       switchToMultiPage: this.controller.switchToMultiPage,
+      switchToOutFromMultiPage: this.controller.switchToOutFromMultiPage,
       currentOnDemandPlay,
       updateCurrentInMultiPageStatus:
         this.controller.updateCurrentInMultiPageStatus,
+      onRowActivate: this.handleRowActivate,
       ShowOrHideIMC,
     };
+
+    const innerCollection = this.state.innerCollection;
+    const showCollectionHeader =
+      !!innerCollection && this.state.isCurrentInMultiPage;
 
     return (
       <Provider value={providerValue}>
@@ -231,28 +287,47 @@ export class MainAppContainer extends Component<
               />
             )}
 
-            {hasScopeRow(mode) && scopes.length > 0 && (
-              <ScopeRow
-                items={scopes}
-                activeIndex={SubNavBarIndex}
-                onChange={this.controller.selectScope}
-                viewMode={this.viewToggleMode()}
-                onToggleView={this.controller.toggleSearchViewMode}
+            {showCollectionHeader ? (
+              <CollectionHeader
+                title={innerCollection.title}
+                trackCount={innerCollection.trackCount}
                 currentPage={currentPage}
                 totalPage={totalPage}
-                showPager={hasPager(mode)}
                 onPageChange={this.controller.changecurrentPage}
-                label={mode === MODE.radio ? "地区" : "范围"}
+                onBack={this.controller.switchToOutFromMultiPage}
+                onPlayAll={this.playCollectionAll}
               />
+            ) : (
+              hasScopeRow(mode) &&
+              scopes.length > 0 && (
+                <ScopeRow
+                  items={scopes}
+                  activeIndex={SubNavBarIndex}
+                  onChange={this.controller.selectScope}
+                  viewMode={this.viewToggleMode()}
+                  onToggleView={this.controller.toggleSearchViewMode}
+                  currentPage={currentPage}
+                  totalPage={totalPage}
+                  showPager={hasPager(mode)}
+                  onPageChange={this.controller.changecurrentPage}
+                  label={mode === MODE.radio ? "地区" : "范围"}
+                />
+              )
             )}
 
             <div className="relative min-h-0 flex-1">
               {/* 每个模式一个实例：切模式重挂载，避免跨模式残留的列表数据与滚动位置 */}
-              <MediaCard
+              <ResultsArea
                 key={mode}
                 mediaData={mediaData}
                 settingsData={settingsData}
                 viewMode={searchViewMode}
+                mode={mode}
+                scopeIndex={SubNavBarIndex}
+                keyword={searchKeyword}
+                isInnerPage={this.state.isCurrentInMultiPage}
+                onRetry={this.handleRetry}
+                onClearSearch={this.handleClearSearch}
               />
             </div>
 
@@ -340,6 +415,7 @@ export class MainAppContainer extends Component<
       allMediaData: [...state.allMediaData],
       isCurrentInMultiPage: state.isCurrentInMultiPage,
       oldItems: state.oldItems,
+      innerCollection: state.innerCollection,
       settingsData: state.settingsData,
       currentSubNavBarAction: state.currentSubNavBarAction,
       currentOnDemandPlay: state.currentOnDemandPlay,
@@ -363,6 +439,7 @@ export class MainAppContainer extends Component<
     const pending = this.pendingSearch;
     this.pendingSearch = null;
     setPanelFocus({ category: next, platform: restored.PlatformIndex });
+    this.innerPageSource = restored.innerCollection;
 
     this.setState(
       {
@@ -429,9 +506,17 @@ export class MainAppContainer extends Component<
       this.controller.runSearch(video ?? keyword);
     },
 
-    /** 真正发起检索：页码归 1、清结果，再交给当前范围的动作。空的检索只重置现场、不发请求。 */
-    runSearch: (text: string, options?: { propagate?: boolean }) => {
+    /**
+     * 真正发起检索：页码归 1、清结果，再交给当前范围的动作。
+     * 空的检索只重置现场、不发请求；`reloadEmpty` 用于「清除搜索」——本地过滤的范围
+     * （收藏 / 电台）要按清空后的关键词重取一遍。
+     */
+    runSearch: (
+      text: string,
+      options?: { propagate?: boolean; reloadEmpty?: boolean },
+    ) => {
       const keyword = text.trim();
+      this.innerPageSource = null;
       // 浏览型范围（视频的「推荐」）不承接关键词：有词时自动落到第一个可搜索的范围
       const platform = this.currentPlatform();
       let scope = this.state.SubNavBarIndex;
@@ -454,11 +539,12 @@ export class MainAppContainer extends Component<
           mediaData: null,
           isCurrentInMultiPage: false,
           oldItems: null,
+          innerCollection: null,
           updating: false,
           currentSubNavBarAction: nextAction,
         },
         () => {
-          if (keyword) this.runCurrentScope();
+          if (keyword || options?.reloadEmpty) this.runCurrentScope();
           if (options?.propagate !== false)
             this.props.changeSearchKeyword(keyword);
         },
@@ -467,6 +553,7 @@ export class MainAppContainer extends Component<
 
     /** 切换来源：页码归 1、回到第一个范围。 */
     selectSource: (index: number) => {
+      this.innerPageSource = null;
       setPanelFocus({ category: this.state.mode, platform: index });
       this.setState(
         {
@@ -478,6 +565,7 @@ export class MainAppContainer extends Component<
           mediaData: null,
           isCurrentInMultiPage: false,
           oldItems: null,
+          innerCollection: null,
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -486,6 +574,7 @@ export class MainAppContainer extends Component<
 
     /** 切换范围：页码归 1、滚到顶部，按当前关键词重取。 */
     selectScope: (index: number) => {
+      this.innerPageSource = null;
       this.setState(
         {
           SubNavBarIndex: index,
@@ -495,6 +584,7 @@ export class MainAppContainer extends Component<
           mediaData: null,
           isCurrentInMultiPage: false,
           oldItems: null,
+          innerCollection: null,
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -554,6 +644,15 @@ export class MainAppContainer extends Component<
       platformData: PlatformData,
       _isCurrentInMultiPage?: boolean,
     ) => {
+      // 记住来源条目：内页加载失败时「重试」按它重载内页
+      this.innerPageSource = platformData;
+      // 专辑 / 歌单的内页头（名称 + 曲目数 + 全部播放）；多 P / 多集仍用范围行
+      const isCollection = !!(
+        platformData.neteaseMusic?.isSongList ||
+        platformData.neteaseMusic?.isAlbum
+      );
+      this.setState({ innerCollection: isCollection ? platformData : null });
+
       if (platformData.bilibili) {
         const data = BilibiliPlatform.getMultiPageBasicsData(platformData);
         const vod = BilibiliPlatform.VOD;
@@ -636,12 +735,14 @@ export class MainAppContainer extends Component<
     switchToOutFromMultiPage: () => {
       const oldItems = this.state.oldItems;
       if (!oldItems) return;
+      this.innerPageSource = null;
       this.setState({ oldItems: null });
       this.setState({ mediaData: oldItems.mediaData });
       this.setState({ allMediaData: oldItems.allMediaData });
       this.setState({ totalPage: oldItems.totalPage });
       this.setState({ currentPage: oldItems.currentPage });
       this.setState({ isCurrentInMultiPage: false });
+      this.setState({ innerCollection: null });
       this.setState({ currentSubNavBarAction: oldItems.SubNavBarAction });
       this.setState({ currentOnDemandPlay: oldItems.OnDemandPlay });
     },

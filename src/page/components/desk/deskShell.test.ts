@@ -26,6 +26,9 @@ describe("外观令牌成对", () => {
   it("颜色类串都带 imw-dark: 成对（不随主题变化的两个除外）", () => {
     const singleTheme = new Set<string>([
       "deskOnRose", // on-rose：白字
+      "deskOnRoseFill", // on-rose 实色：时长胶囊上的白音柱
+      "deskDurationPill", // 视频时长胶囊底（半透明黑，两套主题同值）
+      "deskVideoScrim", // 视频悬停遮罩（两套主题同值）
       "deskSearchShadow", // 搜索栏几乎不可见的抬升线
     ]);
     for (const [name, value] of Object.entries(tokens)) {

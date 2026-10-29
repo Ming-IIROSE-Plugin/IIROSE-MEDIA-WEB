@@ -31,6 +31,12 @@ const settings = vi.hoisted(() => ({
   release: vi.fn(),
 }));
 const about = vi.hoisted(() => ({ showAbout: vi.fn() }));
+const neteasePlatform = vi.hoisted(() => ({
+  getAlbumMultiPageData: vi.fn(),
+  getSongListMultiPageData: vi.fn(),
+  playCollectionAll: vi.fn(),
+  MOD: vi.fn(),
+}));
 
 vi.mock("./MainAppContainerServices/NetEaseService", () => ({
   NetEaseService: netease,
@@ -53,8 +59,12 @@ vi.mock("./MainAppContainerServices/SettingsService", () => ({
 vi.mock("./MainAppContainerServices/AboutService", () => ({
   AboutService: about,
 }));
-vi.mock("./components/media-card-container/MediaCard", () => ({
-  MediaCard: () => null,
+vi.mock("./components/media-card-container/ResultsArea", () => ({
+  ResultsArea: () => null,
+  shapeOf: () => "tracklist",
+}));
+vi.mock("../platforms/NetEasePlatform", () => ({
+  NetEasePlatform: neteasePlatform,
 }));
 vi.mock("../playback/PanelFocus", () => ({ setPanelFocus: () => {} }));
 vi.mock("../storage/FavoritesStorageService", () => ({
@@ -78,6 +88,9 @@ interface Harness {
     selectSource: (index: number) => void;
     submitSearch: (text: string) => void;
     changecurrentPage: (page: number) => Promise<void>;
+    switchToMultiPage: (platformData: PlatformData) => Promise<void>;
+    switchToOutFromMultiPage: () => void;
+    updateCurrentInMultiPageStatus: (status: boolean) => void;
   };
 }
 
@@ -291,5 +304,211 @@ describe("六种模式的现场", () => {
     });
     expect(root.querySelector('[role="radiogroup"]')).toBeNull();
     void controller;
+  });
+});
+
+describe("专辑 / 歌单内页", () => {
+  const albumData = {
+    title: "华丽的冒险",
+    author: "陈绮贞",
+    coverImg: "",
+    websiteUrl: "https://music.163.com/#/album?id=9",
+    trackCount: "2",
+    neteaseMusic: { id: 9, fee: 0, isAlbum: true },
+  } as unknown as PlatformData;
+
+  const trackData = {
+    title: "旅行的意义",
+    author: "陈绮贞",
+    coverImg: "",
+    websiteUrl: "",
+    duration: 240,
+    neteaseMusic: { id: 11, fee: 0 },
+  } as unknown as PlatformData;
+
+  const enterInnerPage = async (ref: { current: MainAppContainer | null }) => {
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      controller.updateCurrentInMultiPageStatus(true);
+    });
+    await act(async () => {
+      await controller.switchToMultiPage(albumData);
+    });
+    return controller;
+  };
+
+  beforeEach(() => {
+    neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
+      platformData: [trackData],
+      totalPage: 1,
+      allPlatformData: [trackData],
+    });
+  });
+
+  it("进入内页保存集合，范围行换成内页头", async () => {
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref);
+
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.isCurrentInMultiPage).toBe(true);
+    expect(state.innerCollection).toBe(albumData);
+    // 外层现场留给「‹ 返回」
+    expect(state.oldItems).not.toBeNull();
+
+    const header = root.querySelector("[data-imw-collection-header]");
+    expect(header).not.toBeNull();
+    expect(header!.textContent).toContain("华丽的冒险");
+    expect(header!.textContent).toContain("2 首");
+    // 内页时范围标签行被内页头取代
+    expect(root.querySelector('[role="tablist"]')).toBeNull();
+  });
+
+  it("‹ 返回清空内页标记与集合，图纸回到外层", async () => {
+    const { ref } = await mount(MODE.music);
+    const controller = await enterInnerPage(ref);
+    const before = (ref.current as unknown as Harness).state.mediaData;
+
+    await act(async () => {
+      controller.switchToOutFromMultiPage();
+    });
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.isCurrentInMultiPage).toBe(false);
+    expect(state.innerCollection).toBeNull();
+    expect(state.oldItems).toBeNull();
+    // 回到进入内页前的现场（同一份数据承诺，不重新请求）
+    expect(before).toBeDefined();
+    expect(root.querySelector("[data-imw-collection-header]")).toBeNull();
+    expect(root.querySelector('[role="tablist"]')).not.toBeNull();
+  });
+
+  it("Esc 在内页返回外层；顺序菜单打开时让位给菜单", async () => {
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref);
+
+    // 顺序菜单开着（菜单自己关），Esc 不返回外层
+    const fakeMenu = document.createElement("div");
+    fakeMenu.setAttribute("data-imw-order-menu", "true");
+    document.body.append(fakeMenu);
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect((ref.current as unknown as Harness).state.isCurrentInMultiPage).toBe(
+      true,
+    );
+    fakeMenu.remove();
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.isCurrentInMultiPage).toBe(false);
+    expect(state.innerCollection).toBeNull();
+  });
+
+  it("「全部播放」按所选顺序委托 NetEasePlatform.playCollectionAll", async () => {
+    neteasePlatform.playCollectionAll.mockResolvedValue(undefined);
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref);
+
+    const trigger = Array.from(root.querySelectorAll("button")).find((el) =>
+      el.textContent?.includes("全部播放"),
+    )!;
+    await act(async () => {
+      trigger.click();
+    });
+    const shuffle = Array.from(
+      document.querySelectorAll('[role="menuitem"]'),
+    ).find((el) => el.textContent === "乱序播放") as HTMLElement;
+    await act(async () => {
+      shuffle.click();
+    });
+    expect(neteasePlatform.playCollectionAll).toHaveBeenCalledWith(
+      albumData,
+      "shuffle",
+    );
+
+    const triggerAgain = Array.from(root.querySelectorAll("button")).find(
+      (el) => el.textContent?.includes("全部播放"),
+    )!;
+    await act(async () => {
+      triggerAgain.click();
+    });
+    const asc = Array.from(document.querySelectorAll('[role="menuitem"]')).find(
+      (el) => el.textContent === "正序播放",
+    ) as HTMLElement;
+    await act(async () => {
+      asc.click();
+    });
+    expect(neteasePlatform.playCollectionAll).toHaveBeenLastCalledWith(
+      albumData,
+      "asc",
+    );
+  });
+
+  it("内页多于一页时头部给出本地分页，翻页只切片不发请求", async () => {
+    neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
+      platformData: [trackData],
+      totalPage: 3,
+      allPlatformData: [trackData, trackData, trackData],
+    });
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref);
+
+    expect(root.textContent).toContain("01 / 03");
+    netease.searchAlbum.mockClear();
+    await act(async () => {
+      (root.querySelector('[aria-label="下一页"]') as HTMLElement).click();
+    });
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.currentPage).toBe(2);
+    expect(root.textContent).toContain("02 / 03");
+    expect(netease.searchAlbum).not.toHaveBeenCalled();
+  });
+
+  it("内页重试只重载内页", async () => {
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref);
+    neteasePlatform.getAlbumMultiPageData.mockClear();
+    netease.searchAlbum.mockClear();
+
+    // 内页头的「重试」在结果区里（容器只保证来自 onRetry 的回调）
+    const container = ref.current as unknown as {
+      handleRetry: () => void;
+    };
+    await act(async () => {
+      container.handleRetry();
+    });
+    expect(neteasePlatform.getAlbumMultiPageData).toHaveBeenCalled();
+    expect(netease.searchAlbum).not.toHaveBeenCalled();
+  });
+});
+
+describe("清除搜索", () => {
+  it("收藏过滤无结果点「清除搜索」按清空后的关键词重取（回到全量）", async () => {
+    const { ref } = await mount(MODE.favorites);
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      controller.runSearch("abc");
+    });
+    expect(favorites.loadFavorites).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "all",
+      "all",
+      10,
+    );
+    const keywordBeforeClear =
+      favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword;
+    expect(keywordBeforeClear).toBe("abc");
+
+    const container = ref.current as unknown as {
+      handleClearSearch: () => void;
+    };
+    await act(async () => {
+      container.handleClearSearch();
+    });
+    expect(
+      favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword,
+    ).toBe("");
+    expect(favorites.loadFavorites).toHaveBeenCalledTimes(3);
   });
 });
