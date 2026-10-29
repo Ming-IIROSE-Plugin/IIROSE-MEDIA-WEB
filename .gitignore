@@ -18,3 +18,7 @@
 # 敏感资料（测试账号凭据等），绝不入库
 /.secrets
 /.inject-bundle.js
+.bmad-loop/runs/
+.bmad-loop/cache/
+.bmad-loop/policy.toml
+_bmad/render/
