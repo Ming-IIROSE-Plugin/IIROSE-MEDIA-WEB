@@ -1,4 +1,11 @@
 import { Component, ComponentChildren } from "preact";
+import {
+  accentText,
+  mutedText,
+  pressTone,
+  themedCard,
+  themedDividerBottom,
+} from "./floating-panel/floatingPanel";
 
 interface SettingCardProps {
   settingsData: SettingData;
@@ -40,20 +47,32 @@ export class SettingCard extends Component<SettingCardProps, SettingCardState> {
     const { title, icon } = this.props.settingsData;
     const { currentActionTitle } = this.state;
     return (
-      <div className="IMW-SettingCard flex flex-col h-[200px] m-[12px] shadow-[0_0_1px_rgba(0,0,0,0.12),_0_1px_1px_rgba(0,0,0,0.24)] text-[#424242] bg-white/50 backdrop-blur-[10px] rounded-xl overflow-hidden">
-        <div className="commonBoxHead text-[rgba(0,0,0,0.4)]! bg-[rgba(255,255,255,0.3)]! border-b border-black/[0.06]">
+      <div
+        className={`IMW-SettingCard flex flex-col h-[200px] m-[12px] rounded-xl overflow-hidden ${themedCard}`}
+      >
+        {/* 标题区：强调色图标 + 次要色标题，主题分隔线（内阴影，不占高度）。
+            commonBoxHead 是宿站类，宿站夜间主题会改它的色与底：覆盖必须带 !（见 ad03018）。 */}
+        <div
+          className={`commonBoxHead text-inherit! bg-transparent! border-0! ${themedDividerBottom}`}
+        >
           <div
-            className={`flex font-md ${icon} h-full text-[30px] items-center`}
+            className={`flex font-md ${icon} h-full text-[30px] max-[768px]:text-[24px] items-center shrink-0 ${accentText}`}
           ></div>
-          <span className="font-bold flex h-full text-[20px] items-center ml-[22px]">
-            {title}
+          {/* 移动端卡宽约 150px：标题缩小并最多两行，长标题不溢出标题区 */}
+          <span
+            className={`font-bold flex h-full min-w-0 text-[20px] max-[768px]:text-[15px] max-[768px]:leading-5 items-center ml-[22px] max-[768px]:ml-2.5 ${mutedText}`}
+          >
+            <span className="line-clamp-2 min-w-0 [overflow-wrap:anywhere]">
+              {title}
+            </span>
           </span>
         </div>
+        {/* 动作区：整块可点，悬停/按压淡强调；当前值用强调色 */}
         <div
-          className="IMW-SettingCard-Action h-[50%] text-[#424242] bg-transparent"
+          className={`IMW-SettingCard-Action h-[50%] cursor-pointer bg-transparent ${accentText} ${pressTone} transition-colors duration-100!`}
           onClick={this.handleClick}
         >
-          {currentActionTitle.startsWith("mdi") ? (
+          {(currentActionTitle ?? "").startsWith("mdi") ? (
             <div
               className={`whoisTouch2 w-full h-full flex items-center justify-center font-md text-[48px] ${currentActionTitle}`}
             />
