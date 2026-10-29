@@ -66,6 +66,10 @@ export function MusicTile({
   }, [platformData]);
 
   const duration = formatDuration(platformData.duration);
+  // 手机点主体出操作条（story 4）、无悬停宽屏只选中：两种情况都不是「点播」，读屏名随之改。
+  const bodyLabel = `${
+    isPhoneLayout() || isTapToReveal() ? "查看" : "点播"
+  } ${platformData.title}`;
 
   const handleBodyClick = (event: MouseEvent) => {
     event.stopPropagation();
@@ -103,7 +107,8 @@ export function MusicTile({
 
         <button
           type="button"
-          aria-label={`点播 ${platformData.title}`}
+          aria-label={bodyLabel}
+          data-imw-tile-body="true"
           className="absolute inset-0 block h-full w-full cursor-pointer border-0 bg-transparent p-0"
           onClick={handleBodyClick}
         />
@@ -121,7 +126,7 @@ export function MusicTile({
         >
           <button
             type="button"
-            className={`flex h-[38px] items-center justify-center rounded-full border-0 px-5 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"}`}
+            className={`flex h-[38px] items-center justify-center rounded-full border-0 px-5 max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"}`}
             onClick={(event) => {
               event.stopPropagation();
               onPlay();

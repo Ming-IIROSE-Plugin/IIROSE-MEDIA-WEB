@@ -20,8 +20,30 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
     favoritable ? FavoritesStorageService.isFavorited(platformData) : false,
   );
 
+  const reread = () => {
+    setIsFavorited(FavoritesStorageService.isFavorited(platformData));
+  };
+
   useEffect(() => {
     setIsFavorited(FavoritesStorageService.isFavorited(platformData));
+  }, [platformData]);
+
+  // 存储层就绪与外部变更（云端拉取落地）后重读一次：否则慢速 IndexedDB 下
+  // 已收藏的条目会显示空心星，点一下反而取消收藏。
+  useEffect(() => {
+    let alive = true;
+    void FavoritesStorageService.init().then(() => {
+      if (alive)
+        setIsFavorited(FavoritesStorageService.isFavorited(platformData));
+    });
+    const off = FavoritesStorageService.onExternalChange?.(() => {
+      if (alive)
+        setIsFavorited(FavoritesStorageService.isFavorited(platformData));
+    });
+    return () => {
+      alive = false;
+      off?.();
+    };
   }, [platformData]);
 
   if (!favoritable) return null;

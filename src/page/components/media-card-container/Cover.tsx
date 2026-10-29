@@ -24,6 +24,8 @@ export interface CoverProps {
   /** 圆角令牌（默认曲目表封面的 xs）。 */
   rounded?: string;
   alt?: string;
+  /** 点击封面打开来源页（曲目行 / 专辑行的既有能力）。 */
+  onOpen?: () => void;
 }
 
 export function Cover({
@@ -32,6 +34,7 @@ export function Cover({
   className = "",
   rounded = roundedXs,
   alt = "",
+  onOpen,
 }: CoverProps) {
   const [url, setUrl] = useState("");
   const [failed, setFailed] = useState(false);
@@ -79,6 +82,18 @@ export function Cover({
         >
           <DeskIcon name={icon} size={20} />
         </div>
+      )}
+      {onOpen && (
+        <button
+          type="button"
+          aria-label="打开来源页"
+          title="打开来源页"
+          className="absolute inset-0 h-full w-full cursor-pointer border-0 bg-transparent p-0"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+        />
       )}
     </div>
   );

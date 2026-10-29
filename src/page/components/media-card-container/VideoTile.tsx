@@ -3,6 +3,7 @@
 // 「点播到房间」胶囊。MV、B 站视频、多源剧集与直播共用本组件。
 import { useEffect, useState } from "preact/hooks";
 import { Cover } from "./Cover";
+import { FavoriteStar } from "./FavoriteStar";
 import {
   formatDuration,
   hasMultiPage,
@@ -59,6 +60,10 @@ export function VideoTile({
   }, [platformData]);
 
   const live = isLiveItem(platformData);
+  // 手机点主体出操作条（story 4）、无悬停宽屏只选中：两种情况都不是「点播」，读屏名随之改。
+  const bodyLabel = `${
+    isPhoneLayout() || isTapToReveal() ? "查看" : "点播"
+  } ${platformData.title}`;
   const duration = formatDuration(platformData.duration);
 
   const handleBodyClick = (event: MouseEvent) => {
@@ -97,10 +102,16 @@ export function VideoTile({
 
         <button
           type="button"
-          aria-label={`点播 ${platformData.title}`}
+          aria-label={bodyLabel}
+          data-imw-tile-body="true"
           className="absolute inset-0 block h-full w-full cursor-pointer border-0 bg-transparent p-0"
           onClick={handleBodyClick}
         />
+
+        {/* 桌面可收藏（旧卡片有）；手机走 story 4 的操作条 */}
+        <span className="absolute right-1 top-1 max-[768px]:hidden">
+          <FavoriteStar platformData={platformData} />
+        </span>
 
         {/* 右下角：直播徽章占时长胶囊的位置，直播卡不显示时长 */}
         {(live || duration) && (
@@ -116,7 +127,7 @@ export function VideoTile({
         >
           <button
             type="button"
-            className={`flex h-[38px] items-center justify-center rounded-full border-0 px-5 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"}`}
+            className={`flex h-[38px] items-center justify-center rounded-full border-0 px-5 max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"}`}
             onClick={(event) => {
               event.stopPropagation();
               onPlay();

@@ -60,10 +60,11 @@ export function NowPlayingBars({
   );
 }
 
-/** 出处列：来源圆点 + 平台简称（圆点从不单独承载信息）。 */
+/** 出处列：来源圆点 + 平台简称（圆点从不单独承载信息）。恒占一格，列位不因来源缺失而左移。 */
 export function SourceCell({ platformData }: { platformData: PlatformData }) {
   const source = sourceOf(platformData);
-  if (!source.key && !source.label) return null;
+  if (!source.key && !source.label)
+    return <span className="max-[768px]:hidden" />;
   return (
     <span
       className={`flex min-w-0 items-center gap-1.5 max-[768px]:hidden ${typeRowMetaSource} ${deskInk3}`}
@@ -163,6 +164,11 @@ export function TracklistRow({
         icon={radio ? "radio" : isVideoItem(platformData) ? "film" : "note"}
         rounded={roundedTrackCover}
         className="h-[42px] w-[42px] max-[768px]:h-12 max-[768px]:w-12"
+        onOpen={
+          platformData.websiteUrl
+            ? () => window.open(platformData.websiteUrl)
+            : undefined
+        }
       />
 
       <div className="min-w-0">
@@ -173,7 +179,12 @@ export function TracklistRow({
         </div>
         <div className={`truncate ${typeRowMeta} ${deskInk2}`}>
           {platformData.author}
-          {nowPlaying && <span> · 房间正在播放</span>}
+          {nowPlaying && (
+            <span>
+              {platformData.author ? " · " : ""}
+              房间正在播放
+            </span>
+          )}
         </div>
       </div>
 

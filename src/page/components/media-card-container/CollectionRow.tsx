@@ -47,6 +47,11 @@ export function CollectionRow({
         icon="note"
         rounded={roundedTrackCover}
         className="h-[42px] w-[42px] max-[768px]:h-12 max-[768px]:w-12"
+        onOpen={
+          platformData.websiteUrl
+            ? () => window.open(platformData.websiteUrl)
+            : undefined
+        }
       />
 
       <div className="min-w-0">

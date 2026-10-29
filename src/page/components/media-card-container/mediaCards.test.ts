@@ -539,7 +539,9 @@ describe("视频卡", () => {
     await mount(
       withCtx(h(VideoTile, { platformData: video, onReveal, onPlay })),
     );
-    const body = host.querySelector('button[aria-label="点播 某视频"]')!;
+    const body = host.querySelector("button[data-imw-tile-body]")!;
+    // 无悬停宽屏第一次点按只是「选中」，读屏名不该说成点播
+    expect(body.getAttribute("aria-label")).toBe("查看 某视频");
     (body as HTMLElement).click();
     expect(onReveal).toHaveBeenCalledOnce();
     expect(onPlay).not.toHaveBeenCalled();
