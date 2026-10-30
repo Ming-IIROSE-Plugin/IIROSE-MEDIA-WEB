@@ -1177,7 +1177,7 @@ describe("多 P / 多集的选集入口已退场", () => {
     ).toBeUndefined();
   });
 
-  it("多 P 条目的音乐网格卡只剩「点播」：点播由平台开面板", async () => {
+  it("多 P 条目的音乐网格卡只剩「点播」：回调照常派发（面板由平台在点播链路里开）", async () => {
     const onPlay = vi.fn();
     await mount(
       withCtx(
@@ -1197,6 +1197,60 @@ describe("多 P / 多集的选集入口已退场", () => {
       play.click();
     });
     expect(onPlay).toHaveBeenCalledOnce();
+    expect(
+      Array.from(host.querySelectorAll("button")).find(
+        (el) => el.textContent === "选集",
+      ),
+    ).toBeUndefined();
+  });
+});
+
+describe("B 站课程卡：桌面保留内页钻取入口", () => {
+  it("课程卡带「选集」文字钮，点击钻取课程分集内页（面板服务不了课程）", async () => {
+    const course = {
+      ...video,
+      title: "某课程",
+      bilibili: { aid: 1, course_id: 2 },
+      multiPage: Promise.resolve({ platform: "bilibili" }),
+    } as unknown as PlatformData;
+    const videos = ready([course]);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.video,
+        viewMode: "card",
+        mediaData: videos,
+      }),
+      videos,
+    );
+    const select = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "选集",
+    )!;
+    expect(select).toBeDefined();
+    // 手机走操作条的「选集」，卡片上的这个入口只在桌面出现
+    expect(select.getAttribute("class")).toContain("max-[768px]:hidden");
+    await act(async () => {
+      select.click();
+    });
+    expect(ctx.updateCurrentInMultiPageStatus).toHaveBeenCalledWith(true);
+    expect(ctx.switchToMultiPage).toHaveBeenCalledWith(course);
+  });
+
+  it("普通多 P 卡没有这个入口：选集由面板接管", async () => {
+    const multi = {
+      ...video,
+      multiPage: Promise.resolve({ platform: "bilibili" }),
+    } as unknown as PlatformData;
+    const videos = ready([multi]);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.video,
+        viewMode: "card",
+        mediaData: videos,
+      }),
+      videos,
+    );
     expect(
       Array.from(host.querySelectorAll("button")).find(
         (el) => el.textContent === "选集",

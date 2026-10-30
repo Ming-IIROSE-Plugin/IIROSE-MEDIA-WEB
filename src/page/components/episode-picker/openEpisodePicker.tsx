@@ -27,13 +27,16 @@ export type { EpisodePickEntry, EpisodePickOrder } from "./EpisodePicker";
 
 /**
  * 触发元素是否能当焦点归还点：`document.body` / 根元素（移动端点按不聚焦时
- * `document.activeElement` 就是 body）没有意义，按「没有触发元素」处理。
+ * `document.activeElement` 就是 body）没有意义，按「没有触发元素」处理；
+ * 落在选集面板自己的根里也不算——退场中重开时焦点还留在上一份面板的按钮上，
+ * 记成归还点会把新面板的焦点送回上一份面板的来源。
  */
 function isReturnTarget(element: Element | null): element is HTMLElement {
   return (
     element instanceof HTMLElement &&
     element !== document.body &&
-    element !== document.documentElement
+    element !== document.documentElement &&
+    !element.closest?.("[data-imw-episode-picker]")
   );
 }
 
@@ -82,11 +85,13 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
     existing.focus();
     return;
   }
-  releaseEpisodePicker();
-
+  // 先在清单例之前读焦点：`releaseEpisodePicker()` 会把旧面板的焦点元素一起摘掉
+  // （它自己的清理还会归还一次焦点），这之后再读就不是调用方的触发元素了。
   const captured = isReturnTarget(document.activeElement)
     ? document.activeElement
     : null;
+  releaseEpisodePicker();
+
   const returnFocus = options.returnFocus ?? captured;
   const root = document.createElement("div");
   root.id = EPISODE_PICKER_ROOT_ID;

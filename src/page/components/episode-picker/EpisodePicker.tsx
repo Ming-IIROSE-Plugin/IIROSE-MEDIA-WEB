@@ -199,7 +199,9 @@ export function EpisodePicker({
 
   return (
     <div
-      className={`fixed inset-0 z-[90010] flex items-center justify-center max-[768px]:items-end ${exiting ? "pointer-events-none" : ""}`}
+      // 外框在退场期间照样拦截指针：整层 `pointer-events-none` 会让 160ms 淡出窗口里的
+      // 第二次点击穿透到下面的结果区（可能又点播一次）。只有卡片本身停收指针。
+      className={`fixed inset-0 z-[90010] flex items-center justify-center max-[768px]:items-end`}
       data-imw-episode-picker="true"
       onPointerDown={(event) => {
         pressedOutside.current = event.target === event.currentTarget;

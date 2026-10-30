@@ -1,6 +1,8 @@
 // 视频卡（DESIGN.md `video-tile`）：16:9 缩略图、无卡片框；右下角等宽时长胶囊，
 // 直播换「直播」徽章且不显示时长；悬停 / 键盘聚焦 / 无悬停宽屏点按选中时覆遮罩并出现
 // 「点播到房间」胶囊。MV、B 站视频、多源剧集与直播共用本组件。
+// 多 P / 多集的选集由插件自有面板接管（story 5）；只有面板服务不了的 B 站课程卡
+// 仍带一个「选集」文字钮，走内页钻取。
 import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
 import {
@@ -38,6 +40,11 @@ export interface VideoTileProps {
   onPlay: () => void;
   /** 手机点缩略图（点播按钮以外）= 操作条挂点（触发元素用于收起后归还焦点）。 */
   onActivate?: (trigger: HTMLElement) => void;
+  /**
+   * 桌面「选集」入口：只给选集面板服务不了的条目（B 站课程——没有分 P 详情与播放流
+   * 接口，面板只会「加载失败」），走内页钻取。普通多 P / 多集由面板接管，不传该 prop。
+   */
+  onSelectEpisodes?: () => void;
 }
 
 export function VideoTile({
@@ -48,6 +55,7 @@ export function VideoTile({
   onReveal,
   onPlay,
   onActivate,
+  onSelectEpisodes,
 }: VideoTileProps) {
   const live = isLiveItem(platformData);
   // 手机点主体出操作条（story 4）、无悬停宽屏只选中：两种情况都不是「点播」，读屏名随之改。
@@ -133,6 +141,18 @@ export function VideoTile({
           >
             点播到房间
           </button>
+          {onSelectEpisodes && (
+            <button
+              type="button"
+              className={`border-0 bg-transparent p-0 max-[768px]:hidden ${deskOnRose} ${typeLabelStrong} underline ${overlayHit}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onSelectEpisodes();
+              }}
+            >
+              选集
+            </button>
+          )}
         </div>
       </div>
 

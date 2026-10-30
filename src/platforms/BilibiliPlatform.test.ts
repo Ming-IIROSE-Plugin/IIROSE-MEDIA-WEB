@@ -78,10 +78,10 @@ beforeEach(() => {
     .mockResolvedValue(undefined);
 });
 
-/** 被播放的分 P 序号（按调用顺序）。 */
 /** 批量 / 单曲循环是 `void` 调用：让它在断言前跑完。 */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** 被播放的分 P 序号（按调用顺序）。 */
 const playedPages = () =>
   playBiliPage.mock.calls.map(
     (call: unknown[]) => (call[1] as { page: number }).page,

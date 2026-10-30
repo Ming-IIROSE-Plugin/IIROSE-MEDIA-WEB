@@ -282,6 +282,13 @@ export function ResultsArea({
           onReveal={() => setRevealedKey(key)}
           onPlay={() => play(platformData)}
           onActivate={(trigger) => activate(platformData, trigger)}
+          // 课程没有分 P 详情 / 播放流接口（课程流走 `BiliBiliCourseApi`）：面板取不到
+          // 分集，桌面保留内页钻取这条既有能力；其余多 P / 多集由面板接管。
+          onSelectEpisodes={
+            platformData.bilibili?.course_id
+              ? () => void openCollection(platformData)
+              : undefined
+          }
         />
       );
     });

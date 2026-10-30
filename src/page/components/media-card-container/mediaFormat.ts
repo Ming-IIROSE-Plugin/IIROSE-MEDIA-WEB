@@ -60,7 +60,10 @@ export function isVideoItem(platformData: PlatformData): boolean {
   );
 }
 
-/** 多 P / 多集条目：卡片遮罩里并列一个过渡的「选集」入口（story 5 换成选集面板）。 */
+/**
+ * 多 P / 多集条目：手机操作条据此显示「选集」（story 5 起由插件自有面板接手）。
+ * 桌面卡片的「选集」入口只在面板服务不了的课程卡上保留，见 `VideoTile`。
+ */
 export async function hasMultiPage(
   platformData: PlatformData,
 ): Promise<boolean> {

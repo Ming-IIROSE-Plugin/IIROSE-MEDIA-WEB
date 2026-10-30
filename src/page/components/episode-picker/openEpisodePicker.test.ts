@@ -185,4 +185,46 @@ describe("确认与取消", () => {
       document.querySelectorAll(`#${EPISODE_PICKER_ROOT_ID}`),
     ).toHaveLength(1);
   });
+
+  it("releaseEpisodePicker 同时注销 episode 层：返回键不会落到空层上", async () => {
+    const below = vi.fn();
+    const release = pushOverlayLayer("order", below);
+    try {
+      await open();
+      act(() => releaseEpisodePicker());
+      await act(async () => {
+        (
+          window as unknown as { Utils?: { backward?: () => void } }
+        ).Utils?.backward?.();
+      });
+      expect(below).toHaveBeenCalledOnce();
+    } finally {
+      release();
+    }
+  });
+
+  it("退场中再次打开：不把上一份面板里的按钮记成焦点归还点", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    try {
+      opener.focus();
+      await open();
+      // 关闭 → 进入 200ms 退场窗口，面板还没卸载
+      await act(async () => {
+        layer().querySelector<HTMLElement>('[aria-label="关闭选集"]')!.click();
+      });
+      expect(root()).not.toBeNull();
+
+      await open();
+      await act(async () => {
+        layer().querySelector<HTMLElement>('[aria-label="关闭选集"]')!.click();
+      });
+      await flush(220);
+      expect(root()).toBeNull();
+      // 新面板没有触发元素可言：关闭后焦点既不落在旧面板里，也不回到上一份的 opener
+      expect(document.activeElement).not.toBe(opener);
+    } finally {
+      opener.remove();
+    }
+  });
 });

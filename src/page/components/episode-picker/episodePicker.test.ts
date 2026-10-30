@@ -444,7 +444,6 @@ describe("焦点与触控目标", () => {
     await flush(220);
     expect(root()).toBeNull();
     expect(document.activeElement).toBe(opener);
-    void onCancel;
   });
 
   it("打开时焦点在 body（移动端点按不聚焦）：不把 body 当归还点", async () => {

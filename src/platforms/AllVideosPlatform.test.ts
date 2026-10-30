@@ -153,6 +153,12 @@ describe("多集开选集面板", () => {
       expect.any(Function),
     );
     expect(playedUrls()).toEqual([playList[2].url, playList[0].url]);
+    // 批量路径的卡片副行也是集名（`named`）：退化成作者 / 简介就分不清第几集
+    expect(
+      sendVideoMedia.mock.calls.map(
+        (call: unknown[]) => (call[0] as PlatformData).author,
+      ),
+    ).toEqual(["第03集", "第01集"]);
     expect(meta.getM3U8Duration).toHaveBeenCalledTimes(2);
   });
 
