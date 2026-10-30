@@ -28,8 +28,10 @@ export interface BatchHandle {
   finish(): void;
 }
 
-/** 结束后停留多久再淡出。 */
+/** 正常播完后停留多久再淡出。 */
 export const BATCH_LINGER_MS = 4_000;
+/** 用户点了「停止」：看清「已停止」即可，很快收起（用户要求不要停留太久）。 */
+export const BATCH_STOP_LINGER_MS = 1_200;
 /** 淡出动画时长。 */
 export const BATCH_LEAVE_MS = 200;
 
@@ -109,7 +111,9 @@ export function startBatch(title: string, total: number): BatchHandle {
       if (finished) return;
       finished = true;
       if (!find(id)) return;
-      update(id, { status: cancelled.has(id) ? "stopped" : "done" });
+      // 停止时 stopBatch 已安排收起，这里不再重复
+      if (cancelled.has(id)) return;
+      update(id, { status: "done" });
       later(id, BATCH_LINGER_MS, () => dismissBatch(id));
     },
   };
@@ -121,7 +125,7 @@ export function stopBatch(id: number): void {
   if (!run || run.status === "done" || run.status === "stopped") return;
   cancelled.add(id);
   update(id, { status: "stopped" });
-  later(id, BATCH_LINGER_MS, () => dismissBatch(id));
+  later(id, BATCH_STOP_LINGER_MS, () => dismissBatch(id));
 }
 
 /** 关掉一张卡（结束后自动调用，或用户点 ×）：先淡出再移除。 */

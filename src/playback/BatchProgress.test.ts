@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BATCH_LEAVE_MS,
   BATCH_LINGER_MS,
+  BATCH_STOP_LINGER_MS,
   getBatches,
   resetBatches,
   startBatch,
@@ -44,6 +45,9 @@ describe("批量点播进度", () => {
     expect(getBatches()[0].status).toBe("stopped");
     batch.finish();
     expect(getBatches()[0].status).toBe("stopped");
+    // 停止后很快收起，不等正常播完的 4 秒
+    vi.advanceTimersByTime(BATCH_STOP_LINGER_MS + BATCH_LEAVE_MS);
+    expect(getBatches()).toHaveLength(0);
   });
 
   it("多次批量各自一张卡", () => {
