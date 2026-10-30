@@ -71,21 +71,22 @@ export const deskDurationPill = "bg-[#0C0B0AB8] imw-dark:bg-[#0C0B0AB8]";
 export const deskVideoScrim = "bg-[#0A090861] imw-dark:bg-[#0A090861]";
 
 // ---------------------------------------------------------------- 底部条
-// room-deck / mini-deck / room-deck-expanded：浅色是墨底纸字（反相），
-// 深色改 sheet 底 + 一圈细线（DESIGN.md `room-deck` / `mini-deck`）。
-/** 底部条 / 迷你条 / 展开层的底色。 */
-export const deskDeckSurface = "bg-[#1C1916] imw-dark:bg-[#1C1A18]";
-/** 底部条上的主文字（浅色 paper、深色 ink-dark）。 */
-export const deskDeckText = "text-[#F5F2EC] imw-dark:text-[#EDE7DD]";
-/** 底部条的细线环：浅色墨底不需要，深色补一圈 rule。 */
-export const deskDeckRing = "shadow-none imw-dark:shadow-[0_0_0_1px_#2B2825]";
-/** 进度填充（浅色 deck-progress 提亮，深色 = rose-dark）。 */
-export const deskDeckProgress = "bg-[#BC4451] imw-dark:bg-[#E3606C]";
-/** 进度轨（浅色 paper 20% 叠墨底，深色 = rule）。 */
-export const deskDeckTrack = "bg-[#F5F2EC33] imw-dark:bg-[#2B2825]";
-/** 模式开关常态描边（浅色 paper 16%，深色 = rule）。 */
+// room-deck / mini-deck / room-deck-expanded：与面板同色系的贴底细栏，
+// sheet 底 + 顶边一条 rule 细线，不再是反相的深色悬浮卡（用户反馈「又粗又大、压迫」）。
+/** 底部条 / 迷你条 / 展开层的底色（sheet）。 */
+export const deskDeckSurface = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]";
+/** 底部条上的主文字（ink）。 */
+export const deskDeckText = "text-[#1C1916] imw-dark:text-[#EDE7DD]";
+/** 底部条顶边细线（rule），用阴影画，不占布局。 */
+export const deskDeckRing =
+  "shadow-[0_-1px_0_#E2DCD1] imw-dark:shadow-[0_-1px_0_#2B2825]";
+/** 进度填充（rose）。 */
+export const deskDeckProgress = "bg-[#B42F3E] imw-dark:bg-[#E3606C]";
+/** 进度轨（rule）。 */
+export const deskDeckTrack = "bg-[#E2DCD1] imw-dark:bg-[#2B2825]";
+/** 模式开关常态描边（rule）。 */
 export const deskDeckToggleBorder =
-  "border-[#F5F2EC29] imw-dark:border-[#2B2825]";
+  "border-[#E2DCD1] imw-dark:border-[#2B2825]";
 /** 进度拖柄的 3px 外环（deck-thumb-ring）。 */
 export const deskDeckThumbRing =
   "shadow-[0_0_0_3px_#BC445159] imw-dark:shadow-[0_0_0_3px_#E3606C59]";
@@ -239,7 +240,7 @@ export const deskFocusRingOnInk =
  * 外圈取 focus-ring-dark（= ink-dark）。见 DESIGN.md 对比度表末两行。
  */
 export const deskFocusRingOnDeck =
-  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[#F5F2EC] imw-dark:focus-visible:outline-[#EDE7DD]";
+  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[#1C1916] imw-dark:focus-visible:outline-[#EDE7DD]";
 
 // ---------------------------------------------------------------- 图标
 // 自包含内联 SVG（currentColor）：DESIGN.md `symbol` 的原始路径，不借用宿站 `mdi-*`。

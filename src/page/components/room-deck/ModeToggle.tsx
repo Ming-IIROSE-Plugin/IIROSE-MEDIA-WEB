@@ -3,7 +3,6 @@
 // 这里只映射到 aria 属性与视觉；点击结果（提示 / 随机先开面板）由使用处处理。
 import {
   DeskIcon,
-  deskDeckText,
   deskDeckToggleBorder,
   deskFocusRingOnDeck,
   deskOnRose,
@@ -12,6 +11,8 @@ import {
   roundedMd,
   typeButtonSm,
   deskPress,
+  deskInk2,
+  deskPressTone,
 } from "../floating-panel/tokens";
 import type { PlaybackModeKind } from "../../../playback/PlaybackMode";
 
@@ -43,10 +44,10 @@ export function ModeToggle({
 }: ModeToggleProps) {
   const base = compact
     ? `flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border border-solid bg-transparent p-0 ${roundedLg}`
-    : `flex h-[38px] shrink-0 cursor-pointer items-center gap-[7px] border border-solid bg-transparent px-3 max-[768px]:h-11 ${roundedMd} ${typeButtonSm}`;
+    : `flex h-8 shrink-0 cursor-pointer items-center gap-1.5 border border-solid bg-transparent px-2.5 max-[768px]:h-11 ${roundedMd} ${typeButtonSm}`;
   const tone = active
     ? `border-transparent ${deskRoseSolid} ${deskOnRose}`
-    : `${deskDeckToggleBorder} ${deskDeckText} opacity-80`;
+    : `${deskDeckToggleBorder} ${deskInk2} ${deskPressTone}`;
 
   return (
     <button

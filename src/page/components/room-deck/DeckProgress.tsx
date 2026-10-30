@@ -13,7 +13,7 @@ import {
   deskDeckThumbRing,
   deskDeckTrack,
   deskFocusRingOnDeck,
-  deskOnRoseFill,
+  deskRoseFill,
   typeMonoNumSm,
 } from "../floating-panel/tokens";
 
@@ -126,26 +126,25 @@ export function DeckProgress({
         ref={track}
         {...slider}
         data-imw-deck-track="true"
-        className={`relative flex h-11 min-w-0 flex-1 touch-none items-center ${
+        className={`group relative flex h-11 min-w-0 flex-1 touch-none items-center ${
           seekable ? `cursor-pointer ${deskFocusRingOnDeck}` : ""
         }`}
       >
         <span
           aria-hidden="true"
-          className={`absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full ${deskDeckTrack}`}
+          className={`absolute inset-x-0 top-1/2 h-[3px] -translate-y-1/2 rounded-full ${deskDeckTrack}`}
         />
-        {/* `transition: none` 覆盖 `.IIROSE_MEDIA_CONTAINER *` 的 0.5s 通配过渡：
-            填充与拖柄每 250ms 改一次宽度/位置，过渡会让拖动预览滞后半秒。 */}
+        {/* 填充与拖柄每 250ms 改一次宽度/位置：显式 `transition: none`，拖动预览不滞后。 */}
         <span
           aria-hidden="true"
           data-imw-deck-fill="true"
-          className={`absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full ${deskDeckProgress}`}
+          className={`absolute top-1/2 left-0 h-[3px] -translate-y-1/2 rounded-full ${deskDeckProgress}`}
           style={{ width: `${ratio * 100}%`, transition: "none" }}
         />
         {seekable && (
           <span
             aria-hidden="true"
-            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ${deskOnRoseFill} ${deskDeckThumbRing}`}
+            className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full opacity-0 hov:group-hover:opacity-100 group-focus-visible:opacity-100 group-active:opacity-100 max-[768px]:opacity-100 ${deskRoseFill} ${deskDeckThumbRing}`}
             style={{ left: `${ratio * 100}%`, transition: "none" }}
           />
         )}

@@ -211,7 +211,7 @@ describe("订阅与手势隔离", () => {
 });
 
 describe("桌面三栏（room-deck）", () => {
-  it("封面 + 标签 + 标题 + 点播者、时间 · 轨道 · 总时长、两组带文字开关", () => {
+  it("封面 + 标题 + 点播者、时间 · 轨道 · 总时长、两组带文字开关", () => {
     const { session } = harness({
       owner: "小飞鱼",
       ownMedia: false,
@@ -222,7 +222,8 @@ describe("桌面三栏（room-deck）", () => {
     mount();
 
     const root = deck("room")!;
-    expect(root.textContent).toContain("Now in room");
+    // 贴底细栏不再有「Now in room」标签行（组名仍由 aria-label 给读屏）
+    expect(root.textContent).not.toContain("Now in room");
     expect(root.textContent).toContain("测试曲目");
     expect(root.textContent).toContain("小飞鱼 点播");
     expect(root.textContent).toContain("0:30");

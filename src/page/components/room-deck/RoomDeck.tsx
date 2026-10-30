@@ -22,7 +22,6 @@ import {
   deskRoseFill,
   deskRoseSolid,
   roundedSm,
-  roundedXl,
   roundedXs,
   typeDeckLabel,
   typeDeckTitle,
@@ -189,22 +188,18 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
           data-imw-deck="room"
           role="group"
           aria-label={deckName}
-          className={`mx-6 mt-3 mb-[18px] flex h-[78px] items-center gap-[22px] pr-[18px] pl-[14px] ${roundedXl} ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
+          className={`flex h-[60px] items-center gap-6 px-[36px] ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
           {...stopHostGestures}
         >
-          <div className="flex w-[300px] min-w-0 shrink-0 items-center gap-3">
+          <div className="flex w-[280px] min-w-0 shrink-0 items-center gap-3">
             <Cover
               src={cover}
               icon="note"
-              className="h-[50px] w-[50px]"
+              className="h-10 w-10"
               rounded={roundedSm}
             />
             <div className="min-w-0 flex-1">
-              <DeckLabel />
-              <div
-                className={`mt-[3px] truncate ${typeDeckTitle}`}
-                title={title}
-              >
+              <div className={`truncate ${typeDeckTitle}`} title={title}>
                 {title}
               </div>
               {requester && (
@@ -245,11 +240,11 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
 
       <div
         id="imw-desk-mini-deck"
-        className="relative z-[1] hidden h-[62px] shrink-0 max-[768px]:block"
+        className="relative z-[1] hidden h-[58px] shrink-0 max-[768px]:block"
       >
         <div
           data-imw-deck="mini"
-          className={`relative mx-3 flex h-full items-center gap-[11px] overflow-hidden pr-2 pl-2 ${roundedXl} ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
+          className={`relative flex h-full items-center gap-[11px] overflow-hidden px-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
           {...stopHostGestures}
         >
           {/* 顶边 3px 进度线：仅显示，不可拖动；直播 / 电台流与无播放时不画。 */}
@@ -332,7 +327,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
               aria-modal="true"
               aria-label={deckName}
               onKeyDown={trapFocusWithin}
-              className={`absolute inset-x-3 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
+              className={`absolute inset-x-0 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
               {...stopHostGestures}
             >
               <div className="flex items-start gap-3">
