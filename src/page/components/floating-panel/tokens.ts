@@ -59,6 +59,26 @@ export const deskDurationPill = "bg-[#0C0B0AB8] imw-dark:bg-[#0C0B0AB8]";
 /** 视频悬停遮罩（video-scrim）；不随主题变化。 */
 export const deskVideoScrim = "bg-[#0A090861] imw-dark:bg-[#0A090861]";
 
+// ---------------------------------------------------------------- 底部条
+// room-deck / mini-deck / room-deck-expanded：浅色是墨底纸字（反相），
+// 深色改 sheet 底 + 一圈细线（DESIGN.md `room-deck` / `mini-deck`）。
+/** 底部条 / 迷你条 / 展开层的底色。 */
+export const deskDeckSurface = "bg-[#1C1916] imw-dark:bg-[#1C1A18]";
+/** 底部条上的主文字（浅色 paper、深色 ink-dark）。 */
+export const deskDeckText = "text-[#F5F2EC] imw-dark:text-[#EDE7DD]";
+/** 底部条的细线环：浅色墨底不需要，深色补一圈 rule。 */
+export const deskDeckRing = "shadow-none imw-dark:shadow-[0_0_0_1px_#2B2825]";
+/** 进度填充（浅色 deck-progress 提亮，深色 = rose-dark）。 */
+export const deskDeckProgress = "bg-[#BC4451] imw-dark:bg-[#E3606C]";
+/** 进度轨（浅色 paper 20% 叠墨底，深色 = rule）。 */
+export const deskDeckTrack = "bg-[#F5F2EC33] imw-dark:bg-[#2B2825]";
+/** 模式开关常态描边（浅色 paper 16%，深色 = rule）。 */
+export const deskDeckToggleBorder =
+  "border-[#F5F2EC29] imw-dark:border-[#2B2825]";
+/** 进度拖柄的 3px 外环（deck-thumb-ring）。 */
+export const deskDeckThumbRing =
+  "shadow-[0_0_0_3px_#BC445159] imw-dark:shadow-[0_0_0_3px_#E3606C59]";
+
 /** 正在播放 / 已选中：缩略图外 2px ink 描边（与焦点环同色）。 */
 export const deskSelectedRing =
   "shadow-[0_0_0_2px_#1C1916] imw-dark:shadow-[0_0_0_2px_#EDE7DD]";
@@ -154,6 +174,13 @@ export const typeVideoMeta = `${fontSans} text-[12px] max-[768px]:text-[11px]`;
 /** 等宽小字但无字距（键位提示 kbd，DESIGN.md mono-caption 注）。 */
 export const typeKeyHint = `${fontMono} text-[11px] tabular-nums`;
 
+/** 底部条标签（等宽大写，0.2em 字距；55% 不透明度由使用处补）。 */
+export const typeDeckLabel = `${fontMono} text-[10px] uppercase tracking-[0.2em]`;
+/** 底部条标题（15px semibold）。 */
+export const typeDeckTitle = `${fontSans} text-[15px] font-semibold`;
+/** 迷你条标题（14px semibold）。 */
+export const typeDeckTitleMini = `${fontSans} text-[14px] font-semibold`;
+
 // ---------------------------------------------------------------- 圆角
 export const roundedXs = "rounded-[6px]";
 export const roundedSm = "rounded-[8px]";
@@ -192,6 +219,13 @@ export const deskFocusRingOnRose = `${deskFocusRing} focus-visible:shadow-[inset
 export const deskFocusRingOnInk =
   "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[#F5F2EC] imw-dark:focus-visible:outline-[#141312]";
 
+/**
+ * 底部条上的焦点环：浅色底部条是墨底 → 外圈改 paper；深色底部条是 sheet 底 →
+ * 外圈取 focus-ring-dark（= ink-dark）。见 DESIGN.md 对比度表末两行。
+ */
+export const deskFocusRingOnDeck =
+  "outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[#F5F2EC] imw-dark:focus-visible:outline-[#EDE7DD]";
+
 // ---------------------------------------------------------------- 图标
 // 自包含内联 SVG（currentColor）：DESIGN.md `symbol` 的原始路径，不借用宿站 `mdi-*`。
 export type DeskIconName =
@@ -212,7 +246,8 @@ export type DeskIconName =
   | "list"
   | "grid"
   | "sort"
-  | "shuffle";
+  | "shuffle"
+  | "repeat";
 
 const ICON_INNER: Record<DeskIconName, string> = {
   note: '<path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="16.5" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/>',
@@ -239,6 +274,8 @@ const ICON_INNER: Record<DeskIconName, string> = {
   sort: '<path d="M5 7h8M5 12h6M5 17h4M17 6v12M17 18l-2.5-2.5M17 18l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   shuffle:
     '<path d="M4 17h3.2c1.2 0 2.1-.6 2.8-1.6l4-5.8c.7-1 1.6-1.6 2.8-1.6H20M4 7h3.2c1.2 0 2.1.6 2.8 1.6l.6.9M13.6 15l.6.9c.7 1 1.6 1.6 2.8 1.6H20M18 4l2 2-2 2M18 14l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  repeat:
+    '<path d="M5 11V9.5A2.5 2.5 0 0 1 7.5 7H18l-2.5-2.5M19 13v1.5a2.5 2.5 0 0 1-2.5 2.5H6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 10v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
 };
 
 /** 外壳图标：`currentColor` 着色，随宿主字号/字色走。 */

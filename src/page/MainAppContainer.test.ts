@@ -313,6 +313,15 @@ describe("六种模式的现场", () => {
     expect(root.querySelector('[role="radiogroup"]')).toBeNull();
     void controller;
   });
+
+  it("底部条挂载点随容器渲染：没有会话时整块空渲染，不影响其余布局", async () => {
+    await mount(MODE.music);
+    // 未提供 MediaSession：底部条不渲染（没有占位 div 也没有内容）
+    expect(root.querySelector("[data-imw-deck]")).toBeNull();
+    expect(root.querySelector("#imw-desk-room-deck")).toBeNull();
+    // 结果区与页头照常
+    expect(root.querySelector("h1")).not.toBeNull();
+  });
 });
 
 describe("专辑 / 歌单内页", () => {

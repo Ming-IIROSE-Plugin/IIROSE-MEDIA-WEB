@@ -9,6 +9,9 @@ export interface MediaSnapshot {
   duration: number | null;
   playing: boolean;
   connected: boolean;
+  // 当前曲目点播者昵称（`#shareMediaUserName[title]`，去首尾空白）；缺失为空串。
+  // 只用于底部条「某某 点播」，归属判定仍走 ownMedia。
+  owner: string;
   // 当前曲目点播者与本人昵称一致；任一缺失或不等即为 false（保守）。
   ownMedia: boolean;
   // 宿站房间标识（roomnFull 字符串化）；缺失为 null，无标识视为未变化。

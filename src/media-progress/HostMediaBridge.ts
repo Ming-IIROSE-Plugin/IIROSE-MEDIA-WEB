@@ -98,6 +98,8 @@ export class HostMediaBridge {
     const mediaUser =
       this.doc.getElementById("shareMediaUserName")?.getAttribute("title") ||
       "";
+    // 点播者昵称与归属判定同源：同一个 title 只读一次，trim 后写进 owner。
+    const owner = mediaUser.trim();
     const ownMedia = ownMediaOf(mediaUser, this.host.myself);
     const controlMode: MediaControlMode =
       permission === "allowed"
@@ -130,6 +132,7 @@ export class HostMediaBridge {
       duration: rawDuration && rawDuration > 0 ? rawDuration : null,
       playing,
       connected: this.host.socket?.readyState === 1,
+      owner,
       ownMedia,
       roomKey: this.roomKey,
       seekVersion: this.seekVersion,

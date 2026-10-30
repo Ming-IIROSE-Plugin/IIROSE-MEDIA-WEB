@@ -20,6 +20,11 @@ import {
 } from "./components/shuffle-picker/openShufflePicker";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { MediaPayloadMemory } from "../playback/MediaPayloadMemory";
+import {
+  provideMediaSession,
+  releaseMediaSession,
+} from "../media-progress/MediaSession";
+import type { MediaSessionHandle } from "../media-progress/MediaSession";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Socket } from "../iirose_func/Socket";
 import {
@@ -69,8 +74,14 @@ function initMediaProgress() {
   const cutWatcher = new CutWatcher();
   let memory: MediaPayloadMemory | undefined;
   let sidebar!: SidebarMediaEntry;
+  let session!: MediaSessionHandle;
   let unsubscribePlayback: (() => void) | undefined;
   let close: (restoreFocus?: boolean) => void = () => {};
+  // 随机点亮前的选择面板：侧栏行与面板底部条共用同一条接线（确认才作废旧预取并点亮）。
+  let openShuffle: (
+    returnFocus: HTMLElement | null,
+    done: () => void,
+  ) => void = () => {};
   let onPageHide: (event: PageTransitionEvent) => void = () => {};
   let disposed = false;
   // 每一步独立兜错：任一环节抛错都不能跳过后面的解绑（定时器、pagehide、页面键）。
@@ -88,6 +99,10 @@ function initMediaProgress() {
       // 释放顺序：先断订阅，再让状态机与适配器、行、桥接依次停摆。
       // 行元素由 SidebarPlaybackRow 自己移除，SidebarMediaEntry 只解除适配。
       safely(() => close(false));
+      safely(() => {
+        // 还没提供过会话时什么都不清：别误清别人的登记。
+        if (session) releaseMediaSession(session);
+      });
       safely(() => releaseShufflePicker());
       safely(() => unsubscribePlayback?.());
       safely(() => loop?.dispose());
@@ -112,22 +127,25 @@ function initMediaProgress() {
   bridge = new HostMediaBridge();
   playback = new PlaybackMode();
   // 随机点亮前先经选择面板：确认才作废旧预取并点亮，取消什么都不改。
-  // shuffle 在行之后构造，回调运行时再读取。
+  // shuffle 在行之后构造，回调运行时再读取。侧栏行与面板底部条共用这一条接线。
+  openShuffle = (returnFocus, done) => {
+    // 可见平台与初始标签由面板按收藏与已存随机平台计算（无记录按「插件启动默认页面」）；与主面板焦点无关。
+    openShufflePicker({
+      defaultPage: PluginSettings.getPluginSetting().defaultPage,
+      returnFocus,
+      onConfirm: () => {
+        if (disposed) return;
+        shuffle?.invalidate();
+        done();
+      },
+    });
+  };
   playbackRow = new SidebarPlaybackRow(playback, document, {
-    pickShuffle: (done) => {
-      // 可见平台与初始标签由面板按收藏与已存随机平台计算（无记录按「插件启动默认页面」）；与主面板焦点无关。
-      openShufflePicker({
-        defaultPage: PluginSettings.getPluginSetting().defaultPage,
-        returnFocus: playbackRow.element.querySelector<HTMLElement>(
-          "#imw-toggle-shuffle",
-        ),
-        onConfirm: () => {
-          if (disposed) return;
-          shuffle?.invalidate();
-          done();
-        },
-      });
-    },
+    pickShuffle: (done) =>
+      openShuffle(
+        playbackRow.element.querySelector<HTMLElement>("#imw-toggle-shuffle"),
+        done,
+      ),
   });
   memory = new MediaPayloadMemory();
   // 只观察插件自己发出的报文：重播只对插件点播过的曲目可用。
@@ -214,6 +232,13 @@ function initMediaProgress() {
   unsubscribePlayback = bridge.subscribe((snapshot) =>
     playback.applySnapshot(snapshot),
   );
+  // 面板底部条在面板打开时挂载、可能早于这里：注册表带订阅，提供后立即重渲染。
+  session = {
+    bridge,
+    playback,
+    pickShuffle: (done, returnFocus) => openShuffle(returnFocus ?? null, done),
+  };
+  provideMediaSession(session);
   loop.attach();
   shuffle.attach();
   onPageHide = (event: PageTransitionEvent) => {

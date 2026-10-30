@@ -738,6 +738,29 @@ describe("宿站桥接与交互生命周期", () => {
 });
 
 describe("快照中的点播归属与房间标识", () => {
+  it("owner 与 ownMedia 同源：昵称去首尾空白，空白与缺失为空串", () => {
+    const { host, bridge, session } = fixture();
+    const owner = document.getElementById("shareMediaUserName")!;
+    try {
+      // 缺失（没有 title 属性）
+      expect(bridge.read().owner).toBe("");
+      // 有昵称：只 trim，不做其他归一化
+      owner.setAttribute("title", "  小飞鱼  ");
+      expect(bridge.read().owner).toBe("小飞鱼");
+      // 全空白
+      owner.setAttribute("title", "   ");
+      expect(bridge.read().owner).toBe("");
+      // owner 不影响归属判定：非本人时仍写入他人昵称
+      owner.setAttribute("title", "小飞鱼");
+      host.myself = "铭铭";
+      expect(bridge.read()).toMatchObject({ owner: "小飞鱼", ownMedia: false });
+      host.myself = "小飞鱼";
+      expect(bridge.read()).toMatchObject({ owner: "小飞鱼", ownMedia: true });
+    } finally {
+      session.dispose();
+    }
+  });
+
   it("ownMedia 取两侧去首尾空白后的严格相等，未知与不等一律 false", () => {
     const { host, bridge, session } = fixture();
     const owner = document.getElementById("shareMediaUserName")!;

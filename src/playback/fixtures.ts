@@ -10,6 +10,7 @@ export function snapshot(patch: Partial<MediaSnapshot> = {}): MediaSnapshot {
     duration: 200,
     playing: true,
     connected: true,
+    owner: "",
     ownMedia: true,
     roomKey: "fixture-room",
     seekVersion: 0,

@@ -14,6 +14,8 @@ import {
 } from "../playback/ShuffleSelection";
 import { resetPanelFocus, setPanelFocus } from "../playback/PanelFocus";
 import { releaseShufflePicker } from "./components/shuffle-picker/openShufflePicker";
+import { mediaSession } from "../media-progress/MediaSession";
+import { Gesture } from "../listener/Gesture";
 
 const sent = vi.fn();
 const payload = `&1${JSON.stringify({
@@ -322,5 +324,34 @@ describe("收藏随机选择面板接线", () => {
       await settle();
       expect(pickerRoot()).toBeNull();
     });
+  });
+});
+
+describe("面板底部条会话接线", () => {
+  const mainContainer = () =>
+    document.getElementById("mainContainer") as HTMLDivElement;
+
+  it("init 后提供页面会话（底部条随之渲染），pagehide 后释放", async () => {
+    IMCInit.init(mainContainer());
+    const session = mediaSession();
+    expect(session).not.toBeNull();
+    // 快照取自宿站 DOM：标题来自 #shareMediaSongName
+    expect(session!.bridge.read().title).toBe("甲");
+
+    // 打开面板：底部条经注册表拿到会话后立即渲染
+    (window as unknown as { Utils: Record<string, unknown> }).Utils.sync =
+      () => {};
+    const show = Gesture.ShowHideMainApp as unknown as () => Promise<void>;
+    await act(async () => {
+      await show();
+    });
+    expect(document.querySelector('[data-imw-deck="room"]')).not.toBeNull();
+
+    act(() => {
+      window.dispatchEvent(
+        new PageTransitionEvent("pagehide", { persisted: false }),
+      );
+    });
+    expect(mediaSession()).toBeNull();
   });
 });

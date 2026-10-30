@@ -30,6 +30,7 @@ import { SyncManager } from "../sync/SyncManager";
 import { PageHeader } from "./components/desk/PageHeader";
 import { SearchBar, type SearchSource } from "./components/desk/SearchBar";
 import { ScopeRow, type ScopeItem } from "./components/desk/ScopeRow";
+import { RoomDeck } from "./components/room-deck/RoomDeck";
 import { detectVideoTarget } from "./components/desk/searchIntent";
 import {
   MODE,
@@ -349,15 +350,8 @@ export class MainAppContainer extends Component<
               />
             </div>
 
-            {/* 底部条 / 迷你条占位：story 3 的挂载点，本 story 不渲染内容 */}
-            <div
-              id="imw-desk-room-deck"
-              className="shrink-0 max-[768px]:hidden"
-            />
-            <div
-              id="imw-desk-mini-deck"
-              className="hidden shrink-0 max-[768px]:block"
-            />
+            {/* 底部条 / 迷你条：桌面三栏、手机迷你条 + 展开层（story 3） */}
+            <RoomDeck active={this.props.active} mode={this.state.mode} />
           </div>
         </div>
       </Provider>
