@@ -2,6 +2,7 @@
 // 桌面三栏底部条、手机迷你条与点主体向上展开的完整底部条。
 // 数据与跳转全部来自 `useDeck`（页面级桥接 + 同一个 PlaybackMode），
 // 本文件只做视图与展开 / 收起状态机：不新建轮询、不新建模式机。
+import { MODE } from "../desk/deskModes";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatTime } from "../../../media-progress/model";
 import type { MediaSnapshot } from "../../../media-progress/model";
@@ -178,11 +179,14 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
     setOpen(true);
   };
 
+  // 设置 / 关于不是点歌的页面：电脑上不显示底部条，把高度还给内容（手机迷你条保留）
+  const hideDesktop = mode === MODE.settings || mode === MODE.about;
+
   return (
     <>
       <div
         id="imw-desk-room-deck"
-        className="relative shrink-0 max-[768px]:hidden"
+        className={`relative shrink-0 max-[768px]:hidden ${hideDesktop ? "hidden" : ""}`}
       >
         <div
           data-imw-deck="room"

@@ -210,6 +210,27 @@ describe("订阅与手势隔离", () => {
   });
 });
 
+describe("设置与关于不显示桌面底部条", () => {
+  it("切到设置 / 关于时电脑上隐藏桌面条（手机迷你条保留），切回来恢复", async () => {
+    const { MODE } = await import("../desk/deskModes");
+    const { session } = harness();
+    provideMediaSession(session);
+    const desktop = () => host.querySelector("#imw-desk-room-deck")!;
+    mount(true, MODE.music);
+    expect(desktop().getAttribute("class")).not.toMatch(/(^| )hidden( |$)/);
+
+    mount(true, MODE.settings);
+    expect(desktop().getAttribute("class")).toMatch(/(^| )hidden( |$)/);
+    expect(deck("mini")).not.toBeNull();
+
+    mount(true, MODE.about);
+    expect(desktop().getAttribute("class")).toMatch(/(^| )hidden( |$)/);
+
+    mount(true, MODE.favorites);
+    expect(desktop().getAttribute("class")).not.toMatch(/(^| )hidden( |$)/);
+  });
+});
+
 describe("桌面三栏（room-deck）", () => {
   it("封面 + 标题 + 点播者、时间 · 轨道 · 总时长、两组带文字开关", () => {
     const { session } = harness({
