@@ -190,10 +190,13 @@ export function ResultsArea({
     currentOnDemandPlay(platformData);
   };
 
-  /** 行 / 卡的主体点击：手机上挂操作条（story 4 填充），桌面不动作。 */
-  const activate = (platformData: PlatformData) => {
+  /** 行 / 卡的主体点击：手机上挂操作条，桌面不动作。触发元素用于收起后归还焦点。 */
+  const activate = (
+    platformData: PlatformData,
+    trigger?: HTMLElement | null,
+  ) => {
     if (!isPhoneLayout()) return;
-    onRowActivate?.(platformData);
+    onRowActivate?.(platformData, trigger ?? null);
   };
 
   const openCollection = async (platformData: PlatformData) => {
@@ -249,7 +252,7 @@ export function ResultsArea({
         nowPlaying={isNowPlaying(platformData)}
         supported={supported}
         onPlay={() => play(platformData)}
-        onActivate={() => activate(platformData)}
+        onActivate={(trigger) => activate(platformData, trigger)}
       />
     ));
   };
@@ -267,7 +270,7 @@ export function ResultsArea({
           revealed={revealed}
           onReveal={() => setRevealedKey(key)}
           onPlay={() => play(platformData)}
-          onActivate={() => activate(platformData)}
+          onActivate={(trigger) => activate(platformData, trigger)}
           onSelectEpisodes={() => openCollection(platformData)}
         />
       ) : (
@@ -279,7 +282,7 @@ export function ResultsArea({
           revealed={revealed}
           onReveal={() => setRevealedKey(key)}
           onPlay={() => play(platformData)}
-          onActivate={() => activate(platformData)}
+          onActivate={(trigger) => activate(platformData, trigger)}
           onSelectEpisodes={() => openCollection(platformData)}
         />
       );

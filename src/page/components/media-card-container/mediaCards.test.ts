@@ -21,6 +21,7 @@ import {
   TracklistRow,
 } from "./TracklistRow";
 import { VideoTile } from "./VideoTile";
+import { hasOverlayLayers } from "../desk/overlayLayers";
 import {
   formatDuration,
   isCollectionItem,
@@ -646,13 +647,14 @@ describe("专辑 / 歌单行与内页头", () => {
       "乱序播放",
     ]);
 
-    // Esc：只关菜单
+    // Esc：只关菜单（层级栈的一层，关掉后栈为空）
     await act(async () => {
       document.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
       );
     });
     expect(document.querySelector("[data-imw-order-menu]")).toBeNull();
+    expect(hasOverlayLayers()).toBe(false);
     expect(onPlayAll).not.toHaveBeenCalled();
 
     // 点外侧：取消

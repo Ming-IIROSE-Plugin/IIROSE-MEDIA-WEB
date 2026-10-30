@@ -37,8 +37,8 @@ export interface MusicTileProps {
   revealed?: boolean;
   onReveal?: () => void;
   onPlay: () => void;
-  /** 手机点卡片（点播按钮以外）= 操作条挂点（story 4 填充）。 */
-  onActivate?: () => void;
+  /** 手机点卡片（点播按钮以外）= 操作条挂点（触发元素用于收起后归还焦点）。 */
+  onActivate?: (trigger: HTMLElement) => void;
   /** 多 P / 多集条目的过渡「选集」入口（story 5 由选集面板取代）。 */
   onSelectEpisodes?: () => void;
 }
@@ -78,13 +78,13 @@ export function MusicTile({
       return;
     }
     if (isPhoneLayout()) {
-      onActivate?.();
+      onActivate?.(event.currentTarget as HTMLElement);
       return;
     }
     onPlay();
   };
 
-  // 手机没有悬停：胶囊常显，保证「点播」可达（story 4 的操作条接管后回收）。
+  // 手机没有悬停：胶囊常显，保证「点播」可达（操作条接管的是卡片主体的点击）。
   const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100 max-[768px]:opacity-100`;
   const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto max-[768px]:pointer-events-auto`;
 

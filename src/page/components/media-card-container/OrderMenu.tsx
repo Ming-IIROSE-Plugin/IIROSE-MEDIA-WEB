@@ -1,8 +1,10 @@
 // 「全部播放」的顺序菜单（DESIGN.md `order-menu`）：插件自有浮层，不经过宿站 `buildSelect2`。
 // 桌面为贴在按钮下方右对齐的小浮层（宽 200px），手机为底部操作条（头部为专辑/歌单名 + 曲目数）。
-// 透明拦截层：点外侧 = 取消不点播；`Esc` 自管并阻止冒泡（宿站与面板的 Esc 不参与）。
+// 透明拦截层：点外侧 = 取消不点播。`Esc` / 宿站返回键走层级栈（story 4）：打开即登记
+// 一层并先收起别的面板内浮层，因此三种形态互斥、每次返回只关这一层。
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { trackCountLabel } from "./mediaFormat";
+import { closePanelTier, pushOverlayLayer } from "../desk/overlayLayers";
 import {
   DeskIcon,
   deskFocusRing,
@@ -50,6 +52,17 @@ export function OrderMenu({
   const [phone, setPhone] = useState(
     () => window.matchMedia?.("(max-width: 768px)").matches ?? false,
   );
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
+  // 登记层级必须先于移动焦点：互斥收起别的层（如展开的底部条）会把焦点还给它的触发元素，
+  // 顺序反过来会把焦点从菜单项上抢走。
+  useEffect(() => {
+    // 菜单是面板内最上层的一员：先收起别的面板层（操作条 / 展开的底部条），
+    // 再把自己登记为一层，`Esc` 与宿站返回键由此只关菜单。
+    closePanelTier("order");
+    return pushOverlayLayer("order", () => onCancelRef.current());
+  }, []);
 
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -72,16 +85,6 @@ export function OrderMenu({
       right: Math.max(12, window.innerWidth - rect.right),
     });
   }, [anchor, phone]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      onCancel();
-    };
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [onCancel]);
 
   const optionList = (
     <div role="menu" aria-label="播放顺序">

@@ -15,6 +15,7 @@ import {
 import { PlaybackMode } from "../../../playback/PlaybackMode";
 import { SidebarPlaybackRow } from "../../../playback/SidebarPlaybackRow";
 import { snapshot } from "../../../playback/fixtures";
+import { closePanelTier, pushOverlayLayer } from "../desk/overlayLayers";
 import { RoomDeck } from "./RoomDeck";
 
 // 底部条的桥接替身：与宿站桥接同一个形状（read / subscribe / send），
@@ -442,6 +443,60 @@ describe("迷你条与展开的底部条", () => {
     });
     expect(deck("expanded")).toBeNull();
     expect(document.activeElement).toBe(miniBody());
+  });
+
+  it("展开后 Esc 只收起展开层（不关面板），焦点还给迷你条主体", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+    act(() => {
+      miniBody().click();
+    });
+    expect(deck("expanded")).not.toBeNull();
+
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Escape",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(deck("expanded")).toBeNull();
+    expect(document.activeElement).toBe(miniBody());
+    // 展开层注销后栈为空：再按 Esc 不会被这一层吃掉
+    const event = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      document.dispatchEvent(event);
+    });
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("与操作条互斥：展开时收起别的面板层，操作条打开时展开层先收起", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+
+    // 操作条（或顺序菜单）开着 → 点迷你条展开时先收起它
+    const dismissSheet = vi.fn();
+    const releaseSheet = pushOverlayLayer("sheet", dismissSheet);
+    act(() => {
+      miniBody().click();
+    });
+    expect(dismissSheet).toHaveBeenCalledOnce();
+    expect(deck("expanded")).not.toBeNull();
+    releaseSheet();
+
+    // 反向：展开层开着时，操作条打开（`closePanelTier("sheet")`）会先收起展开层
+    act(() => {
+      closePanelTier("sheet");
+    });
+    expect(deck("expanded")).toBeNull();
   });
 
   it("切模式与关面板都收起展开层", () => {

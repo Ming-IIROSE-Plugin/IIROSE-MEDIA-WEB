@@ -30,7 +30,12 @@ import { SyncManager } from "../sync/SyncManager";
 import { PageHeader } from "./components/desk/PageHeader";
 import { SearchBar, type SearchSource } from "./components/desk/SearchBar";
 import { ScopeRow, type ScopeItem } from "./components/desk/ScopeRow";
+import { ActionSheet } from "./components/action-sheet/ActionSheet";
 import { RoomDeck } from "./components/room-deck/RoomDeck";
+import {
+  closePanelTier,
+  pushOverlayLayer,
+} from "./components/desk/overlayLayers";
 import { detectVideoTarget } from "./components/desk/searchIntent";
 import {
   MODE,
@@ -115,6 +120,8 @@ export class MainAppContainer extends Component<
       requestToken: 0,
       searchViewMode:
         PluginSettings.getPluginSetting().searchViewMode || "card",
+      sheetItem: null,
+      sheetTrigger: null,
     };
   }
 
@@ -131,20 +138,24 @@ export class MainAppContainer extends Component<
     });
     void SyncManager.init();
     if (this.props.active && !isPhone()) this.searchBarRef.current?.focus();
-    // 内页（专辑/歌单）里按 Esc 先返回外层结果，再按一次才关面板（story 4 统一为层级栈）
-    document.addEventListener("keydown", this.handleInnerPageEscape, true);
+    // 内页（专辑/歌单）登记为层级栈的一层：`Esc` 与宿站返回键先返回外层结果（story 4）
+    this.syncInnerLayer();
     // 首个模式的首个范围：与旧四行顶栏挂载时自执行首项一致
     this.runCurrentScope();
   }
 
   componentWillUnmount() {
-    document.removeEventListener("keydown", this.handleInnerPageEscape, true);
+    this.releaseInnerLayer();
   }
 
   componentDidUpdate(prevProps: Readonly<MainAppContainerProps>): void {
     // 面板打开：桌面把焦点放进搜索栏（手机不聚焦）
     if (!prevProps.active && this.props.active && !isPhone())
       this.searchBarRef.current?.focus();
+
+    // 面板关闭：面板内的操作条一并收起（焦点不留在屏幕外）
+    if (prevProps.active && !this.props.active && this.state.sheetItem)
+      this.setState({ sheetItem: null, sheetTrigger: null });
 
     // 切模式：先快照当前现场，再恢复目标模式的现场
     if (prevProps.mode !== this.props.mode) {
@@ -174,30 +185,60 @@ export class MainAppContainer extends Component<
         },
       });
     }
+
+    this.syncInnerLayer();
   }
 
+  /** 内页层的注销函数；没有内页（或退不回去）时为 null。 */
+  private releaseInner: (() => void) | null = null;
+
   /**
-   * 内页的 `Esc`：顺序菜单自己关（它先接管并阻止冒泡），否则回到外层结果。
-   * story 4 会把这里换成统一的逐层关闭（捕获阶段 + 层级栈）。
+   * 内页登记为层级栈的一层（`Esc` / 宿站返回键先返回外层，再按一次才关面板）。
+   * 没有外层现场就退不回去，此时不登记：`Esc` 交给下一层（面板）。
    */
-  private handleInnerPageEscape = (event: KeyboardEvent) => {
-    if (!this.props.active) return;
-    if (event.key !== "Escape") return;
-    if (document.querySelector("[data-imw-order-menu]")) return;
-    if (!this.state.isCurrentInMultiPage) return;
-    // 没有外层现场就退不回去：放行给宿站，别把 Esc 吞掉
-    if (!this.state.oldItems) return;
+  private syncInnerLayer() {
+    const wanted =
+      this.props.active &&
+      this.state.isCurrentInMultiPage &&
+      !!this.state.oldItems;
+    if (wanted && !this.releaseInner)
+      this.releaseInner = pushOverlayLayer("inner", this.dismissInnerPage);
+    else if (!wanted && this.releaseInner) this.releaseInnerLayer();
+  }
+
+  private releaseInnerLayer() {
+    this.releaseInner?.();
+    this.releaseInner = null;
+  }
+
+  private dismissInnerPage = () => {
     this.controller.switchToOutFromMultiPage();
-    event.stopPropagation();
   };
 
-  /** 手机操作条的挂点：story 4 在这里打开操作条；在那之前点行体直接点播，不做死点击。 */
-  private handleRowActivate = (platformData: PlatformData) => {
-    if (!roomSupportsRequest()) {
-      notifyRoomUnsupported();
-      return;
-    }
+  /** 手机操作条：要么点播到房间（与行内点播同一路径），要么收藏，要么选集。 */
+  private handleRowActivate = (
+    platformData: PlatformData,
+    trigger?: HTMLElement | null,
+  ) => {
+    // 三者互斥：展开的底部条与顺序菜单先收起
+    closePanelTier("sheet");
+    this.setState({ sheetItem: platformData, sheetTrigger: trigger ?? null });
+  };
+
+  private closeSheet = () => {
+    if (!this.state.sheetItem) return;
+    this.setState({ sheetItem: null, sheetTrigger: null });
+  };
+
+  private playFromSheet = (platformData: PlatformData) => {
     this.state.currentOnDemandPlay(platformData);
+    this.closeSheet();
+  };
+
+  /** 操作条的「选集」：沿用 `switchToMultiPage` 钻取（story 5 换成选集面板）。 */
+  private selectEpisodesFromSheet = (platformData: PlatformData) => {
+    this.closeSheet();
+    void this.controller.openInnerPage(platformData);
   };
 
   /** 重试：内页重载内页，否则重发当前范围。 */
@@ -240,6 +281,8 @@ export class MainAppContainer extends Component<
       totalPage,
       searchViewMode,
       currentOnDemandPlay,
+      sheetItem,
+      sheetTrigger,
     } = this.state;
 
     const categories = this.getActiveCategories();
@@ -352,6 +395,18 @@ export class MainAppContainer extends Component<
 
             {/* 底部条 / 迷你条：桌面三栏、手机迷你条 + 展开层（story 3） */}
             <RoomDeck active={this.props.active} mode={this.state.mode} />
+
+            {/* 手机操作条：挂在主面板内部（面板 `transform` 是 `fixed` 的包含块），
+                因而压得住迷你条与标签栏，也不新设 z-index 根。 */}
+            {this.props.active && sheetItem && (
+              <ActionSheet
+                platformData={sheetItem}
+                returnFocus={sheetTrigger}
+                onClose={this.closeSheet}
+                onPlay={() => this.playFromSheet(sheetItem)}
+                onSelectEpisodes={() => this.selectEpisodesFromSheet(sheetItem)}
+              />
+            )}
           </div>
         </div>
       </Provider>
@@ -457,6 +512,9 @@ export class MainAppContainer extends Component<
       {
         mode: next,
         ...restored,
+        // 面板内的浮层不跨模式存活（操作条随切模式收起，焦点不留在屏幕外）
+        sheetItem: null,
+        sheetTrigger: null,
         updating: false,
         requestToken: this.state.requestToken + 1,
       },
@@ -646,7 +704,24 @@ export class MainAppContainer extends Component<
      * @description 更新目前是否在多集页面里面
      */
     updateCurrentInMultiPageStatus: (status: boolean) => {
-      this.setState({ isCurrentInMultiPage: status });
+      // 进内页时收起面板内的浮层（内页登记为层级栈的一层）
+      this.setState(
+        status
+          ? {
+              isCurrentInMultiPage: status,
+              sheetItem: null,
+              sheetTrigger: null,
+            }
+          : { isCurrentInMultiPage: status },
+      );
+    },
+
+    /**
+     * @description 进入内页：先标记内页再载入集合（与结果区的专辑行同一路径）。
+     */
+    openInnerPage: async (platformData: PlatformData) => {
+      await this.controller.updateCurrentInMultiPageStatus(true);
+      void this.controller.switchToMultiPage(platformData);
     },
 
     /**

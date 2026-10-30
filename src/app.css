@@ -267,6 +267,27 @@
   }
 }
 
+/* 手机操作条从视口底部升起（DESIGN.md `action-sheet`）；减少动态时只留淡入。 */
+@keyframes imwSheetRise {
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes imwSheetFade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 /* --- 5. 通配过渡（全局顺滑感） --- */
 .IIROSE_MEDIA_CONTAINER * {
   transition: all 0.5s ease-in-out;

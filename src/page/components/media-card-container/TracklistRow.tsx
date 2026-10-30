@@ -125,8 +125,8 @@ export interface TracklistRowProps {
   nowPlaying?: boolean;
   supported?: boolean;
   onPlay: () => void;
-  /** 行体点击 = 手机操作条的挂点（story 4 填充），桌面无动作。 */
-  onActivate?: () => void;
+  /** 行体点击 = 手机操作条的挂点（触发元素用于收起后归还焦点），桌面无动作。 */
+  onActivate?: (trigger: HTMLElement) => void;
 }
 
 export function TracklistRow({
@@ -146,7 +146,7 @@ export function TracklistRow({
       className={`${rowFrame} ${trackColumns} min-h-[62px] max-[768px]:min-h-[66px]`}
       data-imw-tracklist-row="true"
       data-now-playing={nowPlaying ? "true" : undefined}
-      onClick={onActivate}
+      onClick={(event) => onActivate?.(event.currentTarget as HTMLElement)}
     >
       <span className="grid place-items-center max-[768px]:hidden">
         {!radio &&

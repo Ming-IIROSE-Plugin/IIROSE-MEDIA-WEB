@@ -13,11 +13,18 @@ vi.mock("../sync/SyncManager", () => ({
 }));
 
 import { MainAppControlLayer } from "./MainAppControlLayer";
+import {
+  pushOverlayLayer,
+  setPanelBackHandler,
+} from "./components/desk/overlayLayers";
 
 // 构造函数签名写的是 props: undefined，这里只按无 props 组件挂载。
 const Layer = MainAppControlLayer as unknown as ComponentType<object>;
 
 type ThemeWindow = Window & { theme?: unknown };
+type HostWindow = Window & {
+  Utils?: { backward?: (...args: unknown[]) => unknown };
+};
 let host: HTMLDivElement;
 const panel = () =>
   document.getElementById("IIROSE_MEDIA_CONTAINER") as HTMLElement;
@@ -37,7 +44,11 @@ beforeEach(() => {
 afterEach(() => {
   render(null, host);
   host.remove();
+  setPanelBackHandler(null);
   delete (window as ThemeWindow).theme;
+  delete (window as unknown as Record<string, unknown>).Utils;
+  delete (window as unknown as Record<string, unknown>)
+    .__imwOverlayBackDispatch;
 });
 
 describe("主面板主题属性", () => {
@@ -92,5 +103,65 @@ describe("主面板主题属性", () => {
     const classes = panel().className.split(/\s+/);
     expect(classes.some((name) => name.includes("--imw-accent"))).toBe(false);
     expect(classes.some((name) => name.includes("--imw-brand"))).toBe(false);
+  });
+});
+
+describe("Esc 与宿站返回键", () => {
+  const escape = async () => {
+    await act(async () => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+  };
+  const isOpen = () => panel().classList.contains("ShowIIROSE_MEDIA_CONTAINER");
+
+  it("Esc 在无浮层时关面板；浮层登记后只关那一层", async () => {
+    render(h(Layer, {}), host);
+    await toggle();
+    expect(isOpen()).toBe(true);
+
+    const dismiss = vi.fn();
+    const release = pushOverlayLayer("sheet", dismiss);
+    await escape();
+    expect(dismiss).toHaveBeenCalledOnce();
+    expect(isOpen()).toBe(true);
+    release();
+
+    await escape();
+    expect(isOpen()).toBe(false);
+  });
+
+  it("返回键：层开着只关层、面板不动；无层时关面板；面板关着时交还宿站", async () => {
+    const hostBackward = vi.fn();
+    // 宿站的 Utils 在全局有完整类型声明：这里按无类型对象替换 backward
+    const hostWindow = window as unknown as Record<string, unknown>;
+    const callBack = () =>
+      (hostWindow.Utils as { backward: () => unknown }).backward();
+    hostWindow.Utils = { backward: hostBackward };
+    render(h(Layer, {}), host);
+    await toggle();
+
+    const dismiss = vi.fn();
+    const release = pushOverlayLayer("order", dismiss);
+    await act(async () => {
+      callBack();
+    });
+    expect(dismiss).toHaveBeenCalledOnce();
+    expect(hostBackward).not.toHaveBeenCalled();
+    expect(isOpen()).toBe(true);
+    release();
+
+    await act(async () => {
+      callBack();
+    });
+    expect(isOpen()).toBe(false);
+    expect(hostBackward).not.toHaveBeenCalled();
+
+    // 面板关着：宿站返回照常执行
+    await act(async () => {
+      callBack();
+    });
+    expect(hostBackward).toHaveBeenCalledOnce();
   });
 });

@@ -75,10 +75,24 @@ vi.mock("../platforms/NetEasePlatform", () => ({
   NetEasePlatform: neteasePlatform,
 }));
 vi.mock("../playback/PanelFocus", () => ({ setPanelFocus: () => {} }));
+const favoriteStorage = vi.hoisted(() => ({
+  toggle: vi.fn(async () => ({ isFavorited: true })),
+  /** 操作条读到的收藏状态（用例按需改写）。 */
+  favorited: false,
+}));
 vi.mock("../storage/FavoritesStorageService", () => ({
+  // 操作条读收藏状态、写切换；其余方法给空壳（本文件只验证接线）。
   FavoritesStorageService: {
     init: async () => null,
-    onExternalChange: () => {},
+    onExternalChange: () => () => {},
+    onChange: () => () => {},
+    deriveFavoriteId: () => ({
+      id: "netease:song:11",
+      platform: "netease",
+      type: "song",
+    }),
+    isFavorited: () => favoriteStorage.favorited,
+    toggle: favoriteStorage.toggle,
   },
 }));
 vi.mock("../sync/SyncManager", () => ({
@@ -87,6 +101,7 @@ vi.mock("../sync/SyncManager", () => ({
 
 import { MainAppContainer } from "./MainAppContainer";
 import { MODE } from "./components/desk/deskModes";
+import { pushOverlayLayer } from "./components/desk/overlayLayers";
 import type { HostMediaBridge } from "../media-progress/HostMediaBridge";
 import {
   provideMediaSession,
@@ -94,6 +109,7 @@ import {
 } from "../media-progress/MediaSession";
 import { PlaybackMode } from "../playback/PlaybackMode";
 import { snapshot } from "../playback/fixtures";
+import { ShowMessage } from "../iirose_func/ShowMessage";
 
 interface Harness {
   state: MainAppContainerState;
@@ -107,6 +123,11 @@ interface Harness {
     switchToOutFromMultiPage: () => void;
     updateCurrentInMultiPageStatus: (status: boolean) => void;
   };
+  /** 结果区行 / 卡主体点击的落点（操作条挂点）。 */
+  handleRowActivate: (
+    platformData: PlatformData,
+    trigger?: HTMLElement | null,
+  ) => void;
 }
 
 type Controller = Harness["controller"];
@@ -406,21 +427,21 @@ describe("专辑 / 歌单内页", () => {
     expect(root.querySelector('[role="tablist"]')).not.toBeNull();
   });
 
-  it("Esc 在内页返回外层；顺序菜单打开时让位给菜单", async () => {
+  it("Esc 在内页返回外层；顺序菜单开着时只关菜单", async () => {
     const { ref } = await mount(MODE.music);
     await enterInnerPage(ref);
 
-    // 顺序菜单开着（菜单自己关），Esc 不返回外层
-    const fakeMenu = document.createElement("div");
-    fakeMenu.setAttribute("data-imw-order-menu", "true");
-    document.body.append(fakeMenu);
+    // 顺序菜单登记为层级栈最上层：Esc 只关它，内页不动
+    const dismissMenu = vi.fn();
+    const releaseMenu = pushOverlayLayer("order", dismissMenu);
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
+    expect(dismissMenu).toHaveBeenCalledOnce();
     expect((ref.current as unknown as Harness).state.isCurrentInMultiPage).toBe(
       true,
     );
-    fakeMenu.remove();
+    releaseMenu();
 
     await act(async () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
@@ -608,5 +629,187 @@ describe("底部条接线", () => {
     } finally {
       releaseMediaSession();
     }
+  });
+});
+
+describe("手机操作条", () => {
+  const song = {
+    title: "鱼",
+    author: "陈绮贞",
+    coverImg: "",
+    websiteUrl: "",
+    duration: 240,
+    neteaseMusic: { id: 11, fee: 0 },
+  } as unknown as PlatformData;
+
+  const album = {
+    title: "华丽的冒险",
+    author: "陈绮贞",
+    coverImg: "",
+    websiteUrl: "",
+    trackCount: "2",
+    multiPage: Promise.resolve({ platform: "neteasemusic" }),
+    neteaseMusic: { id: 9, fee: 0, isAlbum: true },
+  } as unknown as PlatformData;
+
+  const sheet = () =>
+    root.querySelector<HTMLElement>("[data-imw-action-sheet]");
+  const labels = () =>
+    Array.from(sheet()!.querySelectorAll("button")).map((el) =>
+      (el.textContent ?? "").trim(),
+    );
+  const option = (label: string) =>
+    Array.from(sheet()!.querySelectorAll("button")).find(
+      (el) => (el.textContent ?? "").trim() === label,
+    )!;
+
+  /** 行 / 卡主体点击：直接用结果区拿到的那个上下文回调。 */
+  const activate = async (
+    ref: { current: MainAppContainer | null },
+    platformData: PlatformData,
+    trigger: HTMLElement | null = null,
+  ) => {
+    await act(async () => {
+      (ref.current as unknown as Harness).handleRowActivate(
+        platformData,
+        trigger,
+      );
+    });
+  };
+
+  afterEach(() => {
+    delete (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom;
+  });
+
+  it("点行体打开操作条：条目摘要 + 点播到房间 / 收藏，焦点在首项", async () => {
+    const { ref } = await mount(MODE.music);
+    const trigger = document.createElement("div");
+    root.append(trigger);
+
+    await activate(ref, song, trigger);
+
+    expect(sheet()).not.toBeNull();
+    expect(sheet()!.textContent).toContain("鱼");
+    expect(sheet()!.textContent).toContain("陈绮贞");
+    expect(labels()).toEqual(["点播到房间", "收藏"]);
+    // 行内没有多出按钮：只在浮层里
+    expect(document.activeElement).toBe(option("点播到房间"));
+    expect(trigger.querySelectorAll("button")).toHaveLength(0);
+    // 浮层挂在主面板内部：`fixed` 相对面板、与顺序菜单同为 z-40，不新设 z-index 根
+    expect(root.contains(sheet())).toBe(true);
+    expect(sheet()!.getAttribute("class")).toContain("fixed");
+    expect(sheet()!.getAttribute("class")).toContain("z-40");
+  });
+
+  it("点「点播到房间」走行内点播同一路径并收起，焦点归还触发元素", async () => {
+    const { ref } = await mount(MODE.music);
+    const play = vi.fn();
+    await act(async () => {
+      ref.current!.setState({ currentOnDemandPlay: play });
+    });
+
+    // 触发元素本身不可聚焦（手机曲目行体是 div）：归还给它内部第一个可聚焦后代
+    const trigger = document.createElement("div");
+    const inner = document.createElement("button");
+    inner.textContent = "点播";
+    trigger.append(inner);
+    root.append(trigger);
+
+    await activate(ref, song, trigger);
+    await act(async () => {
+      (option("点播到房间") as HTMLButtonElement).click();
+    });
+
+    expect(play).toHaveBeenCalledWith(song);
+    expect(sheet()).toBeNull();
+    expect((ref.current as unknown as Harness).state.sheetItem).toBeNull();
+    expect(document.activeElement).toBe(inner);
+  });
+
+  it("房间不支持点播：首项灰化，点击只提示、不发报文、不收起", async () => {
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom = false;
+    const { ref } = await mount(MODE.music);
+    const play = vi.fn();
+    await act(async () => {
+      ref.current!.setState({ currentOnDemandPlay: play });
+    });
+
+    await activate(ref, song);
+    const primary = option("点播到房间") as HTMLButtonElement;
+    expect(primary.getAttribute("aria-disabled")).toBe("true");
+    expect(primary.getAttribute("class")).toContain("opacity-40");
+    await act(async () => {
+      primary.click();
+    });
+
+    expect(show).toHaveBeenCalledWith("这个房间不支持点播");
+    expect(play).not.toHaveBeenCalled();
+    expect(sheet()).not.toBeNull();
+  });
+
+  it("已收藏条目第二项为「取消收藏」；点击即切换并收起", async () => {
+    favoriteStorage.favorited = true;
+    try {
+      const { ref } = await mount(MODE.music);
+      await activate(ref, song);
+      expect(labels()).toEqual(["点播到房间", "取消收藏"]);
+
+      await act(async () => {
+        (option("取消收藏") as HTMLButtonElement).click();
+      });
+      expect(favoriteStorage.toggle).toHaveBeenCalledWith(song);
+      expect(sheet()).toBeNull();
+    } finally {
+      favoriteStorage.favorited = false;
+    }
+  });
+
+  it("多 P / 多集条目多一行「选集」，点击进入内页", async () => {
+    const { ref } = await mount(MODE.music);
+    await activate(ref, song);
+    expect(labels()).toEqual(["点播到房间", "收藏"]);
+
+    // 换了条目：多集条目在 `multiPage` 落地后才出现「选集」
+    await act(async () => {
+      (ref.current as unknown as Harness).handleRowActivate(album, null);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(labels()).toEqual(["点播到房间", "收藏", "选集"]);
+
+    await act(async () => {
+      (option("选集") as HTMLButtonElement).click();
+    });
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.isCurrentInMultiPage).toBe(true);
+    expect(state.innerCollection).toBe(album);
+    expect(sheet()).toBeNull();
+    expect(root.querySelector("[data-imw-collection-header]")).not.toBeNull();
+  });
+
+  it("Esc 只关操作条；切模式与关面板也一并收起", async () => {
+    const { ref } = await mount(MODE.music);
+    await activate(ref, song);
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(sheet()).toBeNull();
+
+    await activate(ref, song);
+    await act(async () => {
+      render(h(Container, { ...props(MODE.video), ref } as object), root);
+    });
+    expect(sheet()).toBeNull();
+
+    await activate(ref, song);
+    await act(async () => {
+      render(
+        h(Container, { ...props(MODE.video), active: false, ref } as object),
+        root,
+      );
+    });
+    expect(sheet()).toBeNull();
   });
 });

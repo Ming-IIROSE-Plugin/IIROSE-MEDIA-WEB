@@ -7,6 +7,8 @@ import { formatTime } from "../../../media-progress/model";
 import type { MediaSnapshot } from "../../../media-progress/model";
 import type { PlaybackModeKind } from "../../../playback/PlaybackMode";
 import { stopHostGestures } from "../floating-panel/floatingPanel";
+import { trapFocusWithin } from "../desk/focusTrap";
+import { closePanelTier, pushOverlayLayer } from "../desk/overlayLayers";
 import { Cover } from "../media-card-container/Cover";
 import {
   DeskIcon,
@@ -120,6 +122,12 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
     if (expanded) closeButton.current?.focus();
   }, [expanded]);
 
+  // 展开即登记「展开的底部条」层：`Esc` 与宿站返回键先收起它，而不是关掉面板。
+  useEffect(() => {
+    if (!expanded) return;
+    return pushOverlayLayer("deck", () => collapse(true));
+  }, [expanded]);
+
   // 房间停播时收起展开层：与「无播放时点主体不展开」对称，别让拦截层继续盖着列表。
   const idleNow = deck ? !deck.media.playing : false;
   useEffect(() => {
@@ -134,31 +142,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
   const deckName = idle ? "房间暂时安静" : "房间正在播放";
   const cover = idle ? "" : media.cover;
 
-  // 展开层是面板内浮层：Tab 只在其中循环（背后是列表与标签栏）。
-  const trapFocus = (event: KeyboardEvent) => {
-    if (event.key !== "Tab") return;
-    const panel = event.currentTarget as HTMLElement;
-    const items = Array.from(
-      panel.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((element) => element.tabIndex >= 0);
-    if (!items.length) return;
-    const first = items[0];
-    const last = items[items.length - 1];
-    const inside = panel.contains(document.activeElement);
-    if (!event.shiftKey && (!inside || document.activeElement === last)) {
-      event.preventDefault();
-      first.focus();
-    } else if (
-      event.shiftKey &&
-      (!inside || document.activeElement === first)
-    ) {
-      event.preventDefault();
-      last.focus();
-    }
-  };
-
+  // 展开层是面板内浮层：Tab 只在其中循环（背后是列表与标签栏）。焦点规则见 `focusTrap.ts`。
   const toggle = (kind: PlaybackModeKind, element: HTMLButtonElement) =>
     deck.toggle(kind, element);
 
@@ -190,6 +174,8 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
   const openDeck = () => {
     // 房间无播放时点主体不展开。
     if (expandedRef.current || !media.playing) return;
+    // 三者互斥：操作条与顺序菜单先收起
+    closePanelTier("deck");
     setOpen(true);
   };
 
@@ -345,7 +331,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
               role="dialog"
               aria-modal="true"
               aria-label={deckName}
-              onKeyDown={trapFocus}
+              onKeyDown={trapFocusWithin}
               className={`absolute inset-x-3 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
               {...stopHostGestures}
             >

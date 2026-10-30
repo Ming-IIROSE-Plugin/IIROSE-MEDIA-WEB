@@ -31,6 +31,10 @@ interface MainAppContainerState {
   requestToken: number;
   currentSubNavBarAction: () => void;
   currentOnDemandPlay: (platformData: PlatformData) => void;
+  /** 手机操作条的条目（null = 未打开）。 */
+  sheetItem: PlatformData | null;
+  /** 打开操作条的触发元素：收起后焦点还给它（不可聚焦时取内部第一个可聚焦后代）。 */
+  sheetTrigger: HTMLElement | null;
 }
 
 interface MainAppContainerActionContext {

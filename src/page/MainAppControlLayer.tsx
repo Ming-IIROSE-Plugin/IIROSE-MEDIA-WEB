@@ -6,6 +6,10 @@ import { Gesture } from "../listener/Gesture";
 import { SyncManager } from "../sync/SyncManager";
 import { hostIsDark } from "../iirose_func/HostTheme";
 import { themeAttr } from "./components/floating-panel/floatingPanel";
+import {
+  hasOverlayLayers,
+  setPanelBackHandler,
+} from "./components/desk/overlayLayers";
 
 interface MainAppControlLayerState {
   mainAppDisplay: boolean;
@@ -89,6 +93,8 @@ export class MainAppControlLayer extends Component<
 
     // 4. 引用清理
     Gesture.ShowHideMainApp = undefined;
+    // 5. 返回键不再归面板管（宿站照常执行返回）
+    setPanelBackHandler(null);
   }
 
   /** 按宿站当前主题写 `data-imw-theme`（与浮窗同一判定）；面板打开期间不跟随。 */
@@ -106,6 +112,9 @@ export class MainAppControlLayer extends Component<
         ? el.classList.add("ShowIIROSE_MEDIA_CONTAINER")
         : el.classList.remove("ShowIIROSE_MEDIA_CONTAINER");
     }
+
+    // 宿站返回键：面板开着时接管（先关面板内的层，再关面板），关着时交还宿站
+    this.applyBackHandler(isShowing);
 
     // 云端同步：打开 UI 时静默拉一次并启动兜底定时器，关闭时停掉
     // （聊天站里页面常驻可见，可见性事件不会触发，兜底定时器是关键）
@@ -144,7 +153,11 @@ export class MainAppControlLayer extends Component<
   ) {
     // 1. 初始化检查（与打开合批时也要先按当前主题着色）
     if (!this.state.init && nextState.init) {
-      if (nextState.mainAppDisplay) this.applyTheme();
+      if (nextState.mainAppDisplay) {
+        this.applyTheme();
+        // 打开与初始化合批时也要接管宿站返回键：否则首次打开的返回键会直接把人扔出房间
+        this.applyBackHandler(true);
+      }
       return true;
     }
 
@@ -175,6 +188,16 @@ export class MainAppControlLayer extends Component<
     this.setState({ mainAppDisplay: !mainAppDisplay }); // 这里触发 SCU
   };
 
+  /** 宿站返回键：面板开着时接管（层由层级栈先处理），关着时交还宿站。 */
+  private applyBackHandler(isShowing: boolean) {
+    setPanelBackHandler(isShowing ? this.closeFromHostBack : null);
+  }
+
+  /** 宿站返回键落在面板上时的处理器：只关面板（层与浮层由层级栈先处理）。 */
+  private closeFromHostBack = () => {
+    this.setState({ mainAppDisplay: false });
+  };
+
   controller = {
     /**
      * @description 更新搜索词
@@ -202,6 +225,10 @@ export class MainAppControlLayer extends Component<
       }
       this.ShowHideMainApp();
     } else if (event.key === "Escape") {
+      // 层级栈非空时由栈在捕获阶段处理并拦下（外来浮层根的事件也要放行给它）；
+      // 组合输入中的 Esc 不算关闭手势。
+      if (event.defaultPrevented || event.isComposing) return;
+      if (hasOverlayLayers()) return;
       this.setState({ mainAppDisplay: false });
     }
   };

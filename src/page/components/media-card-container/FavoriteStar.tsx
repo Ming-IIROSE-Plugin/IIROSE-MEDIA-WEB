@@ -31,19 +31,23 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
     reread();
   }, [platformData]);
 
-  // 存储层就绪与外部变更（云端拉取落地）后重读一次：否则慢速 IndexedDB 下
-  // 已收藏的条目会显示空心星，点一下反而取消收藏。
+  // 存储层就绪、外部变更（云端拉取落地）与其它入口的收藏切换（手机操作条）后重读一次：
+  // 否则慢速 IndexedDB 下已收藏的条目会显示成空心星，操作条里收藏完行内也不更新。
   useEffect(() => {
     let alive = true;
     void FavoritesStorageService.init().then(() => {
       if (alive) reread();
     });
-    const off = FavoritesStorageService.onExternalChange?.(() => {
+    const offExternal = FavoritesStorageService.onExternalChange?.(() => {
+      if (alive) reread();
+    });
+    const offChange = FavoritesStorageService.onChange?.(() => {
       if (alive) reread();
     });
     return () => {
       alive = false;
-      off?.();
+      offExternal?.();
+      offChange?.();
     };
   }, [platformData]);
 
