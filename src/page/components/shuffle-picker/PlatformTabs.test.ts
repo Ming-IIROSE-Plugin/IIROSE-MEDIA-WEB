@@ -41,7 +41,6 @@ function mount(count: number, initial = "a") {
       h(PlatformTabs, {
         items,
         selected,
-        dark: false,
         disabled,
         tabId: (id: string) => `tab-${id}`,
         controls: "panel",

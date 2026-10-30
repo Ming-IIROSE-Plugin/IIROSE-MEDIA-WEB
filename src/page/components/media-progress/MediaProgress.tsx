@@ -23,6 +23,7 @@ import {
   startsOnControl,
   stopHostGestures,
   Svg,
+  themeAttr,
   type DragHandleProps,
 } from "../floating-panel/floatingPanel";
 import { deskAccent, deskInk2, deskThumb } from "../floating-panel/tokens";
@@ -248,7 +249,7 @@ export function MediaProgress({
       role="dialog"
       aria-labelledby="imw-media-progress-title"
       tabIndex={-1}
-      data-imw-theme={media.dark ? "dark" : "light"}
+      data-imw-theme={themeAttr(media.dark)}
       className={`fixed z-[90001] w-[320px] overflow-auto font-sans text-[14px] max-[768px]:w-[320px] ${panelFrame} ${panelSurface}`}
       style={{ left: position.x, top: position.y }}
       {...stopHostGestures}

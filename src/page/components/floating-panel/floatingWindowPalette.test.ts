@@ -11,9 +11,25 @@ import { ShufflePicker } from "../shuffle-picker/ShufflePicker";
 import {
   deskFocusRingOnRose,
   deskInk,
+  deskInk2,
   deskOnRose,
+  deskPressTone,
+  deskRoseBorderFocus,
   deskRoseSolid,
+  deskRoseSolidBorder,
+  deskRule,
+  deskSkeleton,
+  deskThumb,
 } from "./tokens";
+
+// 展开收藏时读曲目会走网络：挂一个永不完成的请求，让骨架态稳定可断言。
+vi.mock("../../../Api/NeteaseAPI/NeteaseMusic", () => ({
+  NeteaseMusicAPI: {
+    getSongListDetail: vi.fn(() => new Promise(() => {})),
+    getAlbumDetail: vi.fn(() => new Promise(() => {})),
+    getNeteaseSongDetail: vi.fn(),
+  },
+}));
 
 let host: MediaHost;
 let root: HTMLDivElement;
@@ -31,6 +47,13 @@ const classes = (node: Element) =>
 
 const classesOf = (element: Element) =>
   (element.getAttribute("class") ?? "").split(/\s+/);
+
+/** 除焦点环（`focus-visible:`）与内环（`inset`）外，浮窗不应有任何投影。 */
+const projections = (node: Element) =>
+  classes(node)
+    .split(/\s+/)
+    .filter((name) => /(shadow|drop-shadow)/.test(name))
+    .filter((name) => !/focus-visible:|inset/.test(name));
 
 /** 桥接宿站主题：`theme` 为假值时深色（与宿站语义一致）。 */
 function makeHost(): MediaHost {
@@ -80,14 +103,39 @@ const favorite = {
   },
 } as unknown as FavoriteRecord;
 
+/** 无封面的单曲：渲染封面占位（thumb 底 + ink2 图标）。 */
+const plainFavorite = {
+  ...favorite,
+  id: "netease:song:2",
+  title: "后来",
+  coverImg: "",
+} as unknown as FavoriteRecord;
+
+/** 可展开的歌单：展开后先出骨架行。 */
+const playlistFavorite = {
+  ...favorite,
+  id: "netease:playlist:2",
+  type: "playlist",
+  title: "通勤歌单",
+  trackCount: "3",
+  platformData: {
+    ...favorite.platformData,
+    neteaseMusic: { id: 2, fee: 0 },
+  },
+} as unknown as FavoriteRecord;
+
 async function mountShuffle(
   dark: boolean,
-  options: { records?: FavoriteRecord[]; error?: string } = {},
+  options: {
+    records?: FavoriteRecord[];
+    error?: string;
+    platforms?: readonly ("netease" | "bilibili")[];
+  } = {},
 ) {
   await act(async () => {
     render(
       h(ShufflePicker, {
-        platforms: ["netease"],
+        platforms: options.platforms ?? ["netease"],
         initialPlatform: "netease",
         dark,
         load: async () => ({ records: options.records ?? [], saved: null }),
@@ -187,7 +235,7 @@ describe("两个浮窗外框与强调色", () => {
           "imw-dark:text-[#EDE7DD]",
         ]),
       );
-      expect(classes(panel)).not.toContain("shadow-[0_12");
+      expect(projections(panel)).toEqual([]);
       // 头部图标与滑块强调色：蔷薇红，不是天蓝。
       expect(classes(panel)).toContain("text-[#B42F3E]");
       expect(classes(panel)).toContain("accent-[#B42F3E]");
@@ -211,7 +259,7 @@ describe("两个浮窗外框与强调色", () => {
         "imw-dark:border-[#2B2825]",
       ]),
     );
-    expect(classes(shuffleDialog())).not.toContain("shadow-[0_12");
+    expect(projections(shuffleDialog())).toEqual([]);
   });
 
   it("实底蔷薇红主按钮：on-rose 字色 + paper 内环焦点环", async () => {
@@ -245,8 +293,8 @@ describe("实底蔷薇红零件（勾选、权重分段、错误行）", () => {
       '[role="checkbox"][aria-checked="true"] > span',
     )!;
     const list = classesOf(box);
-    expect(list).toContain("border-[#B42F3E]");
-    expect(list).toContain("imw-dark:border-[#E3606C]");
+    for (const token of deskRoseSolidBorder.split(/\s+/))
+      expect(list).toContain(token);
     for (const token of solidTokens) expect(list).toContain(token);
   });
 
@@ -281,6 +329,65 @@ describe("实底蔷薇红零件（勾选、权重分段、错误行）", () => {
   });
 });
 
+describe("平台标签行、搜索框与占位件", () => {
+  it("平台标签：选中取蔷薇红实底与同值描边，未选中走 rule + 按压底色", async () => {
+    await mountShuffle(true, { platforms: ["netease", "bilibili"] });
+    const tabs = Array.from(
+      shuffleDialog().querySelectorAll<HTMLElement>('[role="tab"]'),
+    );
+    expect(tabs).toHaveLength(2);
+    const selected = tabs.find(
+      (tab) => tab.getAttribute("aria-selected") === "true",
+    )!;
+    const idle = tabs.find(
+      (tab) => tab.getAttribute("aria-selected") === "false",
+    )!;
+    const selectedSpan = selected.querySelector("span")!;
+    const idleSpan = idle.querySelector("span")!;
+    for (const token of `${deskRoseSolidBorder} ${deskRoseSolid} ${deskOnRose}`.split(
+      /\s+/,
+    ))
+      expect(classesOf(selectedSpan)).toContain(token);
+    for (const token of `${deskRule} ${deskPressTone}`.split(/\s+/))
+      expect(classesOf(idleSpan)).toContain(token);
+    expect(classesOf(idleSpan)).not.toContain("bg-[#B42F3E]");
+    expect(classes(idleSpan)).not.toMatch(/sky-/);
+  });
+
+  it("搜索框：rule 描边，聚焦时蔷薇红描边（focus-within）", async () => {
+    await mountShuffle(true);
+    const search = shuffleDialog().querySelector("input")!.parentElement!;
+    for (const token of `${deskRule} ${deskRoseBorderFocus}`.split(/\s+/))
+      expect(classesOf(search)).toContain(token);
+    expect(classesOf(search)).not.toContain("focus-within:border-sky-500");
+  });
+
+  it("封面占位：thumb 底 + ink2 图标", async () => {
+    await mountShuffle(true, { records: [plainFavorite] });
+    const cover = Array.from(
+      shuffleDialog().querySelectorAll<HTMLElement>("span"),
+    ).find((element) => classesOf(element).includes("w-10"))!;
+    for (const token of `${deskThumb} ${deskInk2}`.split(/\s+/))
+      expect(classesOf(cover)).toContain(token);
+  });
+
+  it("展开收藏时骨架行取 deskSkeleton", async () => {
+    await mountShuffle(true, { records: [playlistFavorite] });
+    const expand = shuffleDialog().querySelector<HTMLElement>(
+      '[aria-label="展开通勤歌单"]',
+    )!;
+    await act(async () => {
+      expand.click();
+    });
+    const region = shuffleDialog().querySelector<HTMLElement>(
+      '[id^="imw-shuffle-picker-tracks-"]',
+    )!;
+    const bar = region.querySelector("span")!;
+    for (const token of deskSkeleton.split(/\s+/))
+      expect(classesOf(bar)).toContain(token);
+  });
+});
+
 describe("零裸色值", () => {
   it("渲染结果里没有 sky- / themed / accentVar / rgba", async () => {
     const bridge = mountProgress();
@@ -297,21 +404,27 @@ describe("零裸色值", () => {
     const { readFileSync, readdirSync } = await import("node:fs");
     const { join } = await import("node:path");
     const base = join(process.cwd(), "src", "page", "components");
-    const dirs = ["floating-panel", "media-progress", "shuffle-picker"];
     const files: string[] = [];
-    for (const dir of dirs) {
-      const path = join(base, dir);
-      for (const name of readdirSync(path) as string[]) {
-        if (!name.endsWith(".tsx")) continue;
-        // 面板的装配层不含样式；浮窗源码只扫组件本身。
-        if (name === "openShufflePicker.tsx") continue;
-        files.push(join(path, name));
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (entry.name.endsWith(".tsx") && entry.name !== "tokens.ts")
+          files.push(path);
       }
-    }
-    expect(files.length).toBeGreaterThanOrEqual(4);
+    };
+    walk(base);
+    const names = files.map((file) => file.slice(base.length + 1));
+    for (const expected of [
+      "floating-panel/floatingPanel.tsx",
+      "media-progress/MediaProgress.tsx",
+      "shuffle-picker/ShufflePicker.tsx",
+      "shuffle-picker/PlatformTabs.tsx",
+    ])
+      expect(names).toContain(expected);
     for (const file of files) {
       const source = readFileSync(file, "utf8");
-      const name = file.slice(file.lastIndexOf("/") + 1);
+      const name = file.slice(base.length + 1);
       expect(
         `${name}: ${source.match(/#[0-9a-fA-F]{3,8}/g) ?? "无裸色值"}`,
       ).toBe(`${name}: 无裸色值`);

@@ -60,15 +60,19 @@ import {
   stopHostGestures,
   Svg,
   textButton,
+  themeAttr,
 } from "../floating-panel/floatingPanel";
 import {
+  deskCaret,
   deskInk,
   deskInk2,
+  deskInk3,
   deskOnRose,
+  deskPlaceholder,
   deskPressTone,
-  deskRoseBorder,
   deskRoseBorderFocus,
   deskRoseSolid,
+  deskRoseSolidBorder,
   deskRule,
   deskSkeleton,
   deskThumb,
@@ -148,14 +152,14 @@ const ShuffleIcon = ({ size = 22 }: { size?: number }) => (
 );
 
 const SearchIcon = () => (
-  <Svg size={18} className="opacity-55">
+  <Svg size={18} className={deskInk3}>
     <circle cx="11" cy="11" r="7" />
     <path d="m20 20-3.5-3.5" />
   </Svg>
 );
 
 const ClearIcon = () => (
-  <Svg size={18} className="opacity-55">
+  <Svg size={18} className={deskInk3}>
     <circle cx="12" cy="12" r="9" />
     <path d="m9 9 6 6M15 9l-6 6" />
   </Svg>
@@ -212,7 +216,7 @@ function Checkbox({
       }}
     >
       <span
-        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 border-solid ${on ? `${deskRoseBorder} ${deskRoseSolid} ${deskOnRose}` : "border-current/40 bg-transparent"}`}
+        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 border-solid ${on ? `${deskRoseSolidBorder} ${deskRoseSolid} ${deskOnRose}` : "border-current/40 bg-transparent"}`}
       >
         {check === "all" && (
           <Svg size={14} strokeWidth={3}>
@@ -674,7 +678,7 @@ export function ShufflePicker({
     else if (failed.has(record.id))
       body = (
         <div className="flex h-11 items-center gap-2 pl-[52px] pr-3 text-[12px]">
-          <span className="opacity-65">加载失败</span>
+          <span className={deskInk2}>加载失败</span>
           <button
             type="button"
             className={textButton}
@@ -690,7 +694,9 @@ export function ShufflePicker({
       );
     else if (loaded.get(record.id)?.length === 0)
       body = (
-        <div className="flex h-11 items-center pl-[52px] pr-3 text-[12px] opacity-65">
+        <div
+          className={`flex h-11 items-center pl-[52px] pr-3 text-[12px] ${deskInk2}`}
+        >
           {record.type === "album" ? "专辑" : "歌单"}里没有可播放的曲目
         </div>
       );
@@ -715,7 +721,9 @@ export function ShufflePicker({
             <div className="flex min-w-0 flex-1 items-baseline gap-2">
               <span className="truncate text-[13px]">{track.name}</span>
               {track.artist && (
-                <span className="shrink-0 max-w-[45%] truncate text-[12px] opacity-65">
+                <span
+                  className={`shrink-0 max-w-[45%] truncate text-[12px] ${deskInk2}`}
+                >
                   {track.artist}
                 </span>
               )}
@@ -733,7 +741,7 @@ export function ShufflePicker({
   return (
     <div
       ref={layer}
-      data-imw-theme={dark ? "dark" : "light"}
+      data-imw-theme={themeAttr(dark)}
       className="pointer-events-none fixed inset-0 z-[90010] flex items-center justify-center font-sans text-[14px] leading-normal max-[768px]:items-start"
     >
       <div
@@ -767,7 +775,6 @@ export function ShufflePicker({
               }))}
               selected={platform}
               onSelect={switchTab}
-              dark={dark}
               disabled={exiting || busy}
               tabId={tabId}
               controls={LIST_ID}
@@ -787,7 +794,7 @@ export function ShufflePicker({
               value={input}
               placeholder="搜索标题或作者…"
               aria-label="搜索标题或作者"
-              className="m-0 h-full min-w-0 flex-1 appearance-none border-0 bg-transparent px-2 font-[inherit] text-[14px] text-inherit outline-none placeholder:text-current placeholder:opacity-50 max-[768px]:text-[16px] [&::-webkit-search-cancel-button]:hidden"
+              className={`m-0 h-full min-w-0 flex-1 appearance-none border-0 bg-transparent px-2 font-[inherit] text-[14px] text-inherit outline-none ${deskPlaceholder} ${deskCaret} max-[768px]:text-[16px] [&::-webkit-search-cancel-button]:hidden`}
               onInput={(event) => setInput(event.currentTarget.value)}
             />
             {input && (
@@ -867,7 +874,7 @@ export function ShufflePicker({
                 );
               })}
             </div>
-            <div className="mt-0.5 text-[11px] leading-4 opacity-65">
+            <div className={`mt-0.5 text-[11px] leading-4 ${deskInk2}`}>
               {WEIGHT_HINT[state.weight]}
             </div>
           </div>
@@ -884,7 +891,7 @@ export function ShufflePicker({
         >
           {!records && loadFailed.has(platform) ? (
             <div className="flex h-28 flex-col items-center justify-center gap-1">
-              <span className="text-[13px] opacity-65">读取收藏失败</span>
+              <span className={`text-[13px] ${deskInk2}`}>读取收藏失败</span>
               <button
                 type="button"
                 className={textButton}
@@ -898,17 +905,21 @@ export function ShufflePicker({
               </button>
             </div>
           ) : !records ? (
-            <div className="flex h-24 items-center justify-center gap-2 opacity-65">
+            <div
+              className={`flex h-24 items-center justify-center gap-2 ${deskInk2}`}
+            >
               <Spinner />
               <span className="text-[13px]">正在读取收藏…</span>
             </div>
           ) : list.length === 0 ? (
-            <div className="flex h-24 items-center justify-center text-[13px] opacity-65">
+            <div
+              className={`flex h-24 items-center justify-center text-[13px] ${deskInk2}`}
+            >
               该平台还没有收藏
             </div>
           ) : visible.length === 0 ? (
             <div className="flex h-28 flex-col items-center justify-center gap-1">
-              <span className="text-[13px] opacity-65">没有匹配的收藏</span>
+              <span className={`text-[13px] ${deskInk2}`}>没有匹配的收藏</span>
               <button
                 type="button"
                 className={textButton}
@@ -959,7 +970,9 @@ export function ShufflePicker({
                       >
                         {record.title}
                       </div>
-                      <div className="truncate text-[12px] leading-4 tabular-nums opacity-65">
+                      <div
+                        className={`truncate text-[12px] leading-4 tabular-nums ${deskInk2}`}
+                      >
                         {sub}
                       </div>
                     </div>
@@ -999,7 +1012,9 @@ export function ShufflePicker({
         </div>
 
         <div className="flex min-h-16 shrink-0 items-center gap-2 px-3 py-2.5 max-[768px]:flex-col max-[768px]:items-stretch">
-          <div className="min-w-0 flex-1 truncate text-[13px] tabular-nums opacity-80 max-[768px]:text-[12px]">
+          <div
+            className={`min-w-0 flex-1 truncate text-[13px] tabular-nums ${deskInk2} max-[768px]:text-[12px]`}
+          >
             {records ? formatSummary(summary) : ""}
           </div>
           <div className="flex shrink-0 flex-col items-stretch">
@@ -1038,7 +1053,7 @@ export function ShufflePicker({
               <div
                 id="imw-shuffle-picker-hint"
                 role="status"
-                className="mt-1 text-right text-[11px] leading-4 opacity-65"
+                className={`mt-1 text-right text-[11px] leading-4 ${deskInk2}`}
               >
                 至少选择一首
               </div>

@@ -17,7 +17,8 @@ import {
 export const focusRing = deskFocusRing;
 // 同一属性的 Tailwind 类不能同时出现（顺序由 Tailwind 决定，不由书写顺序）：
 // 底色、文字色、描边各自按用途补，不放进公共基类。
-export const resetButton = `m-0 cursor-pointer p-0 font-[inherit] ${focusRing}`;
+export const resetBase = "m-0 cursor-pointer p-0 font-[inherit]";
+export const resetButton = `${resetBase} ${focusRing}`;
 export const plainButton = `${resetButton} border-0 bg-transparent`;
 export const iconButton = `${plainButton} text-inherit flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${deskPressTone}`;
 export const textButton = `${plainButton} min-h-[44px] rounded-lg px-3 text-[13px] ${deskRose} ${deskPressTone}`;
@@ -38,7 +39,7 @@ export const panelFrame = "rounded-2xl border border-solid outline-none";
 export const secondaryButton = `${resetButton} min-h-[44px] rounded-lg border border-solid bg-transparent text-inherit ${deskPressTone} ${panelBorder}`;
 
 /** 主按钮（蔷薇红实底 + on-rose 字色，焦点环带 paper 内环）；不含内边距与字号。 */
-export const primaryButton = `m-0 cursor-pointer p-0 font-[inherit] min-h-[44px] rounded-lg border-0 font-semibold ${deskRoseSolid} ${deskOnRose} ${deskFocusRingOnRose} disabled:cursor-not-allowed disabled:opacity-40`;
+export const primaryButton = `${resetBase} min-h-[44px] rounded-lg border-0 font-semibold ${deskRoseSolid} ${deskOnRose} ${deskFocusRingOnRose} disabled:cursor-not-allowed disabled:opacity-40`;
 
 /** 主面板根节点 `data-imw-theme` 的取值（浮窗根也写同一个值）。 */
 export const themeAttr = (dark: boolean) => (dark ? "dark" : "light");

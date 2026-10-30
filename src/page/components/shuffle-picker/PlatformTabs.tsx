@@ -5,8 +5,8 @@ import { focusRing } from "../floating-panel/floatingPanel";
 import {
   deskOnRose,
   deskPressTone,
-  deskRoseBorder,
   deskRoseSolid,
+  deskRoseSolidBorder,
   deskRule,
 } from "../floating-panel/tokens";
 
@@ -20,7 +20,6 @@ export interface PlatformTabsProps<T extends string = string> {
   selected: T;
   /** 用户点选或键盘切到另一项（键盘切换时组件已把焦点移过去）。 */
   onSelect: (id: T) => void;
-  dark: boolean;
   /** 不接受切换（确认中、正在关闭）。 */
   disabled?: boolean;
   /** 每个标签的 DOM id。 */
@@ -123,7 +122,7 @@ export function PlatformTabs<T extends string>({
     >
       {items.map((item, index) => {
         const isSelected = index === selectedIndex;
-        const border = isSelected ? deskRoseBorder : idle;
+        const border = isSelected ? deskRoseSolidBorder : idle;
         const fill = isSelected
           ? `${deskRoseSolid} font-semibold ${deskOnRose}`
           : disabled
