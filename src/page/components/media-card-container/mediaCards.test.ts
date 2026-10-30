@@ -584,7 +584,7 @@ describe("音乐网格卡", () => {
 });
 
 describe("专辑 / 歌单行与内页头", () => {
-  it("整行可点进入内页，行末是右向箭头而不是点播钮", async () => {
+  it("桌面：只有封面、标题与「查看」进内页，点行空白处不进（星标好点）", async () => {
     const onOpen = vi.fn();
     await mount(
       withCtx(h(CollectionRow, { platformData: album, index: 1, onOpen })),
@@ -593,12 +593,34 @@ describe("专辑 / 歌单行与内页头", () => {
     expect(row.textContent).toContain("24 首");
     expect(row.querySelector('button[aria-label^="点播"]')).toBeNull();
     (row as HTMLElement).click();
-    expect(onOpen).toHaveBeenCalledOnce();
-    const arrow = host.querySelector<HTMLElement>(
+    expect(onOpen).not.toHaveBeenCalled();
+
+    const view = host.querySelector<HTMLElement>(
       'button[aria-label="查看 华丽的冒险"]',
     )!;
-    arrow.click();
+    expect(view.textContent).toBe("查看");
+    view.click();
+    expect(onOpen).toHaveBeenCalledTimes(1);
+
+    host.querySelector<HTMLElement>('button[title="查看 华丽的冒险"]')!.click();
     expect(onOpen).toHaveBeenCalledTimes(2);
+
+    host.querySelector<HTMLElement>('button[title="查看"]')!.click();
+    expect(onOpen).toHaveBeenCalledTimes(3);
+  });
+
+  it("手机：整行点按进内页", async () => {
+    const onOpen = vi.fn();
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    try {
+      await mount(
+        withCtx(h(CollectionRow, { platformData: album, index: 1, onOpen })),
+      );
+      (host.querySelector("[data-imw-collection-row]") as HTMLElement).click();
+      expect(onOpen).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("内页头：返回、名称、曲目数与「全部播放」", async () => {
@@ -868,7 +890,9 @@ describe("结果区状态机", () => {
       collection,
     );
     await act(async () => {
-      (host.querySelector("[data-imw-collection-row]") as HTMLElement).click();
+      host
+        .querySelector<HTMLElement>('button[aria-label="查看 华丽的冒险"]')!
+        .click();
     });
     expect(ctx.updateCurrentInMultiPageStatus).toHaveBeenCalledWith(true);
     expect(ctx.switchToMultiPage).toHaveBeenCalledWith(album);
@@ -1184,6 +1208,79 @@ describe("收藏的出处列", () => {
     const row = host.querySelector("[data-imw-tracklist-row]")!;
     expect(row.textContent).toContain("B站");
     expect(row.innerHTML).toContain("bg-[#E1608C]");
+  });
+});
+
+describe("收藏里的专辑 / 歌单", () => {
+  it("列表：与搜索结果同一种歌单行，「查看」进内页", async () => {
+    const data = ready([album, song]);
+    await mount(
+      results({ ...resultsBase, mode: MODE.favorites, mediaData: data }),
+      data,
+    );
+    expect(host.querySelectorAll("[data-imw-collection-row]")).toHaveLength(1);
+    expect(host.querySelectorAll("[data-imw-tracklist-row]")).toHaveLength(1);
+    await act(async () => {
+      host
+        .querySelector<HTMLElement>('button[aria-label="查看 华丽的冒险"]')!
+        .click();
+    });
+    expect(ctx.switchToMultiPage).toHaveBeenCalledWith(album);
+  });
+
+  it("网格：专辑卡的胶囊是「查看」，点了进内页而不是点播", async () => {
+    const data = ready([album]);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.favorites,
+        viewMode: "card",
+        mediaData: data,
+      }),
+      data,
+    );
+    const capsule = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "查看",
+    )!;
+    await act(async () => {
+      capsule.click();
+    });
+    expect(ctx.switchToMultiPage).toHaveBeenCalledWith(album);
+    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+  });
+});
+
+describe("内页头", () => {
+  it("有视图切换；「全部播放」只在自身悬停时变实心", async () => {
+    await mount(
+      withCtx(
+        h(CollectionHeader, {
+          title: album.title,
+          trackCount: album.trackCount,
+          viewMode: "list",
+          onToggleView: () => {},
+          onBack: () => {},
+          onPlayAll: () => {},
+        }),
+      ),
+    );
+    expect(host.querySelector('[role="radiogroup"]')).not.toBeNull();
+    const playAll = Array.from(host.querySelectorAll("button")).find((el) =>
+      el.textContent?.includes("全部播放"),
+    )!;
+    expect(playAll.getAttribute("class")).toContain("hov:hover:bg-[#B42F3E]");
+    expect(playAll.getAttribute("class")).not.toContain("group-hover");
+  });
+
+  it("内页跟着视图切换：网格时音乐为方形卡", () => {
+    const base = {
+      mode: MODE.music,
+      scopeIndex: 1,
+      viewMode: "card" as const,
+      isInnerPage: true,
+    };
+    expect(shapeOf(base)).toBe("musicGrid");
+    expect(shapeOf({ ...base, viewMode: "list" })).toBe("tracklist");
   });
 });
 

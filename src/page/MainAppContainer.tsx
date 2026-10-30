@@ -409,6 +409,8 @@ export class MainAppContainer extends Component<
               <CollectionHeader
                 title={innerCollection.title}
                 trackCount={innerCollection.trackCount}
+                viewMode={searchViewMode}
+                onToggleView={this.controller.toggleSearchViewMode}
                 currentPage={currentPage}
                 totalPage={totalPage}
                 onPageChange={this.controller.changecurrentPage}

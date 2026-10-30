@@ -12,7 +12,7 @@ import { SkeletonRows, SkeletonTiles } from "./Skeletons";
 import { StateMessage } from "./StateMessage";
 import { TracklistHeader, TracklistRow } from "./TracklistRow";
 import { VideoTile } from "./VideoTile";
-import { isPhoneLayout } from "./mediaFormat";
+import { isCollectionItem, isPhoneLayout } from "./mediaFormat";
 import { isNowPlayingTitle, subscribeNowPlayingTitle } from "./nowPlaying";
 import { notifyRoomUnsupported, roomSupportsRequest } from "./roomSupport";
 
@@ -77,7 +77,13 @@ export function shapeOf(options: {
   isInnerPage: boolean;
 }): Shape {
   const { mode, scopeIndex, viewMode, isInnerPage } = options;
-  if (isInnerPage) return "tracklist";
+  // 内页（专辑 / 歌单曲目、多 P）同样跟着视图切换走
+  if (isInnerPage)
+    return viewMode === "list"
+      ? "tracklist"
+      : mode === MODE.video
+        ? "videoGrid"
+        : "musicGrid";
   if (mode === MODE.settings || mode === MODE.about) return "settings";
   if (mode === MODE.radio) return "radio";
   if (mode === MODE.favorites)
@@ -261,18 +267,28 @@ export function ResultsArea({
         />
       ));
     }
-    return items.map((platformData, index) => (
-      <TracklistRow
-        key={`${index}:${platformData.title}`}
-        platformData={platformData}
-        index={pageOffset + index + 1}
-        variant={shape === "radio" ? "radio" : "track"}
-        nowPlaying={isNowPlaying(platformData)}
-        supported={supported}
-        onPlay={() => play(platformData)}
-        onActivate={(trigger) => activate(platformData, trigger)}
-      />
-    ));
+    return items.map((platformData, index) =>
+      // 收藏里的专辑 / 歌单：与搜索结果同一种行（曲目数 + 「查看」进内页）
+      shape === "favorites" && isCollectionItem(platformData) ? (
+        <CollectionRow
+          key={`${index}:${platformData.title}`}
+          platformData={platformData}
+          index={pageOffset + index + 1}
+          onOpen={() => openCollection(platformData)}
+        />
+      ) : (
+        <TracklistRow
+          key={`${index}:${platformData.title}`}
+          platformData={platformData}
+          index={pageOffset + index + 1}
+          variant={shape === "radio" ? "radio" : "track"}
+          nowPlaying={isNowPlaying(platformData)}
+          supported={supported}
+          onPlay={() => play(platformData)}
+          onActivate={(trigger) => activate(platformData, trigger)}
+        />
+      ),
+    );
   };
 
   const renderTiles = (items: PlatformData[]) =>
@@ -280,16 +296,23 @@ export function ResultsArea({
       const key = `${index}:${platformData.title}`;
       const revealed = revealedKey === key;
       // 收藏网格里歌曲、视频、专辑混排：统一方形卡（视频封面方形裁切）
+      // 收藏网格里的专辑 / 歌单：胶囊是「查看」，点卡片或胶囊都进内页
+      const collection =
+        shape === "favoritesGrid" && isCollectionItem(platformData);
+      const open = () => void openCollection(platformData);
       return shape === "musicGrid" || shape === "favoritesGrid" ? (
         <MusicTile
           key={key}
           platformData={platformData}
           nowPlaying={isNowPlaying(platformData)}
-          supported={supported}
+          supported={collection || supported}
           revealed={revealed}
           onReveal={() => setRevealedKey(key)}
-          onPlay={() => play(platformData)}
-          onActivate={(trigger) => activate(platformData, trigger)}
+          onPlay={collection ? open : () => play(platformData)}
+          onActivate={
+            collection ? open : (trigger) => activate(platformData, trigger)
+          }
+          idleLabel={collection ? "查看" : "点播"}
         />
       ) : (
         <VideoTile

@@ -28,6 +28,8 @@ export interface CoverProps {
   alt?: string;
   /** 点击封面打开来源页（曲目行 / 专辑行的既有能力）。 */
   onOpen?: () => void;
+  /** 封面按钮的动作名（默认「打开来源页」；专辑 / 歌单行是「查看」）。 */
+  openLabel?: string;
 }
 
 export function Cover({
@@ -37,6 +39,7 @@ export function Cover({
   rounded = roundedXs,
   alt = "",
   onOpen,
+  openLabel = "打开来源页",
 }: CoverProps) {
   const [url, setUrl] = useState("");
   const [failed, setFailed] = useState(false);
@@ -104,8 +107,8 @@ export function Cover({
       {onOpen && (
         <button
           type="button"
-          aria-label={alt ? `打开来源页：${alt}` : "打开来源页"}
-          title="打开来源页"
+          aria-label={alt ? `${openLabel}：${alt}` : openLabel}
+          title={openLabel}
           className={`absolute inset-0 h-full w-full cursor-pointer border-0 bg-transparent p-0 ${deskFocusRing}`}
           onClick={(event) => {
             event.stopPropagation();

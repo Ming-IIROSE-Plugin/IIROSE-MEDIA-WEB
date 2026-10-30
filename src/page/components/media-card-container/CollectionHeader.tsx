@@ -2,6 +2,7 @@
 // 左：「‹ 返回」文字钮 + 名称 + 等宽曲目数；右：分页（内页本地切片，多于一页才出现）+
 // 描边胶囊「全部播放」→ 顺序菜单（正序播放 / 乱序播放）。
 // 房间不支持点播时「全部播放」灰化但保留可聚焦。
+import { ViewToggle } from "../desk/ViewToggle";
 import { useRef, useState } from "preact/hooks";
 import { OrderMenu, type PlayOrder } from "./OrderMenu";
 import { trackCountLabel } from "./mediaFormat";
@@ -13,7 +14,9 @@ import {
   deskInk2,
   deskInk3,
   deskRule,
-  deskSendHover,
+  deskSendHoverSelf,
+  deskHover,
+  deskPress,
   deskTextButton,
   roundedSm,
   typeButtonSm,
@@ -25,6 +28,9 @@ import {
 export interface CollectionHeaderProps {
   title: string;
   trackCount?: string | number | null;
+  /** 列表 / 网格（与范围行同一份偏好）；不传则不显示切换。 */
+  viewMode?: "card" | "list";
+  onToggleView?: () => void;
   /** 内页本地分页：多于 1 页时在头部右侧给出上一页 / 下一页。 */
   currentPage?: number;
   totalPage?: number;
@@ -40,6 +46,8 @@ const pagerButton = `grid h-[30px] w-[30px] shrink-0 cursor-pointer place-items-
 export function CollectionHeader({
   title,
   trackCount,
+  viewMode,
+  onToggleView,
   currentPage = 1,
   totalPage = 0,
   onPageChange,
@@ -82,6 +90,7 @@ export function CollectionHeader({
       )}
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        {viewMode && <ViewToggle viewMode={viewMode} onToggle={onToggleView} />}
         {pages > 1 && onPageChange && (
           <div className="flex items-center gap-1">
             <button
@@ -119,7 +128,7 @@ export function CollectionHeader({
           aria-expanded={open}
           aria-disabled={!supported}
           title={supported ? "按顺序点播整张" : "这个房间不支持点播"}
-          className={`flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-solid bg-transparent px-[14px] ${typeButtonSm} ${deskRule} ${deskInk2} ${deskFocusRing} max-[768px]:h-11 ${supported ? deskSendHover : "opacity-40"}`}
+          className={`flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-solid bg-transparent px-[14px] ${typeButtonSm} ${deskRule} ${deskInk2} ${deskFocusRing} max-[768px]:h-11 ${supported ? `${deskSendHoverSelf} ${deskPress}` : "opacity-40"} ${open ? deskHover : ""}`}
           onClick={() => {
             if (!supported) {
               notifyRoomUnsupported();

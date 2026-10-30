@@ -36,6 +36,8 @@ export interface MusicTileProps {
   onPlay: () => void;
   /** 手机点卡片（点播按钮以外）= 操作条挂点（触发元素用于收起后归还焦点）。 */
   onActivate?: (trigger: HTMLElement) => void;
+  /** 胶囊的空闲文案（默认「点播」；收藏里的专辑 / 歌单是「查看」，点了进内页）。 */
+  idleLabel?: string;
 }
 
 export function MusicTile({
@@ -46,6 +48,7 @@ export function MusicTile({
   onReveal,
   onPlay,
   onActivate,
+  idleLabel = "点播",
 }: MusicTileProps) {
   const duration = formatDuration(platformData.duration);
   // 手机点主体出操作条（story 4）、无悬停宽屏只选中：两种情况都不是「点播」，读屏名随之改。
@@ -125,7 +128,7 @@ export function MusicTile({
                 className={status === "pending" ? "animate-spin" : ""}
               />
             )}
-            {requestLabel(status, "点播")}
+            {requestLabel(status, idleLabel)}
           </button>
         </div>
       </div>

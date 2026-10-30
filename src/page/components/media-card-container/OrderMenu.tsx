@@ -9,9 +9,13 @@ import {
   DeskIcon,
   deskFocusRing,
   deskInk,
+  deskInk2,
   deskInk3,
+  deskMenuShadow,
+  deskPressTone,
   deskRule,
   deskSheet,
+  roundedMd,
   roundedXl,
   typeLabel,
   typeLabelStrong,
@@ -86,6 +90,7 @@ export function OrderMenu({
     });
   }, [anchor, phone]);
 
+  // 桌面：同来源菜单的圆角行 + 悬停淡底；手机操作条：整宽行 + 细分隔线
   const optionList = (
     <div role="menu" aria-label="播放顺序">
       {OPTIONS.map((option, index) => (
@@ -93,10 +98,16 @@ export function OrderMenu({
           key={option.order}
           type="button"
           role="menuitem"
-          className={`flex min-h-[44px] w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 text-left ${typeLabel} ${deskInk} ${deskFocusRing} ${index > 0 ? `border-t border-solid ${deskRule}` : ""}`}
+          className={
+            phone
+              ? `flex min-h-[44px] w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-4 text-left ${typeLabel} ${deskInk} ${deskFocusRing} ${index > 0 ? `border-t border-solid ${deskRule}` : ""}`
+              : `flex min-h-10 w-full cursor-pointer items-center gap-2.5 border-0 bg-transparent px-3 text-left ${roundedMd} ${typeLabel} ${deskInk} ${deskPressTone} ${deskFocusRing}`
+          }
           onClick={() => onSelect(option.order)}
         >
-          <DeskIcon name={option.icon} size={22} />
+          <span className={deskInk2}>
+            <DeskIcon name={option.icon} size={phone ? 22 : 18} />
+          </span>
           {option.label}
         </button>
       ))}
@@ -112,7 +123,7 @@ export function OrderMenu({
       {phone ? (
         <div
           ref={menuRef}
-          className={`absolute inset-x-0 bottom-0 overflow-hidden border-t border-solid ${deskRule} ${deskSheet} ${roundedXl}`}
+          className={`absolute inset-x-0 bottom-0 overflow-hidden border-t border-solid ${deskRule} ${deskSheet} ${roundedXl} animate-[imwSheetRise_220ms_var(--imw-ease)] motion-reduce:animate-none`}
           onClick={(event) => event.stopPropagation()}
         >
           <div
@@ -130,7 +141,7 @@ export function OrderMenu({
       ) : (
         <div
           ref={menuRef}
-          className={`absolute w-[200px] overflow-hidden border border-solid ${roundedXl} ${deskRule} ${deskSheet} shadow-none`}
+          className={`absolute w-[200px] overflow-hidden border border-solid p-1.5 ${roundedXl} ${deskRule} ${deskSheet} ${deskMenuShadow} animate-[imwMenuIn_160ms_var(--imw-ease)] motion-reduce:animate-none`}
           style={{ top: `${position.top}px`, right: `${position.right}px` }}
           onClick={(event) => event.stopPropagation()}
         >

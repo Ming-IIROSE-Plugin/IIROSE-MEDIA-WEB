@@ -1,6 +1,7 @@
 // 范围行（DESIGN.md `scope-tab` / `view-segmented` / `pager-button`）。
 // 左：范围标签（tablist，方向键在标签间移动，选中项压一条墨色下划线）；右：视图切换 + 等宽分页。
 // 手机标签区可横向滚动，视图切换与分页固定在右侧。
+import { ViewToggle } from "./ViewToggle";
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import {
   DeskIcon,
@@ -149,46 +150,11 @@ export function ScopeRow({
 
       <div className="flex shrink-0 items-center gap-1.5 pb-2 pl-3 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pl-0 max-[768px]:pt-2">
         {viewMode !== null && (
-          <div
-            role="radiogroup"
-            aria-label="视图"
-            title={
-              viewLocked
-                ? viewMode === "list"
-                  ? "这里只有列表视图"
-                  : "这里只有网格视图"
-                : undefined
-            }
-            className={`flex overflow-hidden border border-solid ${roundedMd} ${deskRule}`}
-          >
-            {(
-              [
-                ["list", "列表", "list"],
-                ["card", "网格", "grid"],
-              ] as const
-            ).map(([value, name, icon]) => {
-              const active = viewMode === value;
-              const lockedTitle =
-                viewMode === "list" ? "这里只有列表视图" : "这里只有网格视图";
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  aria-disabled={viewLocked || undefined}
-                  aria-label={name}
-                  title={viewLocked ? lockedTitle : name}
-                  className={`grid h-[30px] w-[34px] place-items-center border-0 bg-transparent p-0 max-[768px]:h-11 max-[768px]:w-11 ${deskFocusRing} ${viewLocked ? "cursor-not-allowed" : `cursor-pointer ${deskPress}`} ${active ? `${deskSheet} ${deskInk}` : deskInk3} ${viewLocked && !active ? "opacity-40" : ""}`}
-                  onClick={() => {
-                    if (!active && !viewLocked) onToggleView?.();
-                  }}
-                >
-                  <DeskIcon name={icon} size={17} />
-                </button>
-              );
-            })}
-          </div>
+          <ViewToggle
+            viewMode={viewMode}
+            locked={viewLocked}
+            onToggle={onToggleView}
+          />
         )}
 
         {showPager && (

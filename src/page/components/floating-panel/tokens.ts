@@ -135,6 +135,9 @@ export const deskRowHover =
  */
 export const deskSendHover =
   "hov:group-hover:bg-[#B42F3E] hov:group-hover:border-[#B42F3E] hov:group-hover:text-[#FFFFFF] imw-dark:hov:group-hover:bg-[#BA4F59] imw-dark:hov:group-hover:border-[#BA4F59]";
+/** 同上，但只在按钮自身悬停时变实心（不跟随所在行 / 头部的整体悬停）。 */
+export const deskSendHoverSelf =
+  "hov:hover:bg-[#B42F3E] hov:hover:border-[#B42F3E] hov:hover:text-[#FFFFFF] imw-dark:hov:hover:bg-[#BA4F59] imw-dark:hov:hover:border-[#BA4F59]";
 
 /** 搜索栏几乎不可见的抬升线（DESIGN.md Elevation & Depth，不承载信息）。 */
 export const deskSearchShadow = "shadow-[0_1px_0_#00000005]";
