@@ -397,11 +397,14 @@ export class FavoritesStorageService {
   public static async query(options?: {
     platform?: "all" | "netease" | "bilibili";
     type?: "all" | "song" | "album" | "playlist" | "video";
+    /** 合并范围（如「歌单与专辑」）；与 `type` 并用时取交集。 */
+    types?: FavoriteRecord["type"][];
     keyword?: string;
   }): Promise<FavoriteRecord[]> {
     await this.ensureOwnerScope();
     const platform = options?.platform || "all";
     const type = options?.type || "all";
+    const types = options?.types;
     const keyword = options?.keyword?.trim().toLowerCase();
     const owner = this.getCurrentOwnerUid();
 
@@ -413,6 +416,7 @@ export class FavoritesStorageService {
       if (rec.deletedAt) return false;
       if (platform !== "all" && rec.platform !== platform) return false;
       if (type !== "all" && rec.type !== type) return false;
+      if (types && !types.includes(rec.type)) return false;
       if (keyword) {
         const matchTitle = rec.title?.toLowerCase().includes(keyword);
         const matchAuthor = rec.author?.toLowerCase().includes(keyword);

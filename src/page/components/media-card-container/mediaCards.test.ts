@@ -709,9 +709,11 @@ describe("专辑 / 歌单行与内页头", () => {
 });
 
 describe("结果区状态机", () => {
-  it("音乐首屏（未搜索）显示引导文案", async () => {
+  it("音乐首屏（未搜索）显示空历史文案", async () => {
     await mount(results({ ...resultsBase, mediaData: null }));
-    expect(host.textContent).toContain("搜索歌名或歌手，点播到房间。");
+    expect(host.textContent).toContain(
+      "还没有点播记录。搜索歌名或歌手，点播到房间。",
+    );
   });
 
   it("收藏为空显示引导；有关键词时是「没有匹配的收藏」+「清除搜索」", async () => {
@@ -775,7 +777,12 @@ describe("结果区状态机", () => {
 
     render(null, host);
     await mount(
-      results({ ...resultsBase, viewMode: "card", mediaData: pending }),
+      results({
+        ...resultsBase,
+        keyword: "晴天",
+        viewMode: "card",
+        mediaData: pending,
+      }),
     );
     expect(
       host.querySelectorAll("[data-imw-skeleton-tile]").length,
@@ -809,7 +816,12 @@ describe("结果区状态机", () => {
     render(null, host);
     const oneSong = ready([song]);
     await mount(
-      results({ ...resultsBase, viewMode: "card", mediaData: oneSong }),
+      results({
+        ...resultsBase,
+        keyword: "晴天",
+        viewMode: "card",
+        mediaData: oneSong,
+      }),
       oneSong,
     );
     expect(host.querySelectorAll("[data-imw-tile]")).toHaveLength(1);
@@ -1003,6 +1015,105 @@ describe("结果区状态机", () => {
       }),
     );
     expect(host.querySelector(".IMW-SettingCard")).not.toBeNull();
+  });
+});
+
+describe("音乐首屏「最近点播」", () => {
+  it("固定曲目表：标题在表头之前、行照常渲染（忽略网格视图）", async () => {
+    const songs = ready([song]);
+    await mount(
+      results({ ...resultsBase, viewMode: "card", mediaData: songs }),
+      songs,
+    );
+    const heading = host.querySelector("h2")!;
+    expect(heading.textContent).toBe("最近点播");
+    expect(heading.getAttribute("class")).toContain(tokens.typeLabelStrong);
+
+    const header = host.querySelector("[data-imw-tracklist-header]")!;
+    expect(header).not.toBeNull();
+    expect(
+      heading.compareDocumentPosition(header) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(host.querySelectorAll("[data-imw-tracklist-row]")).toHaveLength(1);
+    expect(host.querySelectorAll("[data-imw-tile]")).toHaveLength(0);
+  });
+
+  it("首屏没有历史：只给新文案，不出现「最近点播」标题", async () => {
+    const empty = ready([]);
+    await mount(results({ ...resultsBase, mediaData: empty }), empty);
+    expect(host.textContent).toContain(
+      "还没有点播记录。搜索歌名或歌手，点播到房间。",
+    );
+    expect(host.querySelector("h2")).toBeNull();
+  });
+
+  it("有关键词即回到普通搜索：没有标题，视图跟着切换走", async () => {
+    const songs = ready([song]);
+    await mount(
+      results({
+        ...resultsBase,
+        keyword: "晴天",
+        viewMode: "card",
+        mediaData: songs,
+      }),
+      songs,
+    );
+    expect(host.textContent).not.toContain("最近点播");
+    expect(host.querySelectorAll("[data-imw-tile]")).toHaveLength(1);
+  });
+});
+
+describe("收藏模式取消收藏", () => {
+  it("取消收藏后行仍留在列表里（星标转空心），不即时摘行", async () => {
+    vi.spyOn(FavoritesStorageService, "init").mockResolvedValue(null);
+    vi.spyOn(FavoritesStorageService, "onExternalChange").mockReturnValue(
+      () => {},
+    );
+    vi.spyOn(FavoritesStorageService, "onChange").mockReturnValue(() => {});
+    const isFavorited = vi
+      .spyOn(FavoritesStorageService, "isFavorited")
+      .mockReturnValue(true);
+    const toggle = vi
+      .spyOn(FavoritesStorageService, "toggle")
+      .mockImplementation(async () => {
+        isFavorited.mockReturnValue(false);
+        return { isFavorited: false } as never;
+      });
+    const data = ready([song, secondSong]);
+    await mount(
+      results({ ...resultsBase, mode: MODE.favorites, mediaData: data }),
+      data,
+    );
+
+    const rows = () => host.querySelectorAll("[data-imw-tracklist-row]");
+    expect(rows()).toHaveLength(2);
+
+    const star = host.querySelector<HTMLButtonElement>(
+      '[aria-label="取消收藏"]',
+    )!;
+    await act(async () => {
+      star.click();
+    });
+
+    // 行数不变：只把星标翻成空心（重新加载列表前保留该行）
+    expect(toggle).toHaveBeenCalledOnce();
+    expect(rows()).toHaveLength(2);
+    expect(host.querySelectorAll('[aria-label="取消收藏"]')).toHaveLength(1);
+  });
+});
+
+describe("收藏的出处列", () => {
+  it("B 站收藏行显示 B站圆点 + 简称", async () => {
+    const favorite = { ...video, title: "收藏的视频" } as PlatformData;
+    const data = ready([favorite]);
+    await mount(
+      results({ ...resultsBase, mode: MODE.favorites, mediaData: data }),
+      data,
+    );
+    const row = host.querySelector("[data-imw-tracklist-row]")!;
+    expect(row.textContent).toContain("B站");
+    expect(row.innerHTML).toContain("bg-[#E1608C]");
   });
 });
 
@@ -1292,7 +1403,12 @@ describe("行 / 卡主体点击 → 手机操作条挂点", () => {
     ctx.onRowActivate.mockClear();
     const songs = ready([song]);
     await mount(
-      results({ ...resultsBase, viewMode: "card", mediaData: songs }),
+      results({
+        ...resultsBase,
+        keyword: "晴天",
+        viewMode: "card",
+        mediaData: songs,
+      }),
       songs,
     );
     const musicBody = host.querySelector<HTMLElement>(

@@ -4,7 +4,7 @@ import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { SettingCard } from "../SettingCard";
 import { MediaContainerContext } from "../media-container-context/MediaContainerContext";
 import { MODE } from "../desk/deskModes";
-import { deskGutter } from "../floating-panel/tokens";
+import { deskGutter, deskInk, typeLabelStrong } from "../floating-panel/tokens";
 import { CollectionRow } from "./CollectionRow";
 import { MusicTile } from "./MusicTile";
 import { SkeletonRows, SkeletonTiles } from "./Skeletons";
@@ -117,9 +117,17 @@ export function ResultsArea({
   const previousData = useRef<Promise<ResultsPayload> | null>(mediaData);
   const wasInnerPage = useRef(isInnerPage);
 
-  const shape = shapeOf({ mode, scopeIndex, viewMode, isInnerPage });
   const supported = roomSupportsRequest();
   const trimmedKeyword = keyword.trim();
+  /** 音乐首屏（单曲范围、关键词为空、非内页）：列出「最近点播」，固定曲目表。 */
+  const firstScreen =
+    mode === MODE.music && scopeIndex === 0 && !trimmedKeyword && !isInnerPage;
+  const shape = shapeOf({
+    mode,
+    scopeIndex,
+    viewMode: firstScreen ? "list" : viewMode,
+    isInnerPage,
+  });
 
   // Promise 状态机：只为最新的请求落地，旧请求的结果直接丢弃。
   useEffect(() => {
@@ -217,6 +225,8 @@ export function ResultsArea({
   const emptyState = (): { message: string; action?: string } => {
     // 内页没有关键词可换：空列表说明这张专辑/歌单本身没有曲目。
     if (isInnerPage) return { message: "这张列表没有曲目。" };
+    if (firstScreen)
+      return { message: "还没有点播记录。搜索歌名或歌手，点播到房间。" };
     if (shape === "favorites") {
       return trimmedKeyword
         ? { message: "没有匹配的收藏", action: "清除搜索" }
@@ -224,8 +234,6 @@ export function ResultsArea({
     }
     if (shape === "radio" && trimmedKeyword)
       return { message: "没有匹配的电台", action: "清除搜索" };
-    if (mode === MODE.music && scopeIndex === 0 && !trimmedKeyword)
-      return { message: "搜索歌名或歌手，点播到房间。" };
     return { message: "没有找到结果。换个关键词试试。" };
   };
 
@@ -354,6 +362,11 @@ export function ResultsArea({
 
     return (
       <div className={deskGutter}>
+        {firstScreen && items.length > 0 && (
+          <h2 className={`mb-1 mt-4 ${typeLabelStrong} ${deskInk}`}>
+            最近点播
+          </h2>
+        )}
         {shape !== "radio" && <TracklistHeader durationLabel={durationLabel} />}
         {renderRows(items)}
       </div>

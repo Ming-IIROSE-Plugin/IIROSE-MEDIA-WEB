@@ -47,6 +47,8 @@ export interface SearchBarProps {
   sourceIndex: number;
   onSelectSource: (index: number) => void;
   onSubmit: (keyword: string) => void;
+  /** 输入即通知（收藏 / 电台的即时过滤）；Enter / 按钮提交仍走 `onSubmit`。 */
+  onLiveInput?: (keyword: string) => void;
 }
 
 interface SearchBarState {
@@ -64,6 +66,8 @@ const TEXT_ENTRY = /^(INPUT|TEXTAREA|SELECT)$/;
 
 export class SearchBar extends Component<SearchBarProps, SearchBarState> {
   private inputRef = createRef<HTMLInputElement>();
+  /** 输入法组字中：拼音逐字不触发过滤，组字结束再通知一次最终值。 */
+  private composing = false;
 
   constructor(props: SearchBarProps) {
     super(props);
@@ -77,10 +81,12 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
 
   componentDidMount() {
     document.addEventListener("keydown", this.handleShortcut);
+    this.bindComposition();
   }
 
   componentWillUnmount() {
     document.removeEventListener("keydown", this.handleShortcut);
+    this.unbindComposition();
   }
 
   componentDidUpdate(prevProps: SearchBarProps) {
@@ -103,6 +109,33 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
       return;
     event.preventDefault();
     this.focus();
+  };
+
+  /**
+   * 输入法组字用原生监听挂到输入框上：Preact 的 `onCompositionStart` 依赖
+   * `oncompositionstart` 是 DOM 属性，缺它的环境（jsdom）会挂错事件名。
+   */
+  private bindComposition() {
+    const node = this.inputRef.current;
+    if (!node) return;
+    node.addEventListener("compositionstart", this.handleCompositionStart);
+    node.addEventListener("compositionend", this.handleCompositionEnd);
+  }
+
+  private unbindComposition() {
+    const node = this.inputRef.current;
+    if (!node) return;
+    node.removeEventListener("compositionstart", this.handleCompositionStart);
+    node.removeEventListener("compositionend", this.handleCompositionEnd);
+  }
+
+  private handleCompositionStart = () => {
+    this.composing = true;
+  };
+
+  private handleCompositionEnd = (event: CompositionEvent) => {
+    this.composing = false;
+    this.props.onLiveInput?.((event.currentTarget as HTMLInputElement).value);
   };
 
   private submit() {
@@ -186,9 +219,14 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
           className={`min-w-0 flex-1 border-0 bg-transparent px-2.5 py-0 outline-none ${typeSearchQuery} ${deskInk} ${deskCaret} ${deskPlaceholder}`}
           placeholder={this.placeholder()}
           value={this.state.value}
-          onInput={(event) =>
-            this.setState({ value: event.currentTarget.value })
-          }
+          onInput={(event) => {
+            const value = event.currentTarget.value;
+            this.setState({ value });
+            // 组字中的拼音不是最终过滤词：否则每个字母都会把列表收窄到空
+            if (this.composing || (event as unknown as InputEvent).isComposing)
+              return;
+            this.props.onLiveInput?.(value);
+          }}
           onPaste={this.handlePaste}
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;

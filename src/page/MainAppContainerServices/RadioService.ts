@@ -14,18 +14,23 @@ export class RadioService {
     const {
       allMediaData,
       currentPage,
-      totalPage,
       updating,
       requestToken,
       isCurrentInMultiPage,
+      searchKeyword,
     } = ctx.getState();
-    const maxPage = Math.ceil(allMediaData.length / itemsPerPage);
+    // 输入即过滤：只裁本地列表里的台名，不发网络请求（电台只有一页）
+    const keyword = searchKeyword.trim().toLowerCase();
+    const matches = (item: PlatformData) =>
+      !keyword || (item.title ?? "").toLowerCase().includes(keyword);
+    const filtered = allMediaData.filter(matches);
+    const maxPage = Math.ceil(filtered.length / itemsPerPage);
 
-    // 1. 逻辑 A: 处理本地分页缓存
-    if (currentPage <= maxPage) {
+    // 1. 逻辑 A: 处理本地分页缓存（已加载过列表就只切片：过滤为空也不联网）
+    if (allMediaData.length > 0 || currentPage <= maxPage) {
       const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, allMediaData.length);
-      const currentPageData = allMediaData.slice(startIndex, endIndex);
+      const endIndex = Math.min(startIndex + itemsPerPage, filtered.length);
+      const currentPageData = filtered.slice(startIndex, endIndex);
 
       // 如果在多级页面，点播逻辑通常会变为 MOD (播放单曲)
       const onDemand = isCurrentInMultiPage
@@ -35,17 +40,32 @@ export class RadioService {
       ctx.setState({
         mediaData: Promise.resolve({
           platformData: currentPageData,
-          totalPage,
+          totalPage: 1,
         }),
         currentOnDemandPlay: onDemand,
       });
     }
-    // 2. 逻辑 B: 处理异步网络请求
+    // 2. 逻辑 B: 处理异步网络请求（返回前同样按关键词过一遍）
     else if (!updating) {
       const currentRequestToken = requestToken + 1;
       ctx.setState({ updating: true, requestToken: currentRequestToken });
 
-      const dataPromise = searchFn(area);
+      // 过滤按「落地时的当前关键词」求值：请求在途时改词，落地的也得是收窄后的列表
+      const dataPromise = searchFn(area).then((res) => {
+        const currentKeyword = ctx
+          .getState()
+          .searchKeyword.trim()
+          .toLowerCase();
+        return {
+          ...res,
+          platformData: (res.platformData as PlatformData[]).filter(
+            (item) =>
+              !currentKeyword ||
+              (item.title ?? "").toLowerCase().includes(currentKeyword),
+          ),
+          totalPage: 1,
+        };
+      });
       const onDemand = getOnDemandPlay(RadioPlatform);
 
       ctx.setState({

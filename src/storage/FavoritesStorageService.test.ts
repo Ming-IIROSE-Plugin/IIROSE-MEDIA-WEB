@@ -214,6 +214,54 @@ describe("收藏读写与账号隔离", () => {
   });
 });
 
+describe("收藏查询", () => {
+  it("types 合并范围（歌单与专辑）与 type / platform / 关键词一起取交集", async () => {
+    const svc = await freshService();
+    await svc.init();
+    await svc.add(song("6001", "某单曲"));
+    await svc.add({
+      title: "某专辑",
+      coverImg: "",
+      author: "作者",
+      websiteUrl: "https://music.163.com/#/album?id=9",
+      neteaseMusic: { id: 9, fee: 0, isAlbum: true },
+    } as any);
+    await svc.add({
+      title: "某歌单",
+      coverImg: "",
+      author: "作者",
+      websiteUrl: "https://music.163.com/#/playlist?id=8",
+      neteaseMusic: { id: 8, fee: 0, isSongList: true },
+    } as any);
+
+    const collection = await svc.query({ types: ["album", "playlist"] });
+    expect(collection.map((r) => r.type).sort()).toEqual(["album", "playlist"]);
+
+    // 与 type 并用取交集：视频类型下没有专辑/歌单
+    expect(
+      await svc.query({ type: "video", types: ["album", "playlist"] }),
+    ).toEqual([]);
+    // 与关键词取交集
+    expect(
+      (await svc.query({ types: ["album", "playlist"], keyword: "专辑" })).map(
+        (r) => r.title,
+      ),
+    ).toEqual(["某专辑"]);
+
+    // 墓碑不进合并范围
+    await svc.remove({
+      title: "某专辑",
+      coverImg: "",
+      author: "作者",
+      websiteUrl: "https://music.163.com/#/album?id=9",
+      neteaseMusic: { id: 9, fee: 0, isAlbum: true },
+    } as any);
+    expect(
+      (await svc.query({ types: ["album", "playlist"] })).map((r) => r.type),
+    ).toEqual(["playlist"]);
+  });
+});
+
 describe("墓碑语义", () => {
   it("删除写墓碑：不进列表、isFavorited 为假，但记录仍在库里", async () => {
     const svc = await freshService();

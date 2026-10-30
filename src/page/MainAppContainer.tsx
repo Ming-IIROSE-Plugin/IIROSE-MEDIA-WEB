@@ -24,7 +24,12 @@ import { SettingsService } from "./MainAppContainerServices/SettingsService";
 import { NetEaseService } from "./MainAppContainerServices/NetEaseService";
 import { MediaContainerGesture } from "./MainAppContainerServices/MediaContainerGesture";
 import { RadioService } from "./MainAppContainerServices/RadioService";
-import { FavoritesService } from "./MainAppContainerServices/FavoritesService";
+import {
+  FavoritesService,
+  type FavoritePlatformFilter,
+  type FavoriteRange,
+} from "./MainAppContainerServices/FavoritesService";
+import { RecentService } from "./MainAppContainerServices/RecentService";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { SyncManager } from "../sync/SyncManager";
 import { PageHeader } from "./components/desk/PageHeader";
@@ -367,6 +372,11 @@ export class MainAppContainer extends Component<
                 sourceIndex={PlatformIndex}
                 onSelectSource={this.controller.selectSource}
                 onSubmit={this.controller.submitSearch}
+                onLiveInput={
+                  mode === MODE.favorites || mode === MODE.radio
+                    ? this.controller.filterLive
+                    : undefined
+                }
               />
             )}
 
@@ -455,7 +465,8 @@ export class MainAppContainer extends Component<
 
   /**
    * 视图切换只在「该范围有两种视图」时出现：
-   * 音乐的单曲范围可切列表/网格；专辑、歌单只有列表，MV 只有网格；
+   * 音乐的单曲范围可切列表/网格（首屏「最近点播」固定曲目表）；
+   * 专辑、歌单只有列表，MV 只有网格；
    * 视频的推荐/视频/直播两种视图都在（收藏只有列表，多源剧集只有列表）。
    */
   private viewToggleMode(): "card" | "list" | null {
@@ -466,6 +477,8 @@ export class MainAppContainer extends Component<
     }
     if (this.state.mode !== MODE.music || this.state.SubNavBarIndex !== 0)
       return null;
+    // 首屏（关键词为空）固定曲目表，不出现视图切换
+    if (!this.state.searchKeyword.trim()) return null;
     return this.state.searchViewMode;
   }
 
@@ -480,6 +493,41 @@ export class MainAppContainer extends Component<
     return (
       categories.platform[this.state.PlatformIndex] ?? categories.platform[0]
     );
+  }
+
+  /**
+   * 收藏的一个来源：三个来源共用同一组四个范围，只是平台过滤不同。
+   * 「歌单与专辑」是合并范围（存储层按 `types` 一次查出两类）。
+   */
+  private favoriteSource(
+    platform: FavoritePlatformFilter,
+    title: string,
+    shortTitle: string,
+    sourceKey?: "netease" | "bilibili",
+  ): Platform {
+    const ranges: { title: string; type: FavoriteRange }[] = [
+      { title: "全部", type: "all" },
+      { title: "单曲", type: "song" },
+      { title: "歌单与专辑", type: "collection" },
+      { title: "视频", type: "video" },
+    ];
+    return {
+      title,
+      shortTitle,
+      ...(sourceKey ? { sourceKey } : {}),
+      subNavBarItems: ranges.map((range) => ({
+        title: range.title,
+        class: "search",
+        searchAction: () => {
+          FavoritesService.loadFavorites(
+            this.getActionContext(),
+            platform,
+            range.type,
+            this.itemsPerPage,
+          );
+        },
+      })),
+    };
   }
 
   /** 当前模式空现场的默认值：第一个来源的第一个范围。 */
@@ -513,7 +561,8 @@ export class MainAppContainer extends Component<
 
   /**
    * 切模式：快照现场 → 恢复目标现场（无历史用默认）→ 首次进入时执行首个范围。
-   * 设置页的数据是本地读取、且同步状态订阅随离开释放，所以每次回到设置页都重跑一次。
+   * 设置页的数据是本地读取、且同步状态订阅随离开释放，所以每次回到设置页都重跑一次；
+   * 收藏与音乐首屏同理：收藏要重新出现已取消收藏的行，首屏要反映最新的点播历史。
    */
   private applyMode(next: number) {
     const previous = this.state.mode;
@@ -543,7 +592,14 @@ export class MainAppContainer extends Component<
       () => {
         // 待提交的关键词走完整提交：浏览型范围（视频「推荐」）会先落到可搜索的范围
         if (pending) this.controller.runSearch(pending, { propagate: false });
-        else if (!snapshot || next === MODE.settings) this.runCurrentScope();
+        else if (
+          !snapshot ||
+          next === MODE.settings ||
+          // 收藏：取消收藏的行要重新出现；音乐首屏：反映最新的点播历史
+          next === MODE.favorites ||
+          (next === MODE.music && restored.searchKeyword.trim() === "")
+        )
+          this.runCurrentScope();
       },
     );
   }
@@ -626,8 +682,11 @@ export class MainAppContainer extends Component<
           SubNavBarIndex: scope,
           searchKeyword: keyword,
           currentPage: 1,
-          totalPage: 0,
-          allMediaData: [],
+          // 电台是本地过滤：保留已加载的列表（与总页数），RadioService 按新关键词
+          // 切片，不再出网
+          totalPage: this.state.mode === MODE.radio ? this.state.totalPage : 0,
+          allMediaData:
+            this.state.mode === MODE.radio ? this.state.allMediaData : [],
           mediaData: null,
           isCurrentInMultiPage: false,
           oldItems: null,
@@ -640,6 +699,19 @@ export class MainAppContainer extends Component<
           if (options?.propagate !== false)
             this.props.changeSearchKeyword(keyword);
         },
+      );
+    },
+
+    /**
+     * 输入即过滤（收藏 / 电台）：只改关键词与页码，不清已渲染结果、不发网络请求。
+     * 与 `runSearch` 分开：后者会清 `mediaData`，逐字提交会每键闪一次骨架。
+     * 关键词保留原始输入（trim 交给 FavoritesService / RadioService）：受控回写不会
+     * 吞掉刚敲的空格，也不会把光标移到末尾。
+     */
+    filterLive: (text: string) => {
+      if (text === this.state.searchKeyword) return;
+      this.setState({ searchKeyword: text, currentPage: 1 }, () =>
+        this.runCurrentScope(),
       );
     },
 
@@ -844,10 +916,13 @@ export class MainAppContainer extends Component<
               title: "单曲",
               class: "search",
               searchAction: () => {
-                NetEaseService.searchMusic(
-                  this.getActionContext(),
-                  this.itemsPerPage,
-                );
+                const ctx = this.getActionContext();
+                // 首屏（关键词为空）列出「最近点播」，不发网络请求
+                if (!ctx.getState().searchKeyword.trim()) {
+                  RecentService.load(ctx, this.itemsPerPage);
+                  return;
+                }
+                NetEaseService.searchMusic(ctx, this.itemsPerPage);
               },
             },
             {
@@ -991,75 +1066,12 @@ export class MainAppContainer extends Component<
         },
       ],
     },
-    // 3 收藏：单来源「全部」，范围为类型（来源筛选与即时过滤在 story 6）
+    // 3 收藏：三来源（全部 / 网易云 / B站）× 四范围（含「歌单与专辑」合并范围）
     {
       platform: [
-        {
-          title: "全部",
-          shortTitle: "全部",
-          subNavBarItems: [
-            {
-              title: "全部",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "all",
-                  "all",
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "单曲",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "all",
-                  "song",
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "专辑",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "all",
-                  "album",
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "歌单",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "all",
-                  "playlist",
-                  this.itemsPerPage,
-                );
-              },
-            },
-            {
-              title: "视频",
-              class: "search",
-              searchAction: () => {
-                FavoritesService.loadFavorites(
-                  this.getActionContext(),
-                  "all",
-                  "video",
-                  this.itemsPerPage,
-                );
-              },
-            },
-          ],
-        },
+        this.favoriteSource("all", "全部", "全部"),
+        this.favoriteSource("netease", "网易云音乐", "网易云", "netease"),
+        this.favoriteSource("bilibili", "哔哩哔哩", "B站", "bilibili"),
       ],
     },
     // 4 设置：搜索栏隐藏，所以把现有四组设置的全部子分组摊平成范围标签

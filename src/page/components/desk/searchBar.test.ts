@@ -97,6 +97,49 @@ describe("搜索栏", () => {
     expect(onSubmit).toHaveBeenCalledTimes(2);
   });
 
+  it("输入即通知 onLiveInput（不提交）；不传时行为不变", () => {
+    const onLiveInput = vi.fn();
+    const { onSubmit } = draw({ onLiveInput });
+    act(() => {
+      input().value = "周杰伦";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onLiveInput).toHaveBeenLastCalledWith("周杰伦");
+    // 逐字过滤不等于提交：Enter / 按钮才是提交路径
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    render(null, host);
+    draw();
+    act(() => {
+      input().value = "x";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(kbd().textContent).toBe("Enter");
+  });
+
+  it("输入法组字期间不通知 onLiveInput，组字结束再通知最终值", () => {
+    const onLiveInput = vi.fn();
+    draw({ onLiveInput });
+
+    act(() => {
+      input().dispatchEvent(
+        new CompositionEvent("compositionstart", { bubbles: true }),
+      );
+      input().value = "zhou";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(onLiveInput).not.toHaveBeenCalled();
+    expect(kbd().textContent).toBe("Enter");
+
+    act(() => {
+      input().value = "周杰伦";
+      input().dispatchEvent(
+        new CompositionEvent("compositionend", { bubbles: true }),
+      );
+    });
+    expect(onLiveInput).toHaveBeenLastCalledWith("周杰伦");
+  });
+
   it("粘贴 BV 号 / 哔哩哔哩链接自动识别并提交", () => {
     const { onSubmit } = draw();
     const paste = (text: string) => {

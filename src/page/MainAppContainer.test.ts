@@ -21,6 +21,7 @@ const favorites = vi.hoisted(() => ({
   loadFavorites: vi.fn(),
   reloadLastQuery: vi.fn(),
 }));
+const recent = vi.hoisted(() => ({ load: vi.fn() }));
 const settings = vi.hoisted(() => ({
   showBilibiliAccount: vi.fn(),
   showBilibiliVideo: vi.fn(),
@@ -66,6 +67,9 @@ vi.mock("./MainAppContainerServices/RadioService", () => ({
 }));
 vi.mock("./MainAppContainerServices/FavoritesService", () => ({
   FavoritesService: favorites,
+}));
+vi.mock("./MainAppContainerServices/RecentService", () => ({
+  RecentService: recent,
 }));
 vi.mock("./MainAppContainerServices/SettingsService", () => ({
   SettingsService: settings,
@@ -165,7 +169,12 @@ import { ShowMessage } from "../iirose_func/ShowMessage";
 interface Harness {
   state: MainAppContainerState;
   controller: {
-    runSearch: (keyword: string, options?: { propagate?: boolean }) => void;
+    runSearch: (
+      keyword: string,
+      options?: { propagate?: boolean; reloadEmpty?: boolean },
+    ) => void;
+    /** 收藏 / 电台的输入即过滤（不发网络请求）。 */
+    filterLive: (keyword: string) => void;
     selectScope: (index: number) => void;
     selectSource: (index: number) => void;
     submitSearch: (text: string) => void;
@@ -216,9 +225,16 @@ afterEach(() => {
 });
 
 describe("六种模式的现场", () => {
-  it("音乐模式首次进入即执行第一个范围（单曲）", async () => {
+  it("音乐模式首次进入即执行单曲范围：关键词为空时走「最近点播」", async () => {
     const { ref } = await mount(MODE.music);
     expect(ref.current!.state.mode).toBe(MODE.music);
+    expect(recent.load).toHaveBeenCalled();
+    expect(netease.searchMusic).not.toHaveBeenCalled();
+
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      controller.runSearch("陈绮贞");
+    });
     expect(netease.searchMusic).toHaveBeenCalled();
   });
 
@@ -318,10 +334,95 @@ describe("六种模式的现场", () => {
     expect(allvideos.searchAllVideos).toHaveBeenCalled();
   });
 
-  it("收藏模式是单来源「全部」，加载本地收藏", async () => {
-    await mount(MODE.favorites);
+  it("收藏是三来源 × 四范围：来源落平台过滤，「歌单与专辑」是合并范围", async () => {
+    const { ref } = await mount(MODE.favorites);
     expect(favorites.loadFavorites).toHaveBeenCalled();
     expect(favorites.loadFavorites.mock.calls[0][1]).toBe("all");
+    expect(favorites.loadFavorites.mock.calls[0][2]).toBe("all");
+
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      controller.selectSource(2); // B 站
+    });
+    expect(favorites.loadFavorites).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "bilibili",
+      "all",
+      10,
+    );
+
+    await act(async () => {
+      controller.selectScope(2); // 歌单与专辑
+    });
+    expect(favorites.loadFavorites).toHaveBeenLastCalledWith(
+      expect.anything(),
+      "bilibili",
+      "collection",
+      10,
+    );
+  });
+
+  it("收藏 / 电台输入即过滤：只改关键词与页码、重跑当前范围（不带网络请求）", async () => {
+    const { ref } = await mount(MODE.favorites);
+    const controller = (ref.current as unknown as Harness).controller;
+    const before = favorites.loadFavorites.mock.calls.length;
+
+    await act(async () => {
+      controller.filterLive("周杰伦");
+    });
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.searchKeyword).toBe("周杰伦");
+    expect(state.currentPage).toBe(1);
+    expect(favorites.loadFavorites).toHaveBeenCalledTimes(before + 1);
+    expect(
+      favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword,
+    ).toBe("周杰伦");
+    // 只在本地收藏里过滤：网易云 / B 站搜索接口一次都没碰
+    expect(netease.searchMusic).not.toHaveBeenCalled();
+    expect(bilibili.snbclickSearchVideo).not.toHaveBeenCalled();
+  });
+
+  it("电台输入即过滤：重跑电台范围（过滤同一份本地列表）", async () => {
+    const { ref } = await mount(MODE.radio);
+    const controller = (ref.current as unknown as Harness).controller;
+    expect(radio.search).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      controller.filterLive("vocaloid");
+    });
+    expect(radio.search).toHaveBeenCalledTimes(2);
+    expect(radio.search).toHaveBeenLastCalledWith(
+      expect.anything(),
+      10,
+      "japan",
+    );
+    expect((ref.current as unknown as Harness).state.searchKeyword).toBe(
+      "vocaloid",
+    );
+  });
+
+  it("进入收藏模式与关键词为空的音乐首屏都重跑当前范围", async () => {
+    const { ref } = await mount(MODE.favorites);
+    const favoriteCalls = favorites.loadFavorites.mock.calls.length;
+
+    await act(async () => {
+      render(h(Container, { ...props(MODE.music), ref } as object), root);
+    });
+    await act(async () => {
+      render(h(Container, { ...props(MODE.favorites), ref } as object), root);
+    });
+    // 有快照也要重跑：取消收藏的行重新出现在列表里
+    expect(favorites.loadFavorites.mock.calls.length).toBe(favoriteCalls + 1);
+
+    const musicCalls = recent.load.mock.calls.length;
+    await act(async () => {
+      render(h(Container, { ...props(MODE.video), ref } as object), root);
+    });
+    await act(async () => {
+      render(h(Container, { ...props(MODE.music), ref } as object), root);
+    });
+    // 回到首屏按最新的点播历史重取
+    expect(recent.load.mock.calls.length).toBe(musicCalls + 1);
   });
 
   it("电台模式复用无线电广播平台", async () => {
@@ -378,19 +479,22 @@ describe("六种模式的现场", () => {
     expect(root.querySelector('[role="radiogroup"]')).toBeNull();
   });
 
-  it("视图切换：视频显示，音乐的 MV 范围不显示", async () => {
-    const { ref } = await mount(MODE.video);
+  it("视图切换：视频显示，音乐首屏与 MV 范围不显示", async () => {
+    await mount(MODE.video);
     expect(root.querySelector('[role="radiogroup"]')).not.toBeNull();
 
-    const controller = (ref.current as unknown as Harness).controller;
     render(null, root);
     const music = await mount(MODE.music);
+    // 音乐首屏（关键词为空）固定曲目表，没有两种视图可切
+    expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+    await act(async () => {
+      (music.ref.current as unknown as Harness).controller.runSearch("陈绮贞");
+    });
     expect(root.querySelector('[role="radiogroup"]')).not.toBeNull();
     await act(async () => {
       (music.ref.current as unknown as Harness).controller.selectScope(3); // MV
     });
     expect(root.querySelector('[role="radiogroup"]')).toBeNull();
-    void controller;
   });
 
   it("底部条挂载点随容器渲染：没有会话时整块空渲染，不影响其余布局", async () => {
@@ -400,6 +504,77 @@ describe("六种模式的现场", () => {
     expect(root.querySelector("#imw-desk-room-deck")).toBeNull();
     // 结果区与页头照常
     expect(root.querySelector("h1")).not.toBeNull();
+  });
+});
+
+describe("搜索框到即时过滤的接线", () => {
+  /** 向容器里真实的 SearchBar 派发输入事件（与用户逐字输入同一条路径）。 */
+  const typeInSearchBar = async (text: string) => {
+    const input = root.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    return input;
+  };
+
+  it("收藏模式逐字输入：经容器接到 filterLive，按原始关键词与页码 1 重跑", async () => {
+    const { ref } = await mount(MODE.favorites);
+    const before = favorites.loadFavorites.mock.calls.length;
+
+    // 带前导空格的原始输入：不能被 trim 回写（否则空格被吞、光标跳到末尾）
+    const input = await typeInSearchBar(" 周杰伦");
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.searchKeyword).toBe(" 周杰伦");
+    expect(state.currentPage).toBe(1);
+    expect(favorites.loadFavorites).toHaveBeenCalledTimes(before + 1);
+    expect(
+      favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword,
+    ).toBe(" 周杰伦");
+    expect(input.value).toBe(" 周杰伦");
+  });
+
+  it("电台模式逐字输入：重跑电台范围（本地过滤同一份列表）", async () => {
+    await mount(MODE.radio);
+    expect(radio.search).toHaveBeenCalledTimes(1);
+
+    await typeInSearchBar("vocaloid");
+    expect(radio.search).toHaveBeenCalledTimes(2);
+    expect(radio.search).toHaveBeenLastCalledWith(
+      expect.anything(),
+      10,
+      "japan",
+    );
+  });
+
+  it("音乐模式打字不触发网易云搜索（只有 Enter 才提交）", async () => {
+    await mount(MODE.music);
+    netease.searchMusic.mockClear();
+
+    await typeInSearchBar("陈绮贞");
+    expect(netease.searchMusic).not.toHaveBeenCalled();
+  });
+
+  it("电台模式提交 / 清除搜索不清空已加载的本地列表（不会落回网络分支）", async () => {
+    const { ref } = await mount(MODE.radio);
+    const controller = (ref.current as unknown as Harness).controller;
+    const cached = [
+      { title: "Listen.moe" },
+      { title: "Vocaloid Radio" },
+    ] as unknown as PlatformData[];
+    await act(async () => {
+      ref.current!.setState({ allMediaData: cached });
+    });
+
+    await act(async () => {
+      controller.runSearch("vocaloid");
+    });
+    expect((ref.current as unknown as Harness).state.allMediaData).toBe(cached);
+
+    await act(async () => {
+      controller.runSearch("", { reloadEmpty: true });
+    });
+    expect((ref.current as unknown as Harness).state.allMediaData).toBe(cached);
   });
 });
 

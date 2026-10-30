@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Socket } from "../iirose_func/Socket";
 import { act } from "preact/test-utils";
 import { IMCInit } from "./index";
+import { RequestHistory } from "../history/RequestHistory";
 import {
   FavoritesStorageService,
   type FavoriteRecord,
@@ -84,6 +85,41 @@ describe("播放报文观察接线", () => {
       new PageTransitionEvent("pagehide", { persisted: false }),
     );
     expect(Socket.observe).toBeUndefined();
+  });
+
+  it("发送 &1 后写入本地点播历史；卡片报文不写；卸载后不再写", () => {
+    localStorage.clear();
+    IMCInit.init(document.getElementById("mainContainer") as HTMLDivElement);
+
+    new Socket().send(payload);
+    expect(RequestHistory.load()).toHaveLength(1);
+    expect(RequestHistory.load()[0]).toMatchObject({
+      title: "甲",
+      artist: "歌手",
+      link: "https://music.163.com/#/song?id=1",
+    });
+
+    // 卡片报文（宿站自己的 `m__4@0>…` 卡片）不进历史
+    new Socket().send(
+      JSON.stringify({
+        m: "m__4@0>甲>歌手>https://a/c.jpg>000000>320",
+        mc: "000000",
+        i: "1",
+      }),
+    );
+    expect(RequestHistory.load()).toHaveLength(1);
+
+    // 卸载后观察钩子被摘除：不再写入
+    window.dispatchEvent(
+      new PageTransitionEvent("pagehide", { persisted: false }),
+    );
+    expect(Socket.observe).toBeUndefined();
+    new Socket().send(
+      payload
+        .replace('"n":"甲"', '"n":"乙"')
+        .replace("#/song?id=1", "#/song?id=2"),
+    );
+    expect(RequestHistory.load().map((entry) => entry.title)).toEqual(["甲"]);
   });
 });
 
