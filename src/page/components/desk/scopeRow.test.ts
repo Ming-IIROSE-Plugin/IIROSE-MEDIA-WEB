@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act } from "preact/test-utils";
 import { h, render } from "preact";
 import { ScopeRow } from "./ScopeRow";
 
@@ -32,15 +33,33 @@ const draw = (props: Partial<Parameters<typeof ScopeRow>[0]> = {}) =>
 
 describe("范围行", () => {
   it("范围标签是 tablist，选中项 aria-selected + 墨色下划线", () => {
-    draw();
+    act(() => {
+      draw();
+    });
     const list = host.querySelector('[role="tablist"]')!;
     expect(list.getAttribute("aria-label")).toBe("范围");
     expect(tabText()).toEqual(["单曲", "专辑", "歌单"]);
     expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
     expect(tabs()[1].getAttribute("aria-selected")).toBe("false");
-    // 下划线只在选中项
-    expect(tabs()[0].querySelector("span")).not.toBeNull();
-    expect(tabs()[1].querySelector("span")).toBeNull();
+    // 一条共享下划线（不挂在标签里），切换时滑到选中项
+    const bars = list.querySelectorAll(':scope > span[aria-hidden="true"]');
+    expect(bars).toHaveLength(1);
+    expect(tabs()[0].querySelector("span")).toBeNull();
+    // 第一次定位不滑
+    expect(bars[0].getAttribute("class")).toContain("transition-none");
+  });
+
+  it("切换范围后下划线带过渡滑过去", () => {
+    act(() => {
+      draw();
+    });
+    act(() => {
+      draw({ activeIndex: 1 });
+    });
+    const bar = host.querySelector(
+      '[role="tablist"] > span[aria-hidden="true"]',
+    )!;
+    expect(bar.getAttribute("class")).toContain("transition-[translate,width]");
   });
 
   it("单击切换范围", () => {

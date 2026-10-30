@@ -29,6 +29,7 @@ import {
   typeMonoPill,
   typeVideoMeta,
   typeVideoTitle,
+  deskPress,
 } from "../floating-panel/tokens";
 import { DeskIcon } from "../floating-panel/tokens";
 
@@ -138,7 +139,7 @@ export function VideoTile({
           <button
             type="button"
             aria-busy={status === "pending"}
-            className={`flex h-[38px] items-center justify-center gap-1.5 rounded-full border-0 px-5 transition-transform duration-150! ease-out active:scale-95 max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"} ${status === "pending" ? "cursor-wait" : ""} ${status === "failed" ? "animate-[imwShake_360ms_ease-in-out]" : ""}`}
+            className={`flex h-[38px] items-center justify-center gap-1.5 rounded-full border-0 px-5 ${deskPress} max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"} ${status === "pending" ? "cursor-wait" : ""} ${status === "failed" ? "animate-[imwShake_360ms_ease-in-out]" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
               if (status === "pending") return;

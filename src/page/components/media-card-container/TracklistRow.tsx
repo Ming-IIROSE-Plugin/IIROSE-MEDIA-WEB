@@ -33,6 +33,7 @@ import {
   typeRowMeta,
   typeRowMetaSource,
   typeRowTitle,
+  deskPress,
 } from "../floating-panel/tokens";
 
 /** 桌面七列 / 手机四列；表头与所有行共用，列宽不会漂移。 */
@@ -127,7 +128,7 @@ export function RequestButton({
       aria-disabled={!supported || status === "pending"}
       aria-busy={status === "pending"}
       title={supported ? "点播到房间" : "这个房间不支持点播"}
-      className={`relative flex w-full cursor-pointer items-center justify-center gap-1.5 border border-solid bg-transparent p-0 ${roundedRequestButton} ${deskRule} ${deskInk2} ${deskFocusRing} ${typeButtonSm} after:absolute after:-inset-[2px] after:content-[''] h-8 transition-[background-color,border-color,color,transform] duration-150! ease-out active:scale-95 max-[768px]:h-10 max-[768px]:w-10 max-[768px]:justify-self-center ${supported ? (status === "idle" ? deskSendHover : "") : "opacity-40"} ${requestStateLook[status]}`}
+      className={`relative flex w-full cursor-pointer items-center justify-center gap-1.5 border border-solid bg-transparent p-0 ${roundedRequestButton} ${deskRule} ${deskInk2} ${deskFocusRing} ${typeButtonSm} after:absolute after:-inset-[2px] after:content-[''] h-8 ${deskPress} max-[768px]:h-10 max-[768px]:w-10 max-[768px]:justify-self-center ${supported ? (status === "idle" ? deskSendHover : "") : "opacity-40"} ${requestStateLook[status]}`}
       onClick={(event) => {
         event.stopPropagation();
         if (!supported) {

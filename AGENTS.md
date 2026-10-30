@@ -25,7 +25,7 @@
 - 结果区组件键（`src/page/components/media-card-container/`）：曲目表 `TracklistRow` / `TracklistHeader`（桌面七列、手机四列）· 音乐网格 `MusicTile` · 视频卡 `VideoTile`（时长胶囊 / 直播徽章）· 专辑歌单行 `CollectionRow` · 内页头 `CollectionHeader` + 顺序菜单 `OrderMenu` · 收藏星 `FavoriteStar` · 状态 `StateMessage` / `Skeletons` · 容器 `ResultsArea`（Promise 状态机 + 形态派生），共用 `Cover`（https 升级 + onerror 回退）与纯函数 `mediaFormat.ts`。新增结果形态改这些文件，不要回到 `MediaCard`（已删除）。
 - 专辑/歌单的「全部播放」走 `NetEasePlatform.playCollectionAll`（内页头 → 插件自有 `OrderMenu`），**不经宿站 `buildSelect2`**，因而不需要跨弹窗 `setTimeout(300)`。
 - 主面板配色跟随宿站主题：`.IIROSE_MEDIA_CONTAINER` 打开时写 `data-imw-theme="light|dark"`，深色样式用 Tailwind 自定义变体 `imw-dark:`（注册在 `src/app.css`）；点歌台是「纸/墨/蔷薇红」——`paper` 主区、`rail` 竖栏、`sheet` 抬起面，蔷薇红只表示「点播」与「房间正在放」，平台品牌色只做 7px 来源圆点，从不整片铺底。
-- `src/app.css` 只放 Tailwind 无法表达的东西：@keyframes、mdi 图标 `::before` content（反斜杠不能进 class 名）、JS 切换的状态类（`ShowIIROSE_MEDIA_CONTAINER`）、宿站元素选择器、通配过渡；其余样式一律写进组件的 Tailwind 类，**不要新增 SCSS**。
+- `src/app.css` 只放 Tailwind 无法表达的东西：@keyframes、mdi 图标 `::before` content（反斜杠不能进 class 名）、JS 切换的状态类（`ShowIIROSE_MEDIA_CONTAINER`）、宿站元素选择器、动效基线（base 层默认过渡与 `--imw-fast/base/slow` 档位；按下反馈用 `floating-panel` 的 `deskPress`）；其余样式一律写进组件的 Tailwind 类，**不要新增 SCSS**。
 
 ## Running and verifying
 

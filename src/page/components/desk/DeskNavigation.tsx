@@ -20,6 +20,7 @@ import {
   touchMin,
   typeNavLabel,
   typeNavLabelTab,
+  deskPress,
 } from "../floating-panel/tokens";
 import type { DeskIconName } from "../floating-panel/tokens";
 import {
@@ -49,6 +50,7 @@ const railItem = (active: boolean) =>
     "relative flex w-16 shrink-0 cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent px-0 pt-2.5 pb-2",
     roundedLg,
     typeNavLabel,
+    deskPress,
     deskFocusRing,
     active
       ? `${deskInk} ${deskSheet} ${deskRing}`
@@ -60,6 +62,7 @@ const tabItem = (active: boolean) =>
     "flex cursor-pointer flex-col items-center justify-center gap-1 border-0 bg-transparent px-0 text-[11px]",
     typeNavLabelTab,
     touchMin,
+    deskPress,
     deskFocusRing,
     active ? `font-semibold ${deskRose}` : deskInk3,
   ].join(" ");

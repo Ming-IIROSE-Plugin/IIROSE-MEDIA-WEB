@@ -26,6 +26,7 @@ import {
   typeLabelStrong,
   typeSearchQuery,
   type DeskSourceKey,
+  deskPress,
 } from "../floating-panel/tokens";
 import { detectVideoTarget } from "./searchIntent";
 
@@ -243,7 +244,7 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
 
         <button
           type="button"
-          className={`mr-0.5 flex h-[42px] shrink-0 cursor-pointer items-center border-0 px-[18px] ${roundedMd} ${deskInkSurface} ${deskPaperText} ${typeLabelStrong} ${deskFocusRingOnInk} max-[768px]:hidden`}
+          className={`mr-0.5 flex h-[42px] shrink-0 cursor-pointer items-center border-0 px-[18px] ${roundedMd} ${deskInkSurface} ${deskPaperText} ${typeLabelStrong} ${deskFocusRingOnInk} ${deskPress} max-[768px]:hidden`}
           onClick={() => this.submit()}
         >
           搜索

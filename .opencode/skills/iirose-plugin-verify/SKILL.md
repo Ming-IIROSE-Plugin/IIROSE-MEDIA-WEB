@@ -45,7 +45,7 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
 11. **坑：搜索输入框旧选择器**——旧流程文档的 `.inputWrapper` 已不存在；当前触发搜索要点 `.inputIcon` 的父级 div（`MediaSearchBar.tsx` 的 searchInput onClick）。
 12. **视觉动效检查单(每轮 UI 改动后必跑)**——`npm test`、`npm run build` 与功能清单都看不见纯视觉/交互动效缺陷(2026-10 搜索视图特性复盘教训,三类返工全由此盲区产生):
     - **溢出/裁切**:疑似改动元素与容器,双端读 `el.scrollWidth - el.clientWidth` / `getBoundingClientRect()` 对边,必须为 0 或负;本插件无 preflight,`w-*` + `px-*`/`border` 组合必须 `box-border`(容器级兜底已加 app.css,新容器外元素仍需自查)
-    - **动画时长**:app.css 有未分层 `.IIROSE_MEDIA_CONTAINER * { transition: all .5s }`,会压掉 Tailwind `duration-*`;需要快反馈的交互(按压/hover)必须 `duration-N!`(important),真机确认动画肉眼可感知(<200ms)
+    - **动画时长**:app.css 的动效基线在 base 层(只过渡颜色/透明度/阴影/缩放,默认 120ms,`--imw-fast/base/slow` 三档),组件上的 `transition-*`/`duration-*` 直接生效,不需要 `!`;宽高与位置不在默认过渡里,要动画须显式写 `transition-[…]`。Tailwind v4 的 `scale-*`/`translate-*` 是独立属性,过渡要写 `scale`/`translate` 而不是 `transform`;按下反馈用 `deskPress` 令牌。真机确认动画肉眼可感知(<200ms)
     - **触屏 hover**:hover 态样式一律 `hov:` 门控(`@custom-variant hov` 已注册);400×800 视口真机点一下,确认无粘滞高亮
     - **文本裁切**:构造超长标题/作者/subtitle 条目,确认 `text-ellipsis` 出「…」而非硬裁;flex 子项需 `min-w-0`(overflow≠visible 时规范上自动为 0,仍显式写上)
     - **空态渲染**:条件数据(如元信息、multiPage)为空时,确认不渲染占位空行/空块

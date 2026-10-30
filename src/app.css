@@ -43,7 +43,7 @@
    2. mdi 图标字体的 ::before content（反斜杠转义不能进 class 名）
    3. 由 JS 命令式切换的状态类（ShowIIROSE_MEDIA_CONTAINER）
    4. 插件写入宿站页面的元素（#mainContainer 等）
-   5. 通配选择器（universal transition）
+   5. 动效基线（base 层的默认过渡与时长档位）
    其余全部样式已迁移到各组件的 Tailwind 类。
    ============================================================ */
 
@@ -301,8 +301,8 @@
   }
 }
 
-/* 面板提示条从下方 8px 淡入 */
-@keyframes imwToastIn {
+/* 从下方 8px 淡入：提示条、结果区换页 / 换范围 / 换视图 */
+@keyframes imwRiseIn {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -310,6 +310,19 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* 收藏星点亮时弹一下 */
+@keyframes imwPop {
+  0% {
+    scale: 1;
+  }
+  45% {
+    scale: 1.3;
+  }
+  100% {
+    scale: 1;
   }
 }
 
@@ -341,9 +354,30 @@
   }
 }
 
-/* --- 5. 通配过渡（全局顺滑感） --- */
-.IIROSE_MEDIA_CONTAINER * {
-  transition: all 0.5s ease-in-out;
+/* --- 5. 动效基线（base 层，组件上的 transition-* / duration-* 照常覆盖） ---
+   三档时长：快 120ms（悬停、按下）、中 200ms（淡入淡出、切换）、慢 280ms（升起的层）。
+   默认只过渡颜色 / 透明度 / 阴影 / 缩放：宽高与位置不过渡，布局变化不会被拖着「飘」。 */
+.IIROSE_MEDIA_CONTAINER {
+  --imw-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --imw-fast: 120ms;
+  --imw-base: 200ms;
+  --imw-slow: 280ms;
+}
+
+@layer base {
+  .IIROSE_MEDIA_CONTAINER * {
+    transition-property:
+      color, background-color, border-color, outline-color, opacity, box-shadow,
+      scale;
+    transition-duration: var(--imw-fast);
+    transition-timing-function: var(--imw-ease);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .IIROSE_MEDIA_CONTAINER * {
+    scale: none !important;
+  }
 }
 
 /* --- 3. 插件容器开关状态（JS 用 classList 切换，见 MainAppControlLayer） --- */

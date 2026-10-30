@@ -390,7 +390,13 @@ export function ResultsArea({
         onScroll={handleScroll}
         onClick={handleAreaClick}
       >
-        {body()}
+        {/* 换页 / 换范围 / 换视图 / 新结果到达：内容整体从下方 8px 淡入，不整块闪 */}
+        <div
+          key={`${load.status}:${shape}:${scopeIndex}:${pageOffset}`}
+          className="animate-[imwRiseIn_200ms_var(--imw-ease)] motion-reduce:animate-none"
+        >
+          {body()}
+        </div>
       </div>
     </div>
   );

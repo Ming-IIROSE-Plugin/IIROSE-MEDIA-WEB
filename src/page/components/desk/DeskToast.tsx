@@ -37,7 +37,7 @@ export function DeskToast() {
       {toast && (
         <div
           key={toast.id}
-          className={`max-w-full truncate rounded-full px-4 py-2 ${deskToastShadow} ${deskInkSurface} ${deskPaperText} ${typeLabel} transition-[opacity,transform] duration-200! ease-out motion-reduce:transition-opacity ${visible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"} animate-[imwToastIn_200ms_ease-out] motion-reduce:animate-none`}
+          className={`max-w-full truncate rounded-full px-4 py-2 ${deskToastShadow} ${deskInkSurface} ${deskPaperText} ${typeLabel} transition-[opacity,translate] duration-200 ease-[var(--imw-ease)] motion-reduce:transition-opacity ${visible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"} animate-[imwRiseIn_200ms_var(--imw-ease)] motion-reduce:animate-none`}
         >
           {toast.text}
         </div>

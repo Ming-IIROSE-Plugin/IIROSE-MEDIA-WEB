@@ -11,6 +11,7 @@ import {
   roundedLg,
   roundedMd,
   typeButtonSm,
+  deskPress,
 } from "../floating-panel/tokens";
 import type { PlaybackModeKind } from "../../../playback/PlaybackMode";
 
@@ -51,7 +52,7 @@ export function ModeToggle({
     <button
       type="button"
       data-imw-mode={kind}
-      className={`${base} ${tone} ${deskFocusRingOnDeck}`}
+      className={`${base} ${tone} ${deskPress} ${deskFocusRingOnDeck}`}
       aria-pressed={active}
       aria-disabled={!enabled}
       aria-label={compact ? label : undefined}

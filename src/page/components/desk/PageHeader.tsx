@@ -11,6 +11,7 @@ import {
   typeDisplay,
   typeDisplayFamily,
   typeEyebrow,
+  deskPress,
 } from "../floating-panel/tokens";
 
 interface PageHeaderProps {
@@ -34,7 +35,7 @@ export function PageHeader({ title, onClose }: PageHeaderProps) {
       <button
         type="button"
         aria-label="关闭点歌台"
-        className={`ml-auto grid h-10 w-10 shrink-0 cursor-pointer place-items-center border border-solid bg-transparent p-0 ${roundedLg} ${deskRule} ${deskInk2} ${deskPressTone} ${deskFocusRing}`}
+        className={`ml-auto grid h-10 w-10 shrink-0 cursor-pointer place-items-center border border-solid bg-transparent p-0 ${roundedLg} ${deskRule} ${deskInk2} ${deskPressTone} ${deskPress} ${deskFocusRing}`}
         onClick={onClose}
       >
         <DeskIcon name="close" size={20} />

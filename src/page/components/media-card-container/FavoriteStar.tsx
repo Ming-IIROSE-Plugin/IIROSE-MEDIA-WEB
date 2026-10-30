@@ -7,6 +7,7 @@ import {
   deskFocusRing,
   deskInk3,
   deskStarOn,
+  deskPress,
 } from "../floating-panel/tokens";
 
 export interface FavoriteStarProps {
@@ -26,6 +27,8 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
 
   /** 连点期间只认第一次：两次 toggle 交错落地会让星标与存储对不上。 */
   const pending = useRef(false);
+  /** 只在用户亲手点亮的那一下弹跳：加载出来就已收藏的星不弹。 */
+  const [popKey, setPopKey] = useState(0);
 
   useEffect(() => {
     reread();
@@ -61,6 +64,7 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
     pending.current = true;
     const next = !isFavorited;
     setIsFavorited(next);
+    if (next) setPopKey((key) => key + 1);
     try {
       const result = await FavoritesStorageService.toggle(platformData);
       setIsFavorited(result.isFavorited);
@@ -78,10 +82,19 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
       aria-pressed={isFavorited}
       aria-label={isFavorited ? "取消收藏" : "收藏"}
       title={isFavorited ? "已收藏，点击取消" : "点击添加到收藏"}
-      className={`grid h-8 w-8 cursor-pointer place-items-center border-0 bg-transparent p-0 ${deskFocusRing} ${isFavorited ? deskStarOn : deskInk3}`}
+      className={`grid h-8 w-8 cursor-pointer place-items-center border-0 bg-transparent p-0 ${deskFocusRing} ${deskPress} ${isFavorited ? deskStarOn : deskInk3}`}
       onClick={toggle}
     >
-      <DeskIcon name={isFavorited ? "starf" : "star"} size={18} />
+      <DeskIcon
+        key={popKey}
+        name={isFavorited ? "starf" : "star"}
+        size={18}
+        className={
+          popKey > 0 && isFavorited
+            ? "animate-[imwPop_260ms_var(--imw-ease)] motion-reduce:animate-none"
+            : ""
+        }
+      />
     </button>
   );
 }

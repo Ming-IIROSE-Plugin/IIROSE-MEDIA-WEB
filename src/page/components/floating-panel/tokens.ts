@@ -133,6 +133,8 @@ export const deskSendHover =
 
 /** 搜索栏几乎不可见的抬升线（DESIGN.md Elevation & Depth，不承载信息）。 */
 export const deskSearchShadow = "shadow-[0_1px_0_#00000005]";
+/** 按下反馈：缩到 96% 松开回弹（时长取 app.css 动效基线的「快」档；减少动态效果时不缩放）。 */
+export const deskPress = "active:scale-[.96]";
 /** 面板提示条：浮在结果区上方的柔和投影。 */
 export const deskToastShadow = "shadow-[0_6px_20px_#0000002E]";
 
