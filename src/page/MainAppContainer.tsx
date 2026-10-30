@@ -794,36 +794,6 @@ export class MainAppContainer extends Component<
             this.setState({ allMediaData: res.allPlatformData });
           }
         });
-      } else {
-        const multipage = await platformData.multiPage;
-        if (!multipage) return;
-        if (multipage.platform === "video") {
-          const playList = platformData.playList || [];
-          const multiPageDatas: PlatformData[] = playList.map((item) => ({
-            title: `${platformData.title}`,
-            coverImg: platformData.coverImg,
-            author: item.episode,
-            websiteUrl: item.url,
-            multiPage: Promise.resolve(undefined),
-            playList: [item],
-          }));
-
-          const totalPage = Math.ceil(
-            multiPageDatas.length / this.itemsPerPage,
-          );
-          const VOD = AllVideosPlatform.VOD;
-
-          this.setState({
-            currentPage: 1,
-            totalPage: totalPage,
-            mediaData: Promise.resolve({
-              platformData: multiPageDatas.slice(0, this.itemsPerPage),
-              totalPage: totalPage,
-            }),
-            allMediaData: multiPageDatas,
-            currentOnDemandPlay: VOD,
-          });
-        }
       }
     },
 

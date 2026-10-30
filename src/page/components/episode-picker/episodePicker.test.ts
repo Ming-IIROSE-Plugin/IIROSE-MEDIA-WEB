@@ -66,6 +66,14 @@ async function click(element: Element | undefined) {
   await flush();
 }
 
+/** 点按：先 pointerdown 再 click（外框按「按下点」判定，不能只发 click）。 */
+async function tap(element: Element) {
+  await act(async () => {
+    element.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+  });
+  await click(element);
+}
+
 async function press(key: string, element: EventTarget = document) {
   await act(async () => {
     (element as HTMLElement).dispatchEvent(
@@ -181,6 +189,12 @@ describe("标题行与列表", () => {
     await open(entries(2));
     expect(row("第 1 集").textContent).toContain("01:00");
     expect(row("第 2 集").textContent).toContain("01:01");
+  });
+
+  it("有副行的条目（网易云曲目）渲染歌手行", async () => {
+    await open([{ id: "e1", title: "晴天", meta: "周杰伦", duration: 269 }]);
+    expect(row("晴天").textContent).toContain("周杰伦");
+    expect(row("晴天").textContent).toContain("04:29");
   });
 });
 
@@ -326,15 +340,25 @@ describe("三种非就绪状态", () => {
     expect(load).toHaveBeenCalledTimes(2);
     expect(rows()).toHaveLength(2);
     expect(button("点播所选").disabled).toBe(true);
+    // 重试重新取数后不带上一次的点选：全部行未选、全选可用
+    expect(
+      rows().every((node) => node.getAttribute("aria-checked") === "false"),
+    ).toBe(true);
+    expect(button("全选").disabled).toBe(false);
+    expect(button("全选")).not.toBeUndefined();
   });
 
-  it("0 集：只能关闭", async () => {
+  it("0 集：文案按单位（集 / 首），只能关闭", async () => {
     const { onCancel } = await open([]);
     expect(text()).toContain("没有可点播的分集");
     expect(button("全选").disabled).toBe(true);
     expect(button("点播所选").disabled).toBe(true);
     await click(byLabel("关闭选集"));
     expect(onCancel).toHaveBeenCalledOnce();
+
+    act(() => releaseEpisodePicker());
+    await open([], { unit: "首" });
+    expect(text()).toContain("没有可点播的曲目");
   });
 });
 
@@ -346,10 +370,20 @@ describe("取消路径（都不点播）", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it("点面板外侧", async () => {
+  it("点面板外侧（按按下点判定）", async () => {
     const { onCancel } = await open();
-    await click(layer());
+    await tap(layer());
     expect(onCancel).toHaveBeenCalledOnce();
+
+    // 从行内按下、在外框上松开：click 落在公共祖先上，不算点外侧
+    act(() => releaseEpisodePicker());
+    const again = await open();
+    await act(async () => {
+      row("第 1 集").dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    await click(layer());
+    expect(again.onCancel).not.toHaveBeenCalled();
+    expect(root()).not.toBeNull();
   });
 
   it("Esc 只关这一层：面板在时下一层不动，再按一次才关下一层", async () => {
@@ -411,6 +445,30 @@ describe("焦点与触控目标", () => {
     expect(root()).toBeNull();
     expect(document.activeElement).toBe(opener);
     void onCancel;
+  });
+
+  it("打开时焦点在 body（移动端点按不聚焦）：不把 body 当归还点", async () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    (document.activeElement as HTMLElement | null)?.blur?.();
+
+    const { onCancel } = await open(entries(2));
+    expect(document.activeElement).toBe(byLabel("关闭选集"));
+
+    await click(byLabel("关闭选集"));
+    expect(onCancel).toHaveBeenCalledOnce();
+    await flush(220);
+    expect(root()).toBeNull();
+    // 关闭时不往 body 上塞焦点（body 不是触发元素）
+    expect(focus.mock.contexts).not.toContain(document.body);
+  });
+
+  it("returnFocus 已卸载（宿站弹窗确认钮被清空）时不归还、不抛错", async () => {
+    const gone = document.createElement("button");
+    await open(entries(2), { returnFocus: gone });
+    await click(byLabel("关闭选集"));
+    await flush(220);
+    expect(root()).toBeNull();
+    expect(document.activeElement).not.toBe(gone);
   });
 
   it("returnFocus 覆盖打开时的焦点元素", async () => {

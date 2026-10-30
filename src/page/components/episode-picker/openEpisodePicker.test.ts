@@ -127,6 +127,12 @@ describe("确认与取消", () => {
     });
     expect(onConfirm).toHaveBeenCalledOnce();
     expect(onCancel).not.toHaveBeenCalled();
+    // 退场是真的淡出（不是空等）：卡片随即转 opacity-0 并停收指针
+    const card = root()!.querySelector<HTMLElement>(
+      "[data-imw-episode-picker-card]",
+    )!;
+    expect(card.getAttribute("class")).toContain("opacity-0");
+    expect(card.getAttribute("class")).toContain("transition-opacity");
     await flush(220);
     expect(root()).toBeNull();
   });

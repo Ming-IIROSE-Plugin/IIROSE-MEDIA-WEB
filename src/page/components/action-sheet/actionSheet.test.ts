@@ -299,6 +299,39 @@ describe("焦点", () => {
       trigger.remove();
     }
   });
+
+  it("上层已有选集面板时不归还焦点：模态面板不会被打回行体", async () => {
+    const trigger = document.createElement("div");
+    const inner = document.createElement("button");
+    inner.textContent = "行";
+    trigger.append(inner);
+    document.body.append(trigger);
+
+    // 面板已在场（`openEpisodePicker` 的独立根）：操作条的清理必须让位
+    const panelRoot = document.createElement("div");
+    panelRoot.id = "imw-episode-picker-root";
+    const marker = document.createElement("div");
+    marker.setAttribute("data-imw-episode-picker", "true");
+    const close = document.createElement("button");
+    close.textContent = "关闭选集";
+    marker.append(close);
+    panelRoot.append(marker);
+    document.body.append(panelRoot);
+
+    try {
+      await mount(song, { returnFocus: trigger });
+      close.focus();
+      render(null, host);
+      expect(document.activeElement).toBe(close);
+
+      // 面板卸载后焦点照常回到行体（下一次打开时面板自己归还）
+      panelRoot.remove();
+      render(null, host);
+    } finally {
+      panelRoot.remove();
+      trigger.remove();
+    }
+  });
 });
 
 describe("触控目标与零裸值", () => {

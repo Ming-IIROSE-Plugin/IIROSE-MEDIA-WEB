@@ -18,7 +18,6 @@ interface CollectionTrack {
   id: number;
   name?: string;
   ar?: { name: string }[];
-  al?: { picUrl?: string };
   /** 毫秒（song 对象上的 `dt` / `duration` 都是毫秒）。 */
   dt?: number;
   duration?: number;
@@ -85,11 +84,14 @@ export class NetEasePlatform extends Platform {
     const isSongList = !!platformData.neteaseMusic.isSongList;
     /** `load` 里记下的集合信息：确认时拼批量播报的标题 / 简介。 */
     let collection = { title: platformData.title, description: "" };
-    let songsID: number[] = [];
 
-    const tracksOf = (tracks: CollectionTrack[]): EpisodePickEntry[] =>
+    /**
+     * 行 id 带位置（`位置:曲目id`）：同一首歌在歌单里重复出现时行仍唯一，
+     * 否则一次点选会勾中两行、徽章重复、全选计数对不上。
+     */
+    const entriesOf = (tracks: CollectionTrack[]): EpisodePickEntry[] =>
       tracks.map((track, index) => ({
-        id: String(track.id),
+        id: `${index}:${track.id}`,
         title: track.name || `曲目 ${index + 1}`,
         meta: track.ar?.map((artist) => artist.name).join("/") || "",
         duration:
@@ -99,6 +101,10 @@ export class NetEasePlatform extends Platform {
               ? Math.round(track.duration / 1000)
               : undefined,
       }));
+
+    /** 行 id 回填真实曲目 id（确认顺序 = 点选顺序）。 */
+    const songIdOf = (entry: EpisodePickEntry) =>
+      Number(entry.id.slice(entry.id.indexOf(":") + 1));
 
     openEpisodePicker({
       unit: "首",
@@ -111,13 +117,12 @@ export class NetEasePlatform extends Platform {
             title: playlist.name,
             description: playlist.description ?? "",
           };
-          songsID = playlist.trackIds.map((item) => item.id);
           const tracks: CollectionTrack[] = playlist.tracks ?? [];
-          // 详情没带曲目时按 id 退化成「曲目 N」：数量与顺序仍与 trackIds 一致
-          return tracksOf(
+          // 详情没带曲目时按 trackIds 退化成「曲目 N」：数量与顺序仍与歌单一致
+          return entriesOf(
             tracks.length > 0
               ? tracks
-              : songsID.map((trackId) => ({ id: trackId })),
+              : playlist.trackIds.map((item) => ({ id: item.id })),
           );
         }
 
@@ -127,12 +132,10 @@ export class NetEasePlatform extends Platform {
           title: detail.album.name,
           description: detail.album.description ?? "",
         };
-        const songs: CollectionTrack[] = detail.songs ?? [];
-        songsID = songs.map((song) => song.id);
-        return tracksOf(songs);
+        return entriesOf(detail.songs ?? []);
       },
       onConfirm: (chosen) => {
-        const ids = chosen.map((entry) => Number(entry.id));
+        const ids = chosen.map(songIdOf);
         if (ids.length === 1) {
           // 单项：单曲播报窗口，卡片不被并行批量抑制吞掉
           void Announce.runSingleAnnounce(() =>

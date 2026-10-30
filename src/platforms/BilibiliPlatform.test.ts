@@ -89,6 +89,10 @@ const playedPages = () =>
 
 describe("多 P 点播开选集面板", () => {
   it("VOD 判定多 P 后直接开面板：条目 = P{n} {part} + 时长，unit 为「集」", async () => {
+    // spy 必须在被测代码跑之前建：跑完再 spy 的 `not.toHaveBeenCalled()` 恒真
+    const buildSelect2 = vi
+      .spyOn(IIROSEUtils, "buildSelect2")
+      .mockImplementation(() => {});
     await BilibiliPlatform.VOD(video);
 
     expect(episodePicker.openEpisodePicker).toHaveBeenCalledOnce();
@@ -101,9 +105,7 @@ describe("多 P 点播开选集面板", () => {
     ]);
     expect((await options.load())[0].duration).toBe(60);
     // 没有宿站选择弹窗，也没有跨弹窗延迟
-    expect(
-      vi.spyOn(IIROSEUtils, "buildSelect2").mockImplementation(() => {}),
-    ).not.toHaveBeenCalled();
+    expect(buildSelect2).not.toHaveBeenCalled();
   });
 
   it("面板自己取分 P：只有条目（手机操作条）时 `load` 现取，拿到 desc", async () => {

@@ -33,6 +33,7 @@ vi.mock("../tools/parseMediaMetaData", () => ({ ParseMediaMetaData: meta }));
 vi.mock("../iirose_func/Socket", () => ({ Socket: vi.fn(() => socket) }));
 
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
+import { ShowMessage } from "../iirose_func/ShowMessage";
 import { AllVideosPlatform } from "./AllVideosPlatform";
 import allVideosSource from "./AllVideosPlatform.ts?raw";
 import type { EpisodePickEntry } from "../page/components/episode-picker/EpisodePicker";
@@ -99,7 +100,7 @@ describe("多集开选集面板", () => {
     expect(await lastOptions().load()).toHaveLength(3);
   });
 
-  it("单集仍直接点播，不开面板", async () => {
+  it("单集仍直接点播，不开面板；副行沿用作者 / 简介（不是集名）", async () => {
     await AllVideosPlatform.VOD({
       ...drama,
       playList: [playList[0]],
@@ -107,13 +108,29 @@ describe("多集开选集面板", () => {
     expect(episodePicker.openEpisodePicker).not.toHaveBeenCalled();
     expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
     expect(playedUrls()).toEqual([playList[0].url]);
+    expect(sendVideoMedia.mock.calls[0][0]).toMatchObject({
+      author: "剧情简介",
+    });
+  });
+
+  it("单集探流失败：提示一次，不向调用方抛 rejection", async () => {
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    meta.getM3U8Duration.mockRejectedValue(new Error("探流失败"));
+    await expect(
+      AllVideosPlatform.VOD({
+        ...drama,
+        playList: [playList[0]],
+      } as PlatformData),
+    ).resolves.toBeUndefined();
+    expect(show).toHaveBeenCalledWith("探流失败");
+    expect(sendVideoMedia).not.toHaveBeenCalled();
   });
 
   it("只选 1 集：单曲播报窗口，副行用集名", async () => {
     await AllVideosPlatform.VOD(drama);
     const list = await lastOptions().load();
     lastOptions().onConfirm([list[1]]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(playedUrls()).toHaveLength(1));
 
     expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
     expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
@@ -128,7 +145,7 @@ describe("多集开选集面板", () => {
     const list = await lastOptions().load();
     // 点选顺序 3 → 1
     lastOptions().onConfirm([list[2], list[0]]);
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.waitFor(() => expect(playedUrls()).toHaveLength(2));
 
     expect(announce.runBatchAnnounce).toHaveBeenCalledWith(
       "某剧",
@@ -147,7 +164,12 @@ describe("多集开选集面板", () => {
     });
     const list = await lastOptions().load();
     lastOptions().onConfirm([list[0], list[1]]);
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.waitFor(() =>
+      expect(announce.showBatchItemError).toHaveBeenCalledWith(
+        expect.any(Error),
+        "第01集",
+      ),
+    );
 
     expect(announce.showBatchItemError).toHaveBeenCalledWith(
       expect.any(Error),
@@ -170,14 +192,22 @@ describe("多集开选集面板", () => {
 });
 
 describe("宿站选择器的存量已删除", () => {
-  it("平台源码里没有 buildSelect2 / 「正序点播」菜单 / 跨弹窗延迟", () => {
+  it("平台源码里没有 buildSelect2 / 「正序点播」菜单 / 跨弹窗延迟", async () => {
+    // 行为侧：多集与单集都不碰宿站选择弹窗（spy 先建，再跑调用）
+    const buildSelect2 = vi
+      .spyOn(IIROSEUtils, "buildSelect2")
+      .mockImplementation(() => {});
+    await AllVideosPlatform.VOD(drama);
+    await AllVideosPlatform.VOD({
+      ...drama,
+      playList: [playList[0]],
+    } as PlatformData);
+    expect(buildSelect2).not.toHaveBeenCalled();
+
     expect(allVideosSource).not.toMatch(/buildSelect2/);
     expect(allVideosSource).not.toMatch(/buildVideoSelect/);
     expect(allVideosSource).not.toMatch(/正序点播/);
     expect(allVideosSource).not.toMatch(/setTimeout\([^)]*,\s*300\s*\)/);
     expect(allVideosSource).not.toMatch(/IIROSEUtils/);
-    expect(
-      vi.spyOn(IIROSEUtils, "buildSelect2").mockImplementation(() => {}),
-    ).not.toHaveBeenCalled();
   });
 });

@@ -448,7 +448,7 @@ export class SettingsService {
   }
 
   /**
-   * 「合并并上传 / 取消」两选项确认框：范式同 NetEasePlatform.buildOrderConfirmSelect。
+   * 「合并并上传 / 取消」两选项确认框：宿站单选选择弹窗（取值类，不是选集）。
    * 点空白/关闭一律按取消处理，避免预览结果悬空。
    */
   private static confirmMerge(

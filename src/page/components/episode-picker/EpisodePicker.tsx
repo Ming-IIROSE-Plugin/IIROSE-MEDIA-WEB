@@ -4,6 +4,7 @@
 // 受控视图：加载状态、已选项与点选顺序、正序 / 乱序全由 `openEpisodePicker` 持有，
 // 这里只排版与派发。选中项左列是蔷薇红实底序号徽章（点选顺序 1、2、3…），
 // 未选是 20px 描边方块；标题行「全选」按列表顺序选中全部，全选后文案变「取消全选」。
+import { useRef } from "preact/hooks";
 import { formatDuration } from "../media-card-container/mediaFormat";
 import {
   notifyRoomUnsupported,
@@ -99,6 +100,12 @@ export function resolveEpisodeOrder(
 /** 文字钮（「全选」/「取消全选」/「重试」）：无底色、无描边，悬停下划线。 */
 const textAction = `cursor-pointer border-0 bg-transparent ${typeLabelStrong} ${deskRose} hov:hover:underline ${deskFocusRing} ${touchMin}`;
 
+/** 0 集文案按单位组织：视频 / 剧集是「分集」，网易云曲目是「曲目」。 */
+const EMPTY_TEXT: Record<string, string> = {
+  集: "没有可点播的分集",
+  首: "没有可点播的曲目",
+};
+
 export interface EpisodePickerProps {
   /** 数量单位：视频 / 剧集「集」、网易云曲目「首」。 */
   unit: string;
@@ -186,12 +193,22 @@ export function EpisodePicker({
   ];
   /** 方向键在两段之间移动（radiogroup 的读取顺序靠 roving tabIndex + 方向键）。 */
   const otherOrder: EpisodePickOrder = order === "asc" ? "shuffle" : "asc";
+  // 点外侧才取消：按「按下点」判定。从某一行按下、拖到面板外松开时，`click` 会派发到
+  // 最近公共祖先（外框层），只看 click 的 target 会误判并把已选丢掉。
+  const pressedOutside = useRef(false);
 
   return (
     <div
       className={`fixed inset-0 z-[90010] flex items-center justify-center max-[768px]:items-end ${exiting ? "pointer-events-none" : ""}`}
       data-imw-episode-picker="true"
-      onClick={onCancel}
+      onPointerDown={(event) => {
+        pressedOutside.current = event.target === event.currentTarget;
+      }}
+      onClick={(event) => {
+        if (!pressedOutside.current) return;
+        pressedOutside.current = false;
+        if (event.target === event.currentTarget) onCancel();
+      }}
       {...stopHostGestures}
     >
       <div
@@ -200,7 +217,7 @@ export function EpisodePicker({
         aria-labelledby="imw-episode-picker-title"
         tabIndex={-1}
         data-imw-episode-picker-card="true"
-        className={`flex max-h-[min(640px,80vh)] w-[min(560px,calc(100%-72px))] flex-col overflow-hidden border border-solid animate-[imwSheetFade_180ms_ease-out] max-[768px]:max-h-[85vh] max-[768px]:w-full max-[768px]:rounded-b-none max-[768px]:border-x-0 max-[768px]:border-b-0 max-[768px]:pb-[env(safe-area-inset-bottom)] max-[768px]:animate-[imwSheetRise_220ms_ease-out] ${roundedXl} ${deskSheet} ${deskRule}`}
+        className={`flex max-h-[min(640px,80vh)] w-[min(560px,calc(100%-72px))] flex-col overflow-hidden border border-solid animate-[imwSheetFade_180ms_ease-out] max-[768px]:max-h-[85vh] max-[768px]:w-full max-[768px]:rounded-b-none max-[768px]:border-x-0 max-[768px]:border-b-0 max-[768px]:pb-[env(safe-area-inset-bottom)] max-[768px]:animate-[imwSheetRise_220ms_ease-out] ${roundedXl} ${deskSheet} ${deskRule} ${exiting ? "pointer-events-none opacity-0 transition-opacity duration-[160ms]" : ""}`}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={trapFocusWithin}
         {...stopHostGestures}
@@ -246,7 +263,7 @@ export function EpisodePicker({
             <StateRow message="加载失败" action="重试" onAction={onRetry} />
           )}
           {status === "ready" && entries.length === 0 && (
-            <StateRow message="没有可点播的分集" />
+            <StateRow message={EMPTY_TEXT[unit] ?? `没有可点播的${unit}`} />
           )}
           {ready &&
             entries.map((entry) => {

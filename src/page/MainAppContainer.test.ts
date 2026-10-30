@@ -38,6 +38,10 @@ const neteasePlatform = vi.hoisted(() => ({
   MOD: vi.fn(),
   selectEpisodes: vi.fn(),
 }));
+const allVideosPlatform = vi.hoisted(() => ({
+  selectEpisodes: vi.fn(),
+  VOD: vi.fn(),
+}));
 const bilibiliPlatform = vi.hoisted(() => ({
   getMultiPageBasicsData: vi.fn(async () => ({
     platformData: [],
@@ -117,6 +121,9 @@ vi.mock("../platforms/NetEasePlatform", () => ({
 }));
 vi.mock("../platforms/BilibiliPlatform", () => ({
   BilibiliPlatform: bilibiliPlatform,
+}));
+vi.mock("../platforms/AllVideosPlatform", () => ({
+  AllVideosPlatform: allVideosPlatform,
 }));
 vi.mock("../playback/PanelFocus", () => ({ setPanelFocus: () => {} }));
 const favoriteStorage = vi.hoisted(() => ({
@@ -835,11 +842,38 @@ describe("手机操作条", () => {
     });
     expect(labels()).toEqual(["点播到房间", "收藏", "选集"]);
 
+    // 触发元素本身不可聚焦（手机曲目行体是 div）：面板记住的是它内部的可聚焦后代
+    const trigger = document.createElement("div");
+    const inner = document.createElement("button");
+    inner.textContent = "行";
+    trigger.append(inner);
+    root.append(trigger);
+    await act(async () => {
+      (ref.current as unknown as Harness).handleRowActivate(album, trigger);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // 平台会真的开面板（body 独立根）：用标记元素代替，这样操作条的清理会因
+    // 「上层已有面板」而不归还焦点——焦点只能来自容器开面板前的 `restoreFocus(trigger)`。
+    const panelMarker = document.createElement("div");
+    panelMarker.setAttribute("data-imw-episode-picker", "true");
+    neteasePlatform.selectEpisodes.mockImplementationOnce(() => {
+      document.body.append(panelMarker);
+    });
+
     await act(async () => {
       (option("选集") as HTMLButtonElement).click();
     });
-    // 委托给网易云平台的选集面板（不再 `switchToMultiPage` 钻取内页）
-    expect(neteasePlatform.selectEpisodes).toHaveBeenCalledWith(album);
+    try {
+      // 委托给网易云平台的选集面板（不再 `switchToMultiPage` 钻取内页）
+      expect(neteasePlatform.selectEpisodes).toHaveBeenCalledWith(album);
+      // 操作条收起时焦点已落在行体内（面板打开时捕获的归还点），没有被抢回已卸载的操作条
+      expect(document.activeElement).toBe(inner);
+    } finally {
+      panelMarker.remove();
+    }
     const state = (ref.current as unknown as Harness).state;
     expect(state.isCurrentInMultiPage).toBe(false);
     expect(state.innerCollection).toBeNull();
@@ -872,6 +906,37 @@ describe("手机操作条", () => {
       false,
     );
     expect(sheet()).toBeNull();
+  });
+
+  it("多源剧集条目：选集走 AllVideosPlatform.selectEpisodes，不开内页", async () => {
+    const drama = {
+      title: "某剧",
+      author: "",
+      subtitle: "剧情简介",
+      coverImg: "",
+      websiteUrl: "https://example.com/vod/1",
+      playList: [
+        { episode: "第01集", url: "https://cdn.example.com/1.m3u8" },
+        { episode: "第02集", url: "https://cdn.example.com/2.m3u8" },
+      ],
+      multiPage: Promise.resolve({ platform: "video" }),
+    } as unknown as PlatformData;
+    const { ref } = await mount(MODE.video);
+    await activate(ref, drama);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(labels()).toContain("选集");
+
+    await act(async () => {
+      (option("选集") as HTMLButtonElement).click();
+    });
+    expect(allVideosPlatform.selectEpisodes).toHaveBeenCalledOnce();
+    expect(allVideosPlatform.selectEpisodes).toHaveBeenCalledWith(drama);
+    expect(sheet()).toBeNull();
+    expect((ref.current as unknown as Harness).state.isCurrentInMultiPage).toBe(
+      false,
+    );
   });
 
   it("B 站课程没有分 P 接口：仍按内页钻取", async () => {

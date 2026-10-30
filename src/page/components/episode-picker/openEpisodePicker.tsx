@@ -20,10 +20,22 @@ import {
 } from "./EpisodePicker";
 
 export const EPISODE_PICKER_ROOT_ID = "imw-episode-picker-root";
-/** 退场动效时长上限（退场 160ms，留余量后卸载）。 */
+/** 退场动效时长上限（退场淡出 160ms，留余量后卸载）。 */
 const EXIT_MS = 200;
 /** 面板的数据类型对调用方只经这里暴露（平台层只 import 这一个模块）。 */
 export type { EpisodePickEntry, EpisodePickOrder } from "./EpisodePicker";
+
+/**
+ * 触发元素是否能当焦点归还点：`document.body` / 根元素（移动端点按不聚焦时
+ * `document.activeElement` 就是 body）没有意义，按「没有触发元素」处理。
+ */
+function isReturnTarget(element: Element | null): element is HTMLElement {
+  return (
+    element instanceof HTMLElement &&
+    element !== document.body &&
+    element !== document.documentElement
+  );
+}
 
 export interface OpenEpisodePickerOptions {
   /** 数量单位：视频 / 剧集「集」、网易云曲目「首」。 */
@@ -72,11 +84,10 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
   }
   releaseEpisodePicker();
 
-  const returnFocus =
-    options.returnFocus ??
-    (document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null);
+  const captured = isReturnTarget(document.activeElement)
+    ? document.activeElement
+    : null;
+  const returnFocus = options.returnFocus ?? captured;
   const root = document.createElement("div");
   root.id = EPISODE_PICKER_ROOT_ID;
   // 面板根在 `.IIROSE_MEDIA_CONTAINER` 之外，拿不到它写的 `data-imw-theme`：
@@ -105,7 +116,9 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
     render(null, root);
     root.remove();
     if (page[PICKER_KEY] === handle) delete page[PICKER_KEY];
-    restoreFocus(returnFocus);
+    // 触发元素可能已经卸载（网易云从宿站弹窗确认进来时，触发钮随后被清空）：
+    // 只对仍在文档内的元素归还焦点，别把焦点丢给 body。
+    if (returnFocus?.isConnected) restoreFocus(returnFocus);
   };
 
   const handle: PickerHandle = {

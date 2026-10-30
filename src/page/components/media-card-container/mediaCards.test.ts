@@ -1159,11 +1159,7 @@ describe("多 P / 多集的选集入口已退场", () => {
     } as unknown as PlatformData;
     await mount(
       withCtx(h(VideoTile, { platformData: multi, onPlay: () => {} })),
-      multi.multiPage,
     );
-    await act(async () => {
-      await Promise.resolve();
-    });
     expect(
       Array.from(host.querySelectorAll("button")).find(
         (el) => el.textContent === "选集",
@@ -1181,7 +1177,7 @@ describe("多 P / 多集的选集入口已退场", () => {
     ).toBeUndefined();
   });
 
-  it("多 P 条目的卡片只剩「点播到房间」：点播由平台开面板", async () => {
+  it("多 P 条目的音乐网格卡只剩「点播」：点播由平台开面板", async () => {
     const onPlay = vi.fn();
     await mount(
       withCtx(

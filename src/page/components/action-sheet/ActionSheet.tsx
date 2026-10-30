@@ -128,7 +128,10 @@ export function ActionSheet({
     primaryRef.current?.focus({ preventScroll: true });
     return () => {
       release();
-      restoreFocus(returnFocus);
+      // 「选集」会先开上层选集面板（`role="dialog" aria-modal="true"`）再卸载本操作条：
+      // 此时焦点已经落在面板里，不能抢回行体，否则模态面板拿不到焦点。
+      if (!document.querySelector("[data-imw-episode-picker]"))
+        restoreFocus(returnFocus);
     };
   }, []);
 

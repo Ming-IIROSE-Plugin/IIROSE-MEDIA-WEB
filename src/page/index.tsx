@@ -18,6 +18,7 @@ import {
   openShufflePicker,
   releaseShufflePicker,
 } from "./components/shuffle-picker/openShufflePicker";
+import { releaseEpisodePicker } from "./components/episode-picker/openEpisodePicker";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { MediaPayloadMemory } from "../playback/MediaPayloadMemory";
 import {
@@ -104,6 +105,7 @@ function initMediaProgress() {
         if (session) releaseMediaSession(session);
       });
       safely(() => releaseShufflePicker());
+      safely(() => releaseEpisodePicker());
       safely(() => unsubscribePlayback?.());
       safely(() => loop?.dispose());
       safely(() => shuffle?.dispose());
@@ -294,6 +296,7 @@ export class IMCInit {
     const page = window as PanelWindow;
     releaseMainPanel(page);
     releaseShufflePicker();
+    releaseEpisodePicker();
     registerShufflePickerEntry();
     const container = document.createElement("div");
     mc.appendChild(container);

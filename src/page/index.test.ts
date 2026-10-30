@@ -211,6 +211,15 @@ describe("收藏随机选择面板接线", () => {
         [{ width: 1, height: 1 }] as unknown as DOMRectList;
     });
 
+    it("重复注入：旧选集面板根被清掉（不让 z-[90010] 挡整页）", () => {
+      const stale = document.createElement("div");
+      stale.id = "imw-episode-picker-root";
+      document.body.append(stale);
+
+      act(() => IMCInit.init(mainContainer()));
+      expect(document.getElementById("imw-episode-picker-root")).toBeNull();
+    });
+
     it("熄灭态点击开面板不点亮；再点只聚焦面板；取消后焦点回按钮", async () => {
       expect(shuffleButton().getAttribute("aria-disabled")).toBe("false");
       act(() => shuffleButton().click());

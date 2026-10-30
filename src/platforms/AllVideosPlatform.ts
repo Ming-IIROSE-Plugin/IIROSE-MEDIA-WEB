@@ -3,6 +3,7 @@ import {
   openEpisodePicker,
   type EpisodePickEntry,
 } from "../page/components/episode-picker/openEpisodePicker";
+import { ShowMessage } from "../iirose_func/ShowMessage";
 import { Socket } from "../iirose_func/Socket";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
@@ -78,7 +79,16 @@ export class AllVideosPlatform extends Platform {
       AllVideosPlatform.selectEpisodes(platformData, playList);
       return;
     }
-    await AllVideosPlatform.playEpisode(platformData, playList[0], true);
+    // 调用方（结果区 / 服务层）都不接 rejection：单集失败要在这里提示，
+    // 否则用户看不到任何反馈（与旧 `VOD_ACTION` 的 catch 同一口径）。
+    try {
+      await AllVideosPlatform.playEpisode(platformData, playList[0], {
+        singleAnnounce: true,
+      });
+    } catch (error) {
+      console.error("[Video VOD Action Error]:", error);
+      ShowMessage.show((error as Error).message);
+    }
   }
 
   /**
@@ -109,11 +119,10 @@ export class AllVideosPlatform extends Platform {
 
         if (picked.length === 1) {
           // 单项：`playEpisode` 内部包单曲播报窗口，卡片不被并行批量抑制吞掉
-          void AllVideosPlatform.playEpisode(
-            platformData,
-            picked[0],
-            true,
-          ).catch((error) =>
+          void AllVideosPlatform.playEpisode(platformData, picked[0], {
+            singleAnnounce: true,
+            named: true,
+          }).catch((error) =>
             Announce.showBatchItemError(error, picked[0].episode),
           );
           return;
@@ -125,7 +134,9 @@ export class AllVideosPlatform extends Platform {
           async () => {
             for (const item of picked) {
               try {
-                await AllVideosPlatform.playEpisode(platformData, item);
+                await AllVideosPlatform.playEpisode(platformData, item, {
+                  named: true,
+                });
                 // 呼吸时间，防止 Socket 拥塞
                 await new Promise((resolve) => setTimeout(resolve, 150));
               } catch (error) {
@@ -141,19 +152,24 @@ export class AllVideosPlatform extends Platform {
 
   /**
    * 点播单集：解析时长后发卡片 + 报文。
-   * `singleAnnounce` 为真时包单曲播报窗口（手动单曲点播），否则由调用方的批量窗口管档位。
+   * - `singleAnnounce`：包单曲播报窗口（手动单曲点播），否则由调用方的批量窗口管档位。
+   * - `named`：副行用集名（选集面板确认的多集点播）；单集直点播仍用作者 / 简介，
+   *   与旧行为一致。
    */
   private static async playEpisode(
     platformData: PlatformData,
     item: PlayItem,
-    singleAnnounce = false,
+    options: { singleAnnounce?: boolean; named?: boolean } = {},
   ) {
+    const { singleAnnounce = false, named = false } = options;
     // 每一个分集都需要获取时长（缓存命中很快，未命中才真的探流）
     const duration = await ParseMediaMetaData.getM3U8Duration(item.url);
     const tempPD: PlatformData = {
       ...platformData,
       title: `${platformData.title}`,
-      author: `${item.episode || platformData.author || platformData.subtitle}`,
+      author: named
+        ? `${item.episode || platformData.author || platformData.subtitle}`
+        : `${platformData.author || platformData.subtitle}`,
     };
     const send = () =>
       AllVideosPlatform.sendVideoMedia(tempPD, item.url, duration);

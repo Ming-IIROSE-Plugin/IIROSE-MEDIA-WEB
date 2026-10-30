@@ -182,7 +182,8 @@ describe("选集委托", () => {
     expect(episodePicker.openEpisodePicker).toHaveBeenCalledOnce();
     expect(lastOptions().unit).toBe("首");
     const entries = await lastOptions().load();
-    expect(entries.map((entry) => entry.id)).toEqual(["1", "2", "3"]);
+    // 行 id 带位置（`位置:曲目id`）：同一首歌在歌单里重复出现时行仍唯一
+    expect(entries.map((entry) => entry.id)).toEqual(["0:1", "1:2", "2:3"]);
     expect(neteaseMusic.getSongListDetail).toHaveBeenCalledWith(7);
   });
 
@@ -201,9 +202,38 @@ describe("选集委托", () => {
     await choose(() => NetEasePlatform.MLOD(songList), 2);
 
     expect(await lastOptions().load()).toEqual([
-      { id: "1", title: "晴天", meta: "周杰伦", duration: 269 },
-      { id: "2", title: "鱼", meta: "陈绮贞", duration: 240 },
+      { id: "0:1", title: "晴天", meta: "周杰伦", duration: 269 },
+      { id: "1:2", title: "鱼", meta: "陈绮贞", duration: 240 },
     ]);
+  });
+
+  it("歌单里重复出现的同一首歌：两行可分别点选，序号 1/2，确认按点选顺序给两条", async () => {
+    neteaseMusic.getSongListDetail.mockResolvedValue({
+      playlist: {
+        name: "冬日歌单",
+        description: "冬天听",
+        trackIds: [{ id: 5 }, { id: 5 }],
+        tracks: [
+          { id: 5, name: "晴天", ar: [{ name: "周杰伦" }], dt: 269000 },
+          { id: 5, name: "晴天", ar: [{ name: "周杰伦" }], dt: 269000 },
+        ],
+      },
+    });
+    await choose(() => NetEasePlatform.MLOD(songList), 2);
+    const entries = await lastOptions().load();
+    // 行 id 唯一，不会一次点选勾中两行
+    expect(entries.map((entry) => entry.id)).toEqual(["0:5", "1:5"]);
+
+    // 点选顺序：第二行 → 第一行
+    lastOptions().onConfirm([entries[1], entries[0]]);
+    expect(announce.runBatchAnnounce).toHaveBeenCalledWith(
+      "冬日歌单",
+      2,
+      expect.any(Function),
+      "冬天听",
+    );
+    // 同一首歌两条都播，顺序与点选一致
+    expect(await playedIds()).toEqual([5, 5]);
   });
 
   it("确认顺序 = 点选顺序：批量播报按该顺序交给 finalODSONG", async () => {
@@ -236,7 +266,7 @@ describe("选集委托", () => {
     await choose(() => NetEasePlatform.AOD(album), 2);
     const entries = await lastOptions().load();
     expect(neteaseMusic.getAlbumDetail).toHaveBeenCalledWith(9);
-    expect(entries.map((entry) => entry.id)).toEqual(["4", "5", "6"]);
+    expect(entries.map((entry) => entry.id)).toEqual(["0:4", "1:5", "2:6"]);
 
     lastOptions().onConfirm([entries[2], entries[0]]);
     expect(announce.runBatchAnnounce).toHaveBeenCalledWith(
