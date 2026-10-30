@@ -52,17 +52,85 @@ describe("搜索栏", () => {
     expect(host.textContent).toContain("网易云");
     const dot = host.querySelector('[aria-hidden="true"]')!;
     expect(dot.getAttribute("class")).toContain("bg-[#D7371F]");
-    const select = host.querySelector("select")!;
-    expect(select.getAttribute("aria-label")).toBe("来源");
+    const trigger = host.querySelector<HTMLButtonElement>(
+      '[aria-haspopup="listbox"]',
+    )!;
+    expect(trigger.getAttribute("aria-label")).toBe("来源：网易云音乐");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    // 不再用原生 select（展开样式由系统决定）
+    expect(host.querySelector("select")).toBeNull();
   });
 
-  it("来源切换回调下标", () => {
+  const TWO: SearchSource[] = [
+    { label: "全部", short: "全部", dot: null },
+    { label: "网易云音乐", short: "网易云", dot: "netease" },
+  ];
+  const trigger = () =>
+    host.querySelector<HTMLButtonElement>('[aria-haspopup="listbox"]')!;
+  const options = () =>
+    Array.from(host.querySelectorAll<HTMLElement>('[role="option"]'));
+
+  it("点切换器展开自有菜单：当前项打勾，点选项回调下标并收起", () => {
     const onSelectSource = vi.fn();
-    draw({ onSelectSource });
-    const select = host.querySelector("select")!;
-    select.value = "0";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    expect(onSelectSource).toHaveBeenCalledWith(0);
+    draw({ sources: TWO, sourceIndex: 0, onSelectSource });
+    act(() => trigger().click());
+    expect(trigger().getAttribute("aria-expanded")).toBe("true");
+    expect(options().map((el) => el.textContent)).toEqual([
+      "全部",
+      "网易云音乐",
+    ]);
+    expect(options()[0].getAttribute("aria-selected")).toBe("true");
+    expect(options()[0].querySelector("svg")).not.toBeNull();
+    act(() => options()[1].click());
+    expect(onSelectSource).toHaveBeenCalledWith(1);
+    expect(host.querySelector('[role="listbox"]')).toBeNull();
+  });
+
+  it("选当前项不重复回调", () => {
+    const onSelectSource = vi.fn();
+    draw({ sources: TWO, sourceIndex: 1, onSelectSource });
+    act(() => trigger().click());
+    act(() => options()[1].click());
+    expect(onSelectSource).not.toHaveBeenCalled();
+  });
+
+  it("键盘：下键展开，上下移动，回车选中", () => {
+    const onSelectSource = vi.fn();
+    draw({ sources: TWO, sourceIndex: 0, onSelectSource });
+    act(() => {
+      trigger().dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    const list = host.querySelector('[role="listbox"]')!;
+    expect(list).not.toBeNull();
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }),
+      );
+    });
+    expect(document.activeElement).toBe(options()[1]);
+    act(() => {
+      list.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+      );
+    });
+    expect(onSelectSource).toHaveBeenCalledWith(1);
+    // 收起后焦点回到切换器
+    expect(document.activeElement).toBe(trigger());
+  });
+
+  it("点菜单外侧收起，不切换来源", () => {
+    const onSelectSource = vi.fn();
+    draw({ sources: TWO, sourceIndex: 0, onSelectSource });
+    act(() => trigger().click());
+    act(() =>
+      host
+        .querySelector<HTMLElement>('[data-imw-source-backdrop="true"]')!
+        .click(),
+    );
+    expect(host.querySelector('[role="listbox"]')).toBeNull();
+    expect(onSelectSource).not.toHaveBeenCalled();
   });
 
   it("键位提示：为空显示 /，有内容显示 Enter", () => {

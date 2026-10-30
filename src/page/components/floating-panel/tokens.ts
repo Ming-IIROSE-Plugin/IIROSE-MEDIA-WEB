@@ -140,6 +140,9 @@ export const deskSendHover =
 export const deskSearchShadow = "shadow-[0_1px_0_#00000005]";
 /** 按下反馈：缩到 96% 松开回弹（时长取 app.css 动效基线的「快」档；减少动态效果时不缩放）。 */
 export const deskPress = "active:scale-[.96]";
+/** 下拉菜单浮层投影（来源菜单）：浅色柔和，深色加深一档才看得出层次。 */
+export const deskMenuShadow =
+  "shadow-[0_10px_30px_#1C19161F] imw-dark:shadow-[0_10px_30px_#00000080]";
 /** 面板提示条：浮在结果区上方的柔和投影。 */
 export const deskToastShadow = "shadow-[0_6px_20px_#0000002E]";
 

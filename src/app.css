@@ -313,6 +313,18 @@
   }
 }
 
+/* 下拉菜单展开：淡入并从上方 4px 落下 */
+@keyframes imwMenuIn {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
 /* 收藏星点亮时弹一下 */
 @keyframes imwPop {
   0% {

@@ -29,6 +29,7 @@ import {
   deskPress,
 } from "../floating-panel/tokens";
 import { detectVideoTarget } from "./searchIntent";
+import { SourceMenu } from "./SourceMenu";
 
 export interface SearchSource {
   /** 桌面全称（来源切换器里显示）。 */
@@ -54,6 +55,8 @@ export interface SearchBarProps {
 
 interface SearchBarState {
   value: string;
+  /** 来源菜单是否展开。 */
+  menuOpen: boolean;
 }
 
 /** 主面板是否处于打开状态：`/` 只在面板打开时抢焦点。 */
@@ -67,12 +70,25 @@ const TEXT_ENTRY = /^(INPUT|TEXTAREA|SELECT)$/;
 
 export class SearchBar extends Component<SearchBarProps, SearchBarState> {
   private inputRef = createRef<HTMLInputElement>();
+  private sourceButtonRef = createRef<HTMLButtonElement>();
+
+  private closeMenu = () => {
+    if (!this.state.menuOpen) return;
+    this.setState({ menuOpen: false });
+    // 关闭后焦点还给切换器（键盘用户接着操作）
+    this.sourceButtonRef.current?.focus({ preventScroll: true });
+  };
+
+  private pickSource = (index: number) => {
+    this.closeMenu();
+    if (index !== this.props.sourceIndex) this.props.onSelectSource(index);
+  };
   /** 输入法组字中：拼音逐字不触发过滤，组字结束再通知一次最终值。 */
   private composing = false;
 
   constructor(props: SearchBarProps) {
     super(props);
-    this.state = { value: props.keyword };
+    this.state = { value: props.keyword, menuOpen: false };
   }
 
   /** 桌面打开面板时把焦点放进输入区（手机不自动聚焦，避免弹键盘）。 */
@@ -168,39 +184,48 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
       <div
         className={`mx-[36px] mt-5 flex h-14 items-center border border-solid px-1.5 ${roundedXl} ${deskRule} ${deskSheet} ${deskSearchShadow} max-[768px]:mx-4 max-[768px]:mt-4 max-[768px]:h-[50px]`}
       >
-        {/* 来源切换器：原生 select 覆盖在装饰层上，键盘与系统选择器都能用 */}
-        <div
-          className={`relative flex h-[42px] shrink-0 items-center gap-2 px-3 ${roundedMd} ${deskHover} ${deskInk} ${typeLabel} max-[768px]:h-[38px] max-[768px]:gap-1.5 max-[768px]:px-2.5`}
-        >
-          {source?.dot && (
+        {/* 来源切换器：插件自有下拉（原生 select 的展开样式由系统决定，深色下是白底蓝条） */}
+        <div className="relative shrink-0">
+          <button
+            ref={this.sourceButtonRef}
+            type="button"
+            aria-label={`来源：${source?.label ?? ""}`}
+            aria-haspopup="listbox"
+            aria-expanded={this.state.menuOpen}
+            className={`flex h-[42px] cursor-pointer items-center gap-2 border-0 px-3 ${roundedMd} ${deskHover} ${deskInk} ${typeLabel} ${deskFocusRing} ${deskPress} max-[768px]:h-[38px] max-[768px]:gap-1.5 max-[768px]:px-2.5`}
+            onClick={() => this.setState({ menuOpen: !this.state.menuOpen })}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+              event.preventDefault();
+              this.setState({ menuOpen: true });
+            }}
+          >
+            {source?.dot && (
+              <span
+                aria-hidden="true"
+                className={`h-[7px] w-[7px] shrink-0 rounded-full ${dot}`}
+              />
+            )}
+            <span className="whitespace-nowrap max-[768px]:hidden">
+              {source?.label}
+            </span>
+            <span className="hidden whitespace-nowrap max-[768px]:inline">
+              {source?.short}
+            </span>
             <span
-              aria-hidden="true"
-              className={`h-[7px] w-[7px] shrink-0 rounded-full ${dot}`}
+              className={`${deskInk3} transition-[rotate] duration-200 ${this.state.menuOpen ? "rotate-180" : "rotate-0"}`}
+            >
+              <DeskIcon name="chev" size={16} />
+            </span>
+          </button>
+          {this.state.menuOpen && (
+            <SourceMenu
+              sources={sources}
+              selectedIndex={sourceIndex}
+              onSelect={this.pickSource}
+              onClose={this.closeMenu}
             />
           )}
-          <span className="whitespace-nowrap max-[768px]:hidden">
-            {source?.label}
-          </span>
-          <span className="hidden whitespace-nowrap max-[768px]:inline">
-            {source?.short}
-          </span>
-          <span className={deskInk3}>
-            <DeskIcon name="chev" size={16} />
-          </span>
-          <select
-            aria-label="来源"
-            className={`absolute inset-0 cursor-pointer appearance-none border-0 bg-transparent p-0 opacity-0 ${roundedMd} ${deskFocusRing}`}
-            value={String(sourceIndex)}
-            onChange={(event) =>
-              this.props.onSelectSource(Number(event.currentTarget.value))
-            }
-          >
-            {sources.map((item, index) => (
-              <option key={item.label} value={String(index)}>
-                {item.label}
-              </option>
-            ))}
-          </select>
         </div>
 
         <span
