@@ -43,7 +43,10 @@ export function SettingsGroup({ group }: SettingsGroupProps) {
   );
 }
 
-/** 关于卡：同一张卡的变体，没有组名（页头已经说明这一屏是「关于」）。 */
+/**
+ * 关于卡：同一张卡的变体，没有组名——桌面由页头「关于」说明这一屏，
+ * 手机在设置内由范围标签「关于」+ 行内容（作者、项目源代码地址…）说明。
+ */
 export function AboutCard({ items }: { items: SettingData[] }) {
   return (
     <section data-imw-about-card="true" className={cardClass}>

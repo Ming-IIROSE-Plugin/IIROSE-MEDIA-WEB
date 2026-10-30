@@ -312,15 +312,14 @@ export class MainAppContainer extends Component<
     } = this.state;
 
     const categories = this.getActiveCategories();
-    const platform = this.currentPlatform();
     // 手机专属范围标签（设置的「关于」）：桌面不渲染。它恒为末项，过滤后前面的下标不位移；
-    // 若停在它上面（下标 4）时视口越过 768px，桌面只剩 4 个标签、activeIndex 越界会让
-    // 整个 tablist 没有一个 tabIndex=0，所以传给范围行的下标要夹回有效范围。
-    const phone = isPhoneLayout();
-    const scopes: ScopeItem[] = (platform?.subNavBarItems ?? [])
-      .filter((item) => phone || !item.phoneOnly)
-      .map((item) => ({ title: item.title }));
-    const scopeIndex = Math.min(SubNavBarIndex, Math.max(scopes.length - 1, 0));
+    // 若停在它上面（下标 4）时视口越过 768px，桌面只剩 4 个标签，越界下标既会让 tablist
+    // 没有一个 tabIndex=0，也会让 `runCurrentScope` 执行桌面看不到的那一项，
+    // 所以范围解析（渲染 / 动作）统一走 `effectiveScopeIndex`，不各算一套。
+    const scopes: ScopeItem[] = this.visibleScopes().map((item) => ({
+      title: item.title,
+    }));
+    const scopeIndex = this.effectiveScopeIndex();
     const sources: SearchSource[] = categories.platform.map((item) => ({
       label: item.title,
       short: item.shortTitle ?? item.title,
@@ -420,7 +419,7 @@ export class MainAppContainer extends Component<
                 settingsData={settingsData}
                 viewMode={searchViewMode}
                 mode={mode}
-                scopeIndex={SubNavBarIndex}
+                scopeIndex={scopeIndex}
                 keyword={searchKeyword}
                 isInnerPage={this.state.isCurrentInMultiPage}
                 pageOffset={(currentPage - 1) * this.itemsPerPage}
@@ -608,10 +607,26 @@ export class MainAppContainer extends Component<
     );
   }
 
+  /** 当前模式可见的范围条目（桌面不渲染手机专属项，如设置里的「关于」）。 */
+  private visibleScopes(): Platform["subNavBarItems"] {
+    const phone = isPhoneLayout();
+    return (this.currentPlatform()?.subNavBarItems ?? []).filter(
+      (item) => phone || !item.phoneOnly,
+    );
+  }
+
+  /**
+   * 有效范围下标：手机专属项恒为末项，停在它上面时视口变宽（下标越界），
+   * 夹回可见范围。渲染（范围行、结果区）与动作解析共用这一份，不各算一套。
+   */
+  private effectiveScopeIndex(): number {
+    const items = this.visibleScopes();
+    return Math.min(this.state.SubNavBarIndex, Math.max(items.length - 1, 0));
+  }
+
   /** 执行当前范围的动作（搜索/筛选/读取设置）。 */
   private runCurrentScope() {
-    const item =
-      this.currentPlatform()?.subNavBarItems[this.state.SubNavBarIndex];
+    const item = this.visibleScopes()[this.effectiveScopeIndex()];
     const action = item?.searchAction ?? this.state.currentSubNavBarAction;
     if (!action) return;
     this.setState({ currentSubNavBarAction: action }, () => action());

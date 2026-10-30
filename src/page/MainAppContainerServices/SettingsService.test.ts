@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsService } from "./SettingsService";
 import { AboutService } from "./AboutService";
+import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
 
 // 设置数据契约（story 7）：范围 → 组卡 → 行三级结构、行语义（kind）、
 // 云同步开关的 checked 只来自 SyncManager.getState().enabled、关于卡外链无 emoji。
@@ -119,6 +120,21 @@ describe("设置范围的分组标题", () => {
     expect(rowOf(groups, "syncForgetKey").kind).toBe("action");
     expect(rowOf(groups, "syncLastSyncAt").kind).toBe("readonly");
   });
+  it("四个范围的组名都非空：空串是结果区「关于卡」的判别位", async () => {
+    const titles: string[] = [];
+    const collect = (show: (ctx: Ctx) => void) => {
+      const { ctx, setState } = ctxOf();
+      show(ctx);
+      titles.push(...groupTitles(groupsOf(setState)));
+    };
+    collect((ctx) => SettingsService.showBilibili(ctx));
+    collect((ctx) => SettingsService.showNetEaseMusic(ctx));
+    collect((ctx) => SettingsService.showRadio(ctx));
+    titles.push(...groupTitles((await showPlugin()).groups));
+
+    expect(titles.length).toBeGreaterThan(4);
+    for (const title of titles) expect(title).not.toBe("");
+  });
 });
 
 describe("代理蔷薇@输入开关", () => {
@@ -176,6 +192,108 @@ describe("云同步开关", () => {
     expect(rowOf(groups, "syncLastSyncAt").actionTitle).not.toBe("从未同步");
     // 只读行没有动作：不可点
     expect(rowOf(groups, "syncLastSyncAt").action).toBeUndefined();
+  });
+});
+
+describe("异步构建作废守卫", () => {
+  it("构建在途时切走范围：迟到的插件组卡不落地，也不再订阅同步状态", async () => {
+    const { SyncManager } = await import("../../sync/SyncManager");
+    let resolveKey!: (value: boolean) => void;
+    vi.spyOn(SyncManager, "hasLocalKey").mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveKey = resolve;
+      }),
+    );
+    const onStateChange = vi.spyOn(SyncManager, "onStateChange");
+
+    const { ctx, setState } = ctxOf();
+    const pending = SettingsService.showPluginSettings(
+      ctx,
+      () => {},
+      async () => {},
+    );
+
+    // 在途期间换范围（`setState` 自增版本号）→ 旧构建作废
+    const radio = ctxOf();
+    SettingsService.showRadio(radio.ctx);
+    resolveKey(false);
+    await pending;
+
+    expect(setState).not.toHaveBeenCalled();
+    expect(onStateChange).not.toHaveBeenCalled();
+    expect(groupTitles(groupsOf(radio.setState))).toEqual(["无线电设置"]);
+  });
+
+  it("同一范围两次构建交错完成：以最新一次为准，先发后到的不覆盖", async () => {
+    const { SyncManager } = await import("../../sync/SyncManager");
+    const resolvers: ((value: boolean) => void)[] = [];
+    vi.spyOn(SyncManager, "hasLocalKey").mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const first = ctxOf();
+    const firstPending = SettingsService.showPluginSettings(
+      first.ctx,
+      () => {},
+      async () => {},
+    );
+    const second = ctxOf();
+    const secondPending = SettingsService.showPluginSettings(
+      second.ctx,
+      () => {},
+      async () => {},
+    );
+    expect(resolvers).toHaveLength(2);
+
+    // 后发的先完成（本机有密钥缓存），先发的后完成（无缓存）
+    resolvers[1](false);
+    await secondPending;
+    resolvers[0](true);
+    await firstPending;
+
+    expect(second.setState).toHaveBeenCalledOnce();
+    expect(first.setState).not.toHaveBeenCalled();
+    expect(rowOf(groupsOf(second.setState), "syncForgetKey").actionTitle).toBe(
+      "无本机密钥",
+    );
+  });
+});
+
+describe("取值行的动作回报", () => {
+  /** 宿站选择弹窗被替换成「直接点中某一项」：`buildSelect2` 的第三个参数是取值回调。 */
+  const pickOption = (value: string) =>
+    vi
+      .spyOn(IIROSEUtils, "buildSelect2")
+      .mockImplementation((_i, _a, onPick) =>
+        onPick(null as unknown as HTMLElement, value),
+      );
+
+  it("插件启动默认页面：确认后把新标题回报给行", async () => {
+    const { groups } = await showPlugin();
+    pickOption("2");
+    const report = vi.fn();
+    rowOf(groups, "defaultPage").action?.(report);
+    expect(report).toHaveBeenCalledWith("电台");
+  });
+
+  it("点播播报：确认后把新标题回报给行", async () => {
+    const { groups } = await showPlugin();
+    pickOption("summary");
+    const report = vi.fn();
+    rowOf(groups, "announceMode").action?.(report);
+    expect(report).toHaveBeenCalledWith("批量总结");
+  });
+
+  it("搜索结果视图：翻转后回报新标题，并同步父级的视图偏好", async () => {
+    const { groups, setState } = await showPlugin();
+    const report = vi.fn();
+    rowOf(groups, "searchViewMode").action?.(report);
+    expect(report).toHaveBeenCalledWith("列表");
+    // 结果区渲染读的是父级 state，不跟着改就只落盘不生效
+    expect(setState).toHaveBeenLastCalledWith({ searchViewMode: "list" });
   });
 });
 

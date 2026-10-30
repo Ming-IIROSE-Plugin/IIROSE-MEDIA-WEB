@@ -1025,6 +1025,13 @@ describe("结果区状态机", () => {
     expect(
       host.querySelector('[data-imw-settings-row="value"]'),
     ).not.toBeNull();
+
+    // 页面级布局：卡列随内容区收敛（最大 760px）、卡间 24px（DESIGN `settings-group.note`）
+    const page = card.parentElement!;
+    expect(page.className).toContain("gap-6");
+    expect(page.className).toContain("max-w-[760px]");
+    expect(page.className).toContain("flex-col");
+    expect(page.children).toHaveLength(1);
   });
 
   it("组名为空 ⇒ 关于卡：关于模式与手机在设置内点「关于」得到同一张卡", async () => {

@@ -44,27 +44,6 @@ export const primaryButton = `${resetButton} min-h-[44px] rounded-lg border-0 bg
 /** 主面板根节点 `data-imw-theme` 的取值。 */
 export const themeAttr = (dark: boolean) => (dark ? "dark" : "light");
 
-/** 底部分隔线：用内阴影画，不占盒子高度（各行高度约定不受影响）。 */
-export const themedDividerBottom =
-  "shadow-[inset_0_-1px_0_rgba(0,0,0,0.1)] imw-dark:shadow-[inset_0_-1px_0_rgba(255,255,255,0.15)]";
-
-/** 次要文字。 */
-export const mutedText = "opacity-65";
-
-/** 强调色文字/图标（用 ink：浅色下压得更深，落在光晕与淡底上仍可读）。 */
-export const accentText = "text-(color:--imw-accent-ink)";
-
-/** 悬停淡强调、按压加深（透明底控件用）。 */
-export const pressTone =
-  "hov:hover:bg-(color:--imw-accent)/8 active:bg-(color:--imw-accent)/15";
-
-/**
- * 主面板结果卡片与列表行的表面：浅色白底 + black/8 描边 + 轻阴影；
- * 深色次级表面 white/[0.04] + white/10 描边、无阴影。圆角与内边距由使用处补。
- */
-export const themedCard =
-  "border border-solid bg-white border-black/8 shadow-[0_1px_2px_rgba(16,24,40,0.06),0_4px_12px_rgba(16,24,40,0.07)] imw-dark:bg-white/[0.04] imw-dark:border-white/10 imw-dark:shadow-none";
-
 /** 强调色实底白字（不含交互反馈；禁用态直接用它再补 opacity）。 */
 export const accentFill = "border-0 bg-(color:--imw-accent) text-white";
 

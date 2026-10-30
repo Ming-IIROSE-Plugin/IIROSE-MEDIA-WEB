@@ -163,9 +163,11 @@ export class SettingsService {
     ShowOrHideIMC: () => Promise<void>,
   ) {
     // 构建要 await 本机密钥缓存：期间用户可能切走范围或离开设置模式，
-    // 迟到的结果不能覆盖当前范围、也不能在 release 之后重新订阅。
+    // 迟到的结果不能覆盖当前范围、也不能在 release 之后重新订阅；
+    // 同一范围内也可能有两次构建交错（同步状态连续变化），先发后到的一样作废。
     const revision = this.revision;
-    const stale = () => revision !== this.revision;
+    const build = ++this.buildSeq;
+    const stale = () => revision !== this.revision || build !== this.buildSeq;
 
     const refresh = () =>
       void this.showPluginSettings(ctx, changeSearchKeyword, ShowOrHideIMC);
@@ -538,4 +540,10 @@ export class SettingsService {
    * 要读本机密钥缓存）在开始时捕获它，落地前发现变了就丢弃结果且不重订阅。
    */
   private static revision = 0;
+
+  /**
+   * 构建序号：每开始一次构建自增。`revision` 只区分「换了范围 / 离开了设置」，
+   * 同一范围内两次构建交错完成时，先发的那次会盖掉后发的，所以落地前还要比对序号。
+   */
+  private static buildSeq = 0;
 }

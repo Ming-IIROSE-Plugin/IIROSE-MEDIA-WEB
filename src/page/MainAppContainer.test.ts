@@ -514,7 +514,7 @@ describe("六种模式的现场", () => {
   });
 
   it("设置范围：桌面四项（哔哩哔哩视频 / 网易云音乐 / 无线电广播 / 插件设置），无「关于」", async () => {
-    await mount(MODE.settings);
+    const { props: p } = await mount(MODE.settings);
     const tabs = Array.from(
       root.querySelectorAll('[role="tab"]'),
     ) as HTMLElement[];
@@ -523,6 +523,29 @@ describe("六种模式的现场", () => {
       "网易云音乐",
       "无线电广播",
       "插件设置",
+    ]);
+
+    // 接线：点哪个标签就执行哪个范围（标签文字对不代表接对了服务）
+    settings.showNetEaseMusic.mockClear();
+    settings.showRadio.mockClear();
+    settings.showPluginSettings.mockClear();
+    await act(async () => {
+      tabs[1].click();
+    });
+    expect(settings.showNetEaseMusic).toHaveBeenCalledOnce();
+    expect(settings.showRadio).not.toHaveBeenCalled();
+    await act(async () => {
+      tabs[2].click();
+    });
+    expect(settings.showRadio).toHaveBeenCalledOnce();
+    await act(async () => {
+      tabs[3].click();
+    });
+    expect(settings.showPluginSettings).toHaveBeenCalledOnce();
+    expect(settings.showPluginSettings.mock.calls[0]).toEqual([
+      expect.anything(),
+      p.changeSearchKeyword,
+      p.ShowOrHideIMC,
     ]);
   });
 
@@ -598,6 +621,19 @@ describe("六种模式的现场", () => {
         desktopTabs.filter((el) => el.getAttribute("tabindex") === "0"),
       ).toHaveLength(1);
       expect(desktopTabs[3].getAttribute("aria-selected")).toBe("true");
+
+      // 越界下标只夹显示还不够：重进设置时执行的范围动作也必须是「插件设置」，
+      // 否则桌面标签停在「插件设置」却弹出关于卡（并对关于卡做 release）
+      settings.showPluginSettings.mockClear();
+      about.showAbout.mockClear();
+      await act(async () => {
+        render(h(Container, { ...props(MODE.music), ref } as object), root);
+      });
+      await act(async () => {
+        render(h(Container, { ...props(MODE.settings), ref } as object), root);
+      });
+      expect(settings.showPluginSettings).toHaveBeenCalledOnce();
+      expect(about.showAbout).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
     }
