@@ -363,3 +363,39 @@ describe("一级菜单选正序 / 乱序后显示点播中", () => {
     build.mockRestore();
   });
 });
+
+describe("批量发送：进度与停止", () => {
+  it("逐首上报进度；中途停止后不再处理后面的曲目", async () => {
+    // 文件级 beforeEach 把 finalODSONG 换成了替身：这里要跑真实的发送循环
+    finalODSONG.mockRestore();
+    const { startBatch, stopBatch, getBatches, resetBatches } =
+      await import("../playback/BatchProgress");
+    resetBatches();
+    const songs = [1, 2, 3].map((id) => ({
+      id,
+      name: `曲${id}`,
+      fee: 0,
+      duration: 1000,
+      artists: [{ name: "甲" }],
+      album: { picUrl: "" },
+    }));
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue(songs);
+    const batch = startBatch("测试歌单", 3);
+    let lyricCalls = 0;
+    (neteaseMusic as unknown as { getLyric: unknown }).getLyric = vi.fn(
+      async () => {
+        lyricCalls++;
+        // 第一首取歌词时用户点了「停止」
+        if (lyricCalls === 1) stopBatch(batch.id);
+        return null;
+      },
+    );
+    await (
+      NetEasePlatform as unknown as {
+        finalODSONG: (ids: number[], b: typeof batch) => Promise<void>;
+      }
+    ).finalODSONG([1, 2, 3], batch);
+    expect(lyricCalls).toBe(1);
+    expect(getBatches()[0]).toMatchObject({ status: "stopped", total: 3 });
+  });
+});

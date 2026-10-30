@@ -26,7 +26,8 @@
   .IIROSE_MEDIA_CONTAINER *::after,
   #imw-media-progress-root *,
   #imw-shuffle-picker-root *,
-  #imw-episode-picker-root * {
+  #imw-episode-picker-root *,
+  #imw-batch-progress-root * {
     border: 0 solid currentcolor;
   }
 }
@@ -73,7 +74,11 @@
 #imw-episode-picker-root,
 #imw-episode-picker-root *,
 #imw-episode-picker-root *::before,
-#imw-episode-picker-root *::after {
+#imw-episode-picker-root *::after,
+#imw-batch-progress-root,
+#imw-batch-progress-root *,
+#imw-batch-progress-root *::before,
+#imw-batch-progress-root *::after {
   box-sizing: border-box;
 }
 
@@ -322,6 +327,16 @@
   to {
     opacity: 1;
     translate: 0 0;
+  }
+}
+
+/* 批量点播「准备中」：不确定进度条来回流动 */
+@keyframes imwIndeterminate {
+  0% {
+    translate: -100% 0;
+  }
+  100% {
+    translate: 300% 0;
   }
 }
 

@@ -1,4 +1,5 @@
 import { NeteaseMusicAPI } from "../Api/NeteaseAPI/NeteaseMusic";
+import { startBatch, type BatchHandle } from "../playback/BatchProgress";
 import { guardedRequest } from "../playback/RequestGuard";
 import { NeteaseSearchAPI } from "../Api/NeteaseAPI/NeteaseSearch";
 import { SearchData } from "../Api/NeteaseAPI/NeteaseSearch/SearchInterface";
@@ -170,12 +171,15 @@ export class NetEasePlatform extends Platform {
           return;
         }
         // `finalODSONG` 按入参顺序重排详情结果，这里传的就是点选顺序
-        void Announce.runBatchAnnounce(
-          collection.title,
-          ids.length,
-          () => NetEasePlatform.finalODSONG(ids),
-          collection.description,
-        );
+        const batch = startBatch(collection.title, ids.length);
+        void Promise.resolve(
+          Announce.runBatchAnnounce(
+            collection.title,
+            ids.length,
+            () => NetEasePlatform.finalODSONG(ids, batch),
+            collection.description,
+          ),
+        ).finally(() => batch.finish());
       },
     });
   };
@@ -806,12 +810,16 @@ export class NetEasePlatform extends Platform {
         const trackID = songListDetail.playlist.trackIds.map((item) => item.id);
         const ids =
           order === "shuffle" ? NetEasePlatform.shuffleIds(trackID) : trackID;
-        void Announce.runBatchAnnounce(
-          songListDetail.playlist.name,
-          ids.length,
-          () => NetEasePlatform.finalODSONG(ids),
-          songListDetail.playlist.description,
-        );
+        // 进度浮窗：关掉点播面板也还在，可随时停止
+        const batch = startBatch(songListDetail.playlist.name, ids.length);
+        void Promise.resolve(
+          Announce.runBatchAnnounce(
+            songListDetail.playlist.name,
+            ids.length,
+            () => NetEasePlatform.finalODSONG(ids, batch),
+            songListDetail.playlist.description,
+          ),
+        ).finally(() => batch.finish());
         return;
       }
 
@@ -821,12 +829,15 @@ export class NetEasePlatform extends Platform {
         const songsID = albumDetails.songs.map((item) => item.id);
         const ids =
           order === "shuffle" ? NetEasePlatform.shuffleIds(songsID) : songsID;
-        void Announce.runBatchAnnounce(
-          albumDetails.album.name,
-          ids.length,
-          () => NetEasePlatform.finalODSONG(ids),
-          albumDetails.album.description,
-        );
+        const batch = startBatch(albumDetails.album.name, ids.length);
+        void Promise.resolve(
+          Announce.runBatchAnnounce(
+            albumDetails.album.name,
+            ids.length,
+            () => NetEasePlatform.finalODSONG(ids, batch),
+            albumDetails.album.description,
+          ),
+        ).finally(() => batch.finish());
         return;
       }
 
@@ -969,7 +980,22 @@ export class NetEasePlatform extends Platform {
     }
   };
 
-  private static finalODSONG = async (songsID: number[]) => {
+  /**
+   * @param batch 批量点播进度句柄（整张播放 / 选集多选）：逐首上报，
+   *   每首发送前检查「停止」；单曲点播不传。
+   */
+  private static finalODSONG = async (
+    songsID: number[],
+    batch?: BatchHandle,
+  ) => {
+    try {
+      await NetEasePlatform.sendSongs(songsID, batch);
+    } finally {
+      batch?.finish();
+    }
+  };
+
+  private static sendSongs = async (songsID: number[], batch?: BatchHandle) => {
     const media = new Media();
     const socket = new Socket();
     const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
@@ -988,10 +1014,13 @@ export class NetEasePlatform extends Platform {
 
       // 无版权曲目按批聚合计数：循环结束统一提示一次，不逐曲刷屏
       let noCopyrightSkipped = 0;
+      batch?.setTotal(orderedSongs.length);
 
       for (const item of orderedSongs) {
+        if (batch?.cancelled) break;
         if (item.noCopyrightRcmd) {
           noCopyrightSkipped++;
+          batch?.step();
           continue;
         }
         try {
@@ -1025,12 +1054,15 @@ export class NetEasePlatform extends Platform {
           const mediacard = media.mediaCard(mediaData);
           const mediaEvent = media.mediaEvent(mediaData);
 
+          // 取歌词期间用户点了「停止」：这一首也不再发
+          if (batch?.cancelled) break;
           Announce.sendMediaCard(socket, mediacard);
           socket.send(mediaEvent);
         } catch (error) {
           // 单项失败：带曲名提示（同因 10 秒去重）后跳过，剩余曲目照播
           Announce.showBatchItemError(error, item.name);
         }
+        batch?.step();
       }
 
       if (noCopyrightSkipped > 0) {

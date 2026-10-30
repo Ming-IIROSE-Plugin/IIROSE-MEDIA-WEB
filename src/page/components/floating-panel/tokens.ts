@@ -43,6 +43,8 @@ export const deskInk3Border = "border-[#6B655D] imw-dark:border-[#8F887E]";
 export const deskRose = "text-[#B42F3E] imw-dark:text-[#E3606C]";
 /** 蔷薇红图形：竖栏指示条、标签栏选中图标（rose）。 */
 export const deskRoseFill = "bg-[#B42F3E] imw-dark:bg-[#E3606C]";
+/** 暗淡填充（ink3 色）：已停止的批量点播进度条。 */
+export const deskMutedFill = "bg-[#6B655D] imw-dark:bg-[#8F887E]";
 /** 蔷薇红实底控件的描边：与实底同值（浅 rose、深 rose-fill-dark），见 DESIGN 实底控件。 */
 export const deskRoseSolidBorder = "border-[#B42F3E] imw-dark:border-[#BA4F59]";
 /** 搜索框聚焦时的蔷薇红描边（rose，`focus-within:` 版）。 */

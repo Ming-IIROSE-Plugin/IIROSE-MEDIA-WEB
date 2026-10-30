@@ -1,4 +1,5 @@
 import { noteMediaSent } from "../playback/RequestGuard";
+import { mountBatchProgress } from "./components/batch-progress/BatchProgressStack";
 import { render } from "preact";
 import { MainAppControlLayer } from "./MainAppControlLayer";
 import { MediaProgress } from "./components/media-progress/MediaProgress";
@@ -55,6 +56,7 @@ function releasePlaybackController(page: ControllerWindow) {
     "imw-playback-controls",
     "imw-media-progress-entry",
     "imw-media-progress-root",
+    "imw-batch-progress-root",
   ])
     document.getElementById(id)?.remove();
 }
@@ -87,6 +89,7 @@ function initMediaProgress() {
   ) => void = () => {};
   let onPageHide: (event: PageTransitionEvent) => void = () => {};
   let disposed = false;
+  let unmountBatch: (() => void) | undefined;
   // 每一步独立兜错：任一环节抛错都不能跳过后面的解绑（定时器、pagehide、页面键）。
   const safely = (step: () => void) => {
     try {
@@ -108,6 +111,7 @@ function initMediaProgress() {
       });
       safely(() => releaseShufflePicker());
       safely(() => releaseEpisodePicker());
+      safely(() => unmountBatch?.());
       safely(() => unsubscribePlayback?.());
       safely(() => loop?.dispose());
       safely(() => shuffle?.dispose());
@@ -128,6 +132,8 @@ function initMediaProgress() {
   // 先登记页面键再构造：构造中途抛错时，后注入者仍能释放已创建的实例（含 250ms 轮询）。
   page[CONTROLLER_KEY] = dispose;
   disposeProgress = dispose;
+  // 批量点播进度浮窗：挂在 body 上，关掉点播面板也还在
+  unmountBatch = mountBatchProgress();
   bridge = new HostMediaBridge();
   playback = new PlaybackMode();
   // 随机点亮前先经选择面板：确认才作废旧预取并点亮，取消什么都不改。
