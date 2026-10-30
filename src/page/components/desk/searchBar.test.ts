@@ -143,6 +143,27 @@ describe("搜索栏", () => {
     expect(kbd().textContent).toBe("Enter");
   });
 
+  it("键位提示：已聚焦且为空时不显示 /（已经在输入了），失焦后恢复", () => {
+    draw();
+    act(() => {
+      input().focus();
+    });
+    expect(host.querySelector("kbd")).toBeNull();
+    act(() => {
+      input().value = "晴天";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(kbd().textContent).toBe("Enter");
+    act(() => {
+      input().value = "";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+      input().blur();
+    });
+    expect(kbd().textContent).toBe("/");
+    // 与「搜索」按钮之间留出间距
+    expect(kbd().getAttribute("class")).toContain("mr-2.5");
+  });
+
   it("Enter 与「搜索」按钮都提交当前输入", () => {
     const { onSubmit } = draw();
     act(() => {

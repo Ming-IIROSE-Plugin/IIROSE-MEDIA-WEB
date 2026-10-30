@@ -11,6 +11,7 @@ import {
   deskInk,
   deskInk3,
   deskInkSurface,
+  deskKeyBorder,
   deskPaperText,
   deskPlaceholder,
   deskRule,
@@ -55,6 +56,8 @@ export interface SearchBarProps {
 
 interface SearchBarState {
   value: string;
+  /** 输入区是否有焦点：已聚焦时「/ 聚焦搜索」的提示就多余了。 */
+  focused: boolean;
   /** 来源菜单是否展开。 */
   menuOpen: boolean;
 }
@@ -88,7 +91,7 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
 
   constructor(props: SearchBarProps) {
     super(props);
-    this.state = { value: props.keyword, menuOpen: false };
+    this.state = { value: props.keyword, menuOpen: false, focused: false };
   }
 
   /** 桌面打开面板时把焦点放进输入区（手机不自动聚焦，避免弹键盘）。 */
@@ -178,7 +181,12 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
     const { sources, sourceIndex } = this.props;
     const source = sources[sourceIndex] ?? sources[0];
     const dot = source?.dot ? deskSourceDots[source.dot] : "";
-    const hint = this.state.value.trim() ? "Enter" : "/";
+    // 有内容：提示按回车搜索；空且未聚焦：提示按 / 聚焦；空且已聚焦：不提示
+    const hint = this.state.value.trim()
+      ? "Enter"
+      : this.state.focused
+        ? null
+        : "/";
 
     return (
       <div
@@ -254,6 +262,8 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
             this.props.onLiveInput?.(value);
           }}
           onPaste={this.handlePaste}
+          onFocus={() => this.setState({ focused: true })}
+          onBlur={() => this.setState({ focused: false })}
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
             event.preventDefault();
@@ -261,11 +271,13 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
           }}
         />
 
-        <kbd
-          className={`mr-1 shrink-0 border border-solid px-[7px] py-[3px] ${roundedXs} ${deskRule} ${deskInk3} ${typeKeyHint} max-[768px]:hidden`}
-        >
-          {hint}
-        </kbd>
+        {hint && (
+          <kbd
+            className={`mr-2.5 shrink-0 border border-solid px-[7px] py-[3px] ${roundedXs} ${deskKeyBorder} ${deskInk3} ${typeKeyHint} max-[768px]:hidden`}
+          >
+            {hint}
+          </kbd>
+        )}
 
         <button
           type="button"
