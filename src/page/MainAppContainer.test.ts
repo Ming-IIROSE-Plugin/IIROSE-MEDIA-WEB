@@ -685,6 +685,11 @@ describe("六种模式的现场", () => {
     ).toBe(false);
   });
 
+  it("设置页没有视图切换（不是结果列表）", async () => {
+    await mount(MODE.settings);
+    expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+  });
+
   it("视图切换常驻：视频、音乐首屏可切，MV 锁定为网格，不会消失", async () => {
     await mount(MODE.video);
     expect(root.querySelector('[role="radiogroup"]')).not.toBeNull();

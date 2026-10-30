@@ -222,3 +222,97 @@ describe("isProxyAtInputSetting", () => {
     expect(apply).not.toHaveBeenCalled();
   });
 });
+
+describe("收藏每页显示", () => {
+  let selectCb: ((t: HTMLElement, s: string) => void) | undefined;
+  let options: unknown[][] = [];
+  let syncCb: ((input: string | null) => void) | undefined;
+  const alerts: string[] = [];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    localStorage.setItem("imwPluginSetting", JSON.stringify({}));
+    selectCb = undefined;
+    syncCb = undefined;
+    alerts.length = 0;
+    (window as unknown as Record<string, unknown>).Utils = {
+      buildSelect2: (
+        _i: unknown,
+        a: unknown[][],
+        s: (t: HTMLElement, v: string) => void,
+      ) => {
+        options = a;
+        selectCb = s;
+      },
+      sync: (_e: number, _t: unknown, o: (input: string | null) => void) => {
+        syncCb = o;
+      },
+    };
+    window._alert = (message: string) => {
+      alerts.push(message);
+    };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    delete (window as unknown as Record<string, unknown>).Utils;
+  });
+
+  const saved = () =>
+    JSON.parse(localStorage.getItem("imwPluginSetting")!).favoritesPageSize;
+
+  it("缺省与非法值回退 10 条", () => {
+    expect(PluginSettings.getPluginSetting().favoritesPageSize).toBe(10);
+    expect(PluginSettings.normalizeFavoritesPageSize(0)).toBe(10);
+    expect(PluginSettings.normalizeFavoritesPageSize(501)).toBe(10);
+    expect(PluginSettings.normalizeFavoritesPageSize(12.5)).toBe(10);
+    expect(PluginSettings.normalizeFavoritesPageSize("50")).toBe(50);
+    expect(PluginSettings.parseFavoritesPageSize(100)).toBe("100 条");
+  });
+
+  it("每个选项都带图标位（宿站缺第三项会渲染出 undefined）", () => {
+    PluginSettings.setFavoritesPageSize();
+    expect(options.map((option) => option[1])).toEqual([
+      "10 条",
+      "50 条",
+      "100 条",
+      "自定义…",
+    ]);
+    options.forEach((option) => {
+      expect(typeof option[2]).toBe("string");
+      expect(option[2]).not.toBe("");
+    });
+  });
+
+  it("选预设：直接落盘并回报文案", () => {
+    const report = vi.fn();
+    PluginSettings.setFavoritesPageSize(report);
+    selectCb!(document.createElement("div"), "50");
+    expect(saved()).toBe(50);
+    expect(report).toHaveBeenCalledWith("50 条");
+  });
+
+  it("选自定义：等选择框淡出后再弹输入框，合法整数落盘", () => {
+    const report = vi.fn();
+    PluginSettings.setFavoritesPageSize(report);
+    selectCb!(document.createElement("div"), "custom");
+    expect(syncCb).toBeUndefined();
+    vi.advanceTimersByTime(300);
+    expect(syncCb).toBeDefined();
+    syncCb!("25");
+    expect(saved()).toBe(25);
+    expect(report).toHaveBeenCalledWith("25 条");
+  });
+
+  it("自定义输入超出范围：提示且不改设置", () => {
+    const report = vi.fn();
+    PluginSettings.setFavoritesPageSize(report);
+    selectCb!(document.createElement("div"), "custom");
+    vi.advanceTimersByTime(300);
+    syncCb!("1000");
+    expect(alerts).toEqual(["请输入 1 到 500 之间的整数"]);
+    expect(saved()).toBeUndefined();
+    expect(report).not.toHaveBeenCalled();
+  });
+});

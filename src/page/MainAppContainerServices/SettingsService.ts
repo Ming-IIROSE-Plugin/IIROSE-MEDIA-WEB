@@ -223,6 +223,19 @@ export class SettingsService {
             },
           },
           {
+            key: "favoritesPageSize",
+            title: "收藏每页显示",
+            kind: "value",
+            actionTitle: PluginSettings.parseFavoritesPageSize(
+              ps.favoritesPageSize,
+            ),
+            icon: "star",
+            action: (report) =>
+              PluginSettings.setFavoritesPageSize((actionTitle) =>
+                report?.(actionTitle),
+              ),
+          },
+          {
             key: "announceMode",
             title: "点播播报",
             kind: "value",

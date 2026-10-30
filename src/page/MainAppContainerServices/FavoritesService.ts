@@ -2,6 +2,7 @@ import {
   FavoritesStorageService,
   type FavoriteRecord,
 } from "../../storage/FavoritesStorageService";
+import { PluginSettings } from "../../settings/pluginSettings/PluginSettings";
 import { NetEasePlatform } from "../../platforms/NetEasePlatform";
 import { BilibiliPlatform } from "../../platforms/BilibiliPlatform";
 
@@ -59,7 +60,13 @@ export class FavoritesService {
       }
       return;
     }
-    await this.loadFavorites(ctx, last.platform, last.type, last.itemsPerPage);
+    // 每页条数取当前设置：改了「收藏每页显示」后，外部变更触发的重载也按新条数分页
+    await this.loadFavorites(
+      ctx,
+      last.platform,
+      last.type,
+      PluginSettings.getPluginSetting().favoritesPageSize,
+    );
   }
 
   /**

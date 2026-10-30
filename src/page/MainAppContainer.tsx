@@ -105,6 +105,13 @@ export class MainAppContainer extends Component<
 > {
   static contextType = MediaContainerContext;
   private itemsPerPage = 10;
+
+  /** 每页条数：收藏按设置（10 / 50 / 100 / 自定义），其余固定 10。 */
+  private pageSizeFor(mode: number): number {
+    return mode === MODE.favorites
+      ? PluginSettings.getPluginSetting().favoritesPageSize
+      : this.itemsPerPage;
+  }
   bilibiliRefreshCount = 1;
   mediaContainerGesture = new MediaContainerGesture(this.props.ShowOrHideIMC);
 
@@ -407,8 +414,8 @@ export class MainAppContainer extends Component<
                   items={scopes}
                   activeIndex={scopeIndex}
                   onChange={this.controller.selectScope}
-                  viewMode={this.viewToggle().value}
-                  viewLocked={this.viewToggle().locked}
+                  viewMode={this.viewToggle()?.value ?? null}
+                  viewLocked={this.viewToggle()?.locked ?? false}
                   onToggleView={this.controller.toggleSearchViewMode}
                   currentPage={currentPage}
                   totalPage={totalPage}
@@ -430,7 +437,7 @@ export class MainAppContainer extends Component<
                 scopeIndex={scopeIndex}
                 keyword={searchKeyword}
                 isInnerPage={this.state.isCurrentInMultiPage}
-                pageOffset={(currentPage - 1) * this.itemsPerPage}
+                pageOffset={(currentPage - 1) * this.pageSizeFor(mode)}
                 onRetry={this.handleRetry}
                 onClearSearch={this.handleClearSearch}
               />
@@ -480,9 +487,11 @@ export class MainAppContainer extends Component<
    * 音乐单曲（含首屏「最近点播」）、视频（含多源）、收藏可切列表/网格；
    * 专辑、歌单、电台只有列表，MV 只有网格——显示为灰色锁定并说明原因。
    */
-  private viewToggle(): { value: "card" | "list"; locked: boolean } {
+  private viewToggle(): { value: "card" | "list"; locked: boolean } | null {
     const free = { value: this.state.searchViewMode, locked: false };
     const { mode, SubNavBarIndex } = this.state;
+    // 设置 / 关于不是结果列表，没有视图可切
+    if (mode === MODE.settings || mode === MODE.about) return null;
     if (mode === MODE.radio) return { value: "list", locked: true };
     if (mode === MODE.music) {
       if (SubNavBarIndex === 1 || SubNavBarIndex === 2)
@@ -533,7 +542,7 @@ export class MainAppContainer extends Component<
             this.getActionContext(),
             platform,
             range.type,
-            this.itemsPerPage,
+            this.pageSizeFor(MODE.favorites),
           );
         },
       })),

@@ -96,6 +96,7 @@ describe("设置范围的分组标题", () => {
     expect(chatKeys).toEqual([
       "defaultPage",
       "searchViewMode",
+      "favoritesPageSize",
       "announceMode",
       "proxyAtInput",
     ]);
@@ -115,6 +116,8 @@ describe("设置范围的分组标题", () => {
     expect(rowOf(groups, "defaultPage").kind).toBe("value");
     expect(rowOf(groups, "searchViewMode").kind).toBe("value");
     expect(rowOf(groups, "announceMode").kind).toBe("value");
+    expect(rowOf(groups, "favoritesPageSize").kind).toBe("value");
+    expect(rowOf(groups, "favoritesPageSize").actionTitle).toBe("10 条");
     expect(rowOf(groups, "syncNow").kind).toBe("action");
     expect(rowOf(groups, "syncClearCloud").kind).toBe("action");
     expect(rowOf(groups, "syncForgetKey").kind).toBe("action");

@@ -1,3 +1,4 @@
+import { ShowMessage } from "../../iirose_func/ShowMessage";
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
 import { Input_Behavior_Module } from "../../input-behavior-module/Input-Behavior-Module";
 
@@ -38,8 +39,15 @@ export interface PluginSettingsInterface {
   defaultPage: number;
   searchViewMode: SearchViewMode;
   announceMode: AnnounceMode;
+  /** 收藏每页显示条数（1–500，默认 10） */
+  favoritesPageSize: number;
   sync: PluginSyncSettings;
 }
+
+/** 收藏每页条数的预设与上下限。 */
+export const FAVORITES_PAGE_SIZES = [10, 50, 100] as const;
+export const FAVORITES_PAGE_SIZE_MIN = 1;
+export const FAVORITES_PAGE_SIZE_MAX = 500;
 
 export class PluginSettings {
   /**
@@ -106,6 +114,97 @@ export class PluginSettings {
         `<div class="${iconClass[index]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
       );
     });
+
+    IIROSEUtils.buildSelect2(
+      null,
+      selectOption,
+      set,
+      false,
+      true,
+      null,
+      false,
+      null,
+      () => {},
+    );
+  }
+
+  /** 收藏每页条数：1–500 的整数，其余（含旧存档缺这一项）回退 10。 */
+  public static normalizeFavoritesPageSize(raw: unknown): number {
+    const value = Number(raw);
+    return Number.isInteger(value) &&
+      value >= FAVORITES_PAGE_SIZE_MIN &&
+      value <= FAVORITES_PAGE_SIZE_MAX
+      ? value
+      : 10;
+  }
+
+  public static parseFavoritesPageSize(size: number): string {
+    return `${PluginSettings.normalizeFavoritesPageSize(size)} 条`;
+  }
+
+  private static saveFavoritesPageSize(size: number): number {
+    const ps = PluginSettings.getPluginSetting();
+    ps.favoritesPageSize = PluginSettings.normalizeFavoritesPageSize(size);
+    try {
+      localStorage.setItem("imwPluginSetting", JSON.stringify(ps));
+    } catch {
+      // 存储不可用：本次会话内不生效，不打断交互
+    }
+    return ps.favoritesPageSize;
+  }
+
+  /**
+   * 收藏每页显示：10 / 50 / 100 / 自定义。
+   * 选「自定义」后等宿站选择框淡出（250ms）再弹数字输入框，否则新弹窗会被一并清掉。
+   */
+  public static setFavoritesPageSize(
+    changeActionTitleAction?: (actionTitle?: string) => void,
+  ) {
+    const report = (size: number) =>
+      changeActionTitleAction?.(PluginSettings.parseFavoritesPageSize(size));
+
+    const askCustom = () => {
+      const prompt = [
+        `请输入收藏每页显示条数（${FAVORITES_PAGE_SIZE_MIN}–${FAVORITES_PAGE_SIZE_MAX}）`,
+        `number`,
+        8,
+      ];
+      IIROSEUtils.sync(2, prompt, (input: string | null) => {
+        if (!input) return;
+        const value = Number(input);
+        if (
+          !Number.isInteger(value) ||
+          value < FAVORITES_PAGE_SIZE_MIN ||
+          value > FAVORITES_PAGE_SIZE_MAX
+        ) {
+          ShowMessage.show(
+            `请输入 ${FAVORITES_PAGE_SIZE_MIN} 到 ${FAVORITES_PAGE_SIZE_MAX} 之间的整数`,
+          );
+          return;
+        }
+        report(PluginSettings.saveFavoritesPageSize(value));
+      });
+    };
+
+    const set = (_t: HTMLElement, s: string) => {
+      if (s === "custom") {
+        setTimeout(askCustom, 300);
+        return;
+      }
+      report(PluginSettings.saveFavoritesPageSize(Number(s)));
+    };
+
+    // 宿站选项第三项是图标位（缺了会渲染成 "undefined"）：这里放条数本身
+    const badge = (text: string) =>
+      `<div style="font-size:24px;font-weight:600;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;">${text}</div>`;
+    const selectOption: (string | number)[][] = [
+      ...FAVORITES_PAGE_SIZES.map((size) => [
+        size,
+        `${size} 条`,
+        badge(String(size)),
+      ]),
+      ["custom", "自定义…", badge("#")],
+    ];
 
     IIROSEUtils.buildSelect2(
       null,
@@ -237,6 +336,9 @@ export class PluginSettings {
       parsed.defaultPage = PluginSettings.normalizeDefaultPage(
         parsed.defaultPage,
       );
+      parsed.favoritesPageSize = PluginSettings.normalizeFavoritesPageSize(
+        parsed.favoritesPageSize,
+      );
       // 已退役的「随机包含专辑/歌单」：随机范围改由面板选择决定，旧值不再生效。
       delete (parsed as { shuffleIncludeCollections?: unknown })
         .shuffleIncludeCollections;
@@ -249,6 +351,7 @@ export class PluginSettings {
       defaultPage: 0,
       searchViewMode: "card",
       announceMode: "card",
+      favoritesPageSize: 10,
       sync: PluginSettings.defaultSyncSettings(),
     };
   }
