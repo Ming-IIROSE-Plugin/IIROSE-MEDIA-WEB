@@ -321,3 +321,45 @@ describe("选集面板的歌单曲目", () => {
     expect(neteaseMusic.getNeteaseSongDetail).not.toHaveBeenCalled();
   });
 });
+
+describe("一级菜单选正序 / 乱序后显示点播中", () => {
+  it("选完顺序：这一行进入点播中，第一首发出后恢复", async () => {
+    const { getRequestStatus, requestKey, noteMediaSent, resetRequestGuard } =
+      await import("../playback/RequestGuard");
+    resetRequestGuard();
+    const playlist = {
+      title: "千首歌单",
+      neteaseMusic: { id: 77, isSongList: true },
+    } as PlatformData;
+    let finish!: () => void;
+    const playAll = vi
+      .spyOn(NetEasePlatform, "playCollectionAll")
+      .mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+    const build = vi
+      .spyOn(IIROSEUtils, "buildSelect2")
+      .mockImplementation(() => {});
+    NetEasePlatform.MLOD(playlist);
+    const cb = build.mock.lastCall?.[2] as (
+      target: HTMLElement,
+      value: string,
+    ) => Promise<void>;
+    const done = cb(null as unknown as HTMLElement, "0");
+    await Promise.resolve();
+    expect(playAll).toHaveBeenCalledWith(playlist, "asc");
+    expect(getRequestStatus(requestKey(playlist))).toBe("pending");
+    noteMediaSent("&1{}");
+    finish();
+    await done;
+    // 菜单回调的包装不返回内部 Promise：等守卫自己落地
+    await vi.waitFor(() =>
+      expect(getRequestStatus(requestKey(playlist))).toBe("idle"),
+    );
+    playAll.mockRestore();
+    build.mockRestore();
+  });
+});

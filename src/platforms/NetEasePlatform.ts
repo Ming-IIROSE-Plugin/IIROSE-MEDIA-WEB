@@ -1,4 +1,5 @@
 import { NeteaseMusicAPI } from "../Api/NeteaseAPI/NeteaseMusic";
+import { guardedRequest } from "../playback/RequestGuard";
 import { NeteaseSearchAPI } from "../Api/NeteaseAPI/NeteaseSearch";
 import { SearchData } from "../Api/NeteaseAPI/NeteaseSearch/SearchInterface";
 import {
@@ -846,9 +847,12 @@ export class NetEasePlatform extends Platform {
     const MLODACTION = async (select: number) => {
       // 整单正序 / 乱序：与内页头「全部播放」同一入口
       if (select === 0 || select === 1) {
-        await NetEasePlatform.playCollectionAll(
-          platformData,
-          select === 0 ? "asc" : "shuffle",
+        // 选完顺序后交给点播守卫：这一行的点播按钮转圈到第一首发出
+        await guardedRequest(platformData, () =>
+          NetEasePlatform.playCollectionAll(
+            platformData,
+            select === 0 ? "asc" : "shuffle",
+          ),
         );
         return;
       }
@@ -874,9 +878,12 @@ export class NetEasePlatform extends Platform {
     const AODACTION = async (select: number) => {
       // 整单正序 / 乱序：与内页头「全部播放」同一入口
       if (select === 0 || select === 1) {
-        await NetEasePlatform.playCollectionAll(
-          platformData,
-          select === 0 ? "asc" : "shuffle",
+        // 选完顺序后交给点播守卫：这一行的点播按钮转圈到第一首发出
+        await guardedRequest(platformData, () =>
+          NetEasePlatform.playCollectionAll(
+            platformData,
+            select === 0 ? "asc" : "shuffle",
+          ),
         );
         return;
       }
