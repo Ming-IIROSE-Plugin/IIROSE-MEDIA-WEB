@@ -151,6 +151,8 @@ export const deskSourceDots = {
   netease: "bg-[#D7371F]",
   bilibili: "bg-[#E1608C]",
   radio: "bg-[#4F7FD6]",
+  /** 多源剧集：青绿，与网易云红、B 站粉、电台蓝区分开。 */
+  multi: "bg-[#2E9A86]",
 } as const;
 
 export type DeskSourceKey = keyof typeof deskSourceDots;

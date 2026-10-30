@@ -74,6 +74,18 @@ describe("RequestGuard", () => {
     finish();
   });
 
+  it("最短转圈时长：报文瞬间发出也至少停留 minPendingMs", async () => {
+    const radio = item("电台");
+    const run = guardedRequest(radio, sends(), undefined, {
+      minPendingMs: 1_000,
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(getRequestStatus(requestKey(radio))).toBe("pending");
+    await vi.advanceTimersByTimeAsync(500);
+    await expect(run).resolves.toBe("sent");
+    expect(getRequestStatus(requestKey(radio))).toBe("idle");
+  });
+
   it("不同条目互不影响", async () => {
     await guardedRequest(item("A"), sends());
     await expect(guardedRequest(item("B"), sends())).resolves.toBe("sent");

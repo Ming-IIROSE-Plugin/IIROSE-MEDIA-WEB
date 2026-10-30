@@ -67,6 +67,9 @@ const settingsPageClass =
   "flex max-w-[760px] flex-col gap-6 pb-4 pt-6 max-[768px]:pb-6";
 
 /** 形态由「模式 + 范围 + 视图 + 内页」派生，不新增 prop 爆炸。 */
+/** 电台流几乎瞬间发出：「点播中」至少停留 1 秒，看得见过渡。 */
+export const RADIO_MIN_PENDING_MS = 1_000;
+
 export function shapeOf(options: {
   mode: number;
   scopeIndex: number;
@@ -200,7 +203,9 @@ export function ResultsArea({
       return;
     }
     // 守卫：进行中加锁、同一条目 10 秒冷却、按钮显示点播中 / 已点播 / 重试
-    void guardedRequest(platformData, currentOnDemandPlay);
+    void guardedRequest(platformData, currentOnDemandPlay, undefined, {
+      minPendingMs: mode === MODE.radio ? RADIO_MIN_PENDING_MS : 0,
+    });
   };
 
   /** 行 / 卡的主体点击：手机上挂操作条，桌面不动作。触发元素用于收起后归还焦点。 */

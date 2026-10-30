@@ -115,20 +115,14 @@ export class FavoritesService {
       startIndex + itemsPerPage,
     );
 
+    // 把平台的发送过程交回去：点播守卫据此显示「点播中」（专辑 / 歌单先弹菜单，返回 void）
     const onDemandPlay = (data: PlatformData) => {
-      if (data.bilibili) {
-        BilibiliPlatform.VOD(data);
-      } else if (data.neteaseMusic) {
-        if (data.neteaseMusic.isAlbum) {
-          NetEasePlatform.AOD(data);
-        } else if (data.neteaseMusic.isSongList) {
-          NetEasePlatform.MLOD(data);
-        } else if (data.neteaseMusic.isMV) {
-          NetEasePlatform.MVOD(data);
-        } else {
-          NetEasePlatform.MOD(data);
-        }
-      }
+      if (data.bilibili) return BilibiliPlatform.VOD(data);
+      if (!data.neteaseMusic) return;
+      if (data.neteaseMusic.isAlbum) return NetEasePlatform.AOD(data);
+      if (data.neteaseMusic.isSongList) return NetEasePlatform.MLOD(data);
+      if (data.neteaseMusic.isMV) return NetEasePlatform.MVOD(data);
+      return NetEasePlatform.MOD(data);
     };
 
     ctx.setState({

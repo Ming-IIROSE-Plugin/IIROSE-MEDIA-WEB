@@ -109,6 +109,7 @@ export async function guardedRequest(
   data: PlatformData,
   run: (data: PlatformData) => unknown,
   key: string = requestKey(data),
+  options: { minPendingMs?: number } = {},
 ): Promise<RequestOutcome> {
   if (getRequestStatus(key) === "pending") return "busy";
 
@@ -129,8 +130,15 @@ export async function guardedRequest(
   }
 
   setStatus(key, "pending");
-  const finishSent = (): RequestOutcome => {
+  const startedAt = Date.now();
+  // 电台这类几乎瞬间发出的入口：转圈至少停留 minPendingMs，不至于一闪而过
+  const holdMinimum = async () => {
+    const rest = (options.minPendingMs ?? 0) - (Date.now() - startedAt);
+    if (rest > 0) await new Promise((resolve) => setTimeout(resolve, rest));
+  };
+  const finishSent = async (): Promise<RequestOutcome> => {
     queue.splice(queue.indexOf(entry), 1);
+    await holdMinimum();
     setStatus(key, "idle");
     emitToast(`已点播《${data.title}》`);
     return "sent";

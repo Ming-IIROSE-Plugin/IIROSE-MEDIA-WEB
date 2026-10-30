@@ -1,4 +1,5 @@
 import { setPanelFocus } from "../playback/PanelFocus";
+import { RADIO_MIN_PENDING_MS } from "./components/media-card-container/ResultsArea";
 import { DeskToast } from "./components/desk/DeskToast";
 import { guardedRequest, requestKey } from "../playback/RequestGuard";
 import { Component, createRef } from "preact";
@@ -246,7 +247,14 @@ export class MainAppContainer extends Component<
 
   private playFromSheet = (platformData: PlatformData) => {
     // 操作条随即收起，结果由面板提示条告知（已点播 / 刚刚点过了）
-    void guardedRequest(platformData, this.state.currentOnDemandPlay);
+    void guardedRequest(
+      platformData,
+      this.state.currentOnDemandPlay,
+      undefined,
+      {
+        minPendingMs: this.state.mode === MODE.radio ? RADIO_MIN_PENDING_MS : 0,
+      },
+    );
     this.closeSheet();
   };
 
@@ -522,7 +530,7 @@ export class MainAppContainer extends Component<
     platform: FavoritePlatformFilter,
     title: string,
     shortTitle: string,
-    sourceKey?: "netease" | "bilibili",
+    sourceKey?: "netease" | "bilibili" | "multi",
   ): Platform {
     const ranges: { title: string; type: FavoriteRange }[] = [
       { title: "全部", type: "all" },
@@ -1037,6 +1045,7 @@ export class MainAppContainer extends Component<
         {
           title: "多源剧集",
           shortTitle: "多源",
+          sourceKey: "multi",
           subNavBarItems: [
             {
               title: "U库资源网",

@@ -125,3 +125,29 @@ describe("收藏查询与还原", () => {
     expect((await state().mediaData!).platformData).toHaveLength(1);
   });
 });
+
+describe("收藏点播交回发送过程", () => {
+  it("单曲 / 视频把平台的 Promise 交回去（点播守卫据此显示「点播中」）", async () => {
+    const { NetEasePlatform } = await import("../../platforms/NetEasePlatform");
+    const { BilibiliPlatform } =
+      await import("../../platforms/BilibiliPlatform");
+    const songSend = Promise.resolve();
+    const videoSend = Promise.resolve();
+    const mod = vi.spyOn(NetEasePlatform, "MOD").mockReturnValue(songSend);
+    const vod = vi
+      .spyOn(BilibiliPlatform, "VOD")
+      .mockReturnValue(videoSend as never);
+    storage.query.mockResolvedValue([]);
+
+    const { ctx, state } = makeCtx();
+    await FavoritesService.loadFavorites(ctx, "all", "all", 10);
+    const play = state().currentOnDemandPlay as (data: PlatformData) => unknown;
+
+    const song = { title: "鱼", neteaseMusic: { id: 1 } } as PlatformData;
+    const video = { title: "BV", bilibili: { bvid: "BV1" } } as PlatformData;
+    expect(play(song)).toBe(songSend);
+    expect(play(video)).toBe(videoSend);
+    mod.mockRestore();
+    vod.mockRestore();
+  });
+});
