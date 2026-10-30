@@ -11,6 +11,10 @@ import { h } from "preact";
 const fontSans = "font-['PingFang_SC','Microsoft_YaHei',sans-serif]";
 const fontSerif = "font-['Songti_SC','SimSun',serif]";
 const fontMono = "font-[ui-monospace,'SF_Mono',monospace]";
+// 数字：系统界面字体 + 表格数字（等宽对齐，字形正常）。等宽栈在 Windows 上会落到
+// Consolas / 宋体一类，小字号又细又散、冒号两侧发空（用户反馈时长不好看）。
+const fontNum =
+  "font-[-apple-system,BlinkMacSystemFont,'Segoe_UI','Helvetica_Neue',Arial,'PingFang_SC','Microsoft_YaHei',sans-serif]";
 
 // ---------------------------------------------------------------- 颜色
 /** 主内容区底色（paper）。 */
@@ -167,14 +171,14 @@ export const typeSearchQuery = `${fontSans} text-[17px] max-[768px]:text-[16px]`
 export const typeNavLabel = `${fontSans} text-[11.5px] tracking-[0.04em]`;
 /** 底部标签栏文字。 */
 export const typeNavLabelTab = `${fontSans} text-[11px] tracking-[0.04em]`;
-/** 等宽数字（序号、时长、页码；tabular-nums 保证列对齐）。 */
-export const typeMonoNum = `${fontMono} text-[13px] tabular-nums`;
-/** 等宽小字（手机时长、进度时间）。 */
-export const typeMonoNumSm = `${fontMono} text-[12px] tabular-nums`;
-/** 等宽胶囊字（视频时长胶囊、「直播」徽章）。 */
-export const typeMonoPill = `${fontMono} text-[11.5px] tabular-nums`;
-/** 等宽小字（表头、结果计数、键位提示）。 */
-export const typeMonoCaption = `${fontMono} text-[11px] tracking-[0.14em] tabular-nums`;
+/** 数字（序号、时长、页码；tabular-nums 每位等宽，列对齐）。 */
+export const typeMonoNum = `${fontNum} text-[13px] tabular-nums`;
+/** 数字小字（手机时长、进度时间）。 */
+export const typeMonoNumSm = `${fontNum} text-[12px] tabular-nums`;
+/** 胶囊字（视频时长胶囊、「直播」徽章）。 */
+export const typeMonoPill = `${fontNum} text-[11.5px] font-medium tabular-nums`;
+/** 小字（表头、结果计数）。 */
+export const typeMonoCaption = `${fontNum} text-[11px] tracking-[0.08em] tabular-nums`;
 
 /** 曲目行标题（15px medium）。 */
 export const typeRowTitle = `${fontSans} text-[15px] font-medium`;
