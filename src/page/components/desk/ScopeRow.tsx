@@ -72,12 +72,12 @@ export function ScopeRow({
 
   return (
     <div
-      className={`mx-[36px] mt-[18px] flex items-end border-b border-solid ${deskRule} max-[768px]:mx-[20px] max-[768px]:mt-3`}
+      className={`mx-[36px] mt-[18px] flex items-end border-b border-solid ${deskRule} max-[768px]:mx-[20px] max-[768px]:mt-3 max-[768px]:flex-wrap max-[768px]:border-b-0`}
     >
       <div
         role="tablist"
         aria-label={label}
-        className="no-scrollbar flex min-w-0 flex-1 items-end gap-[26px] overflow-x-auto overflow-y-hidden whitespace-nowrap max-[768px]:gap-[22px] max-[768px]:[mask-image:linear-gradient(to_right,black_calc(100%_-_24px),transparent)]"
+        className={`no-scrollbar flex min-w-0 flex-1 items-end gap-[26px] overflow-x-auto overflow-y-hidden whitespace-nowrap max-[768px]:gap-[22px] max-[768px]:basis-full max-[768px]:border-b max-[768px]:border-solid ${deskRule} max-[768px]:[mask-image:linear-gradient(to_right,black_calc(100%_-_24px),transparent)]`}
         onKeyDown={handleKeyDown}
       >
         {items.map((item, index) => {
@@ -111,7 +111,7 @@ export function ScopeRow({
         })}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5 pb-2 pl-3 max-[768px]:pl-2">
+      <div className="flex shrink-0 items-center gap-1.5 pb-2 pl-3 max-[768px]:w-full max-[768px]:justify-between max-[768px]:pl-0 max-[768px]:pt-2">
         {viewMode !== null && (
           <div
             role="radiogroup"
@@ -145,7 +145,7 @@ export function ScopeRow({
         )}
 
         {showPager && (
-          <div className="ml-2 flex items-center gap-1">
+          <div className="ml-2 flex items-center gap-1 max-[768px]:ml-auto">
             <button
               type="button"
               aria-label="上一页"

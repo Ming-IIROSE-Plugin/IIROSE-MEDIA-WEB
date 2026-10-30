@@ -18,6 +18,19 @@
   box-sizing: border-box;
 }
 
+/* 同样因为没有 preflight，`border-solid` + 单边 `border-b` 会让其余三边落到浏览器默认的 3px。
+   在 base 层补上 preflight 的边框基线（utilities 层照常覆盖它）。 */
+@layer base {
+  .IIROSE_MEDIA_CONTAINER *,
+  .IIROSE_MEDIA_CONTAINER *::before,
+  .IIROSE_MEDIA_CONTAINER *::after,
+  #imw-media-progress-root *,
+  #imw-shuffle-picker-root *,
+  #imw-episode-picker-root * {
+    border: 0 solid currentcolor;
+  }
+}
+
 @layer utilities {
   .font-md {
     font-family: "md" !important;
