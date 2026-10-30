@@ -28,12 +28,32 @@ export interface SourceInfo {
   label: string;
 }
 
-/** 条目的来源：平台圆点 + 简称（收藏/音乐曲目表的出处列）。 */
+/** 网易云条目的细分类型：MV / 歌单 / 专辑 / 电台 / 单曲。 */
+function neteaseKind(
+  netease: NonNullable<PlatformData["neteaseMusic"]>,
+): string {
+  if (netease.isMV) return "MV";
+  if (netease.isSongList) return "歌单";
+  if (netease.isAlbum) return "专辑";
+  if (netease.isDjRadios) return "电台";
+  return "单曲";
+}
+
+/** 条目的来源：平台圆点 + 「平台-类型」简称（收藏/音乐曲目表的出处列）。 */
 export function sourceOf(platformData: PlatformData): SourceInfo {
   if (platformData.radio?.isradio) return { key: "radio", label: "电台" };
-  if (platformData.bilibili || platformData.bilibiliLive)
-    return { key: "bilibili", label: "B站" };
-  if (platformData.neteaseMusic || platformData.websiteUrl?.includes("163.com"))
+  if (platformData.bilibiliLive) return { key: "bilibili", label: "B站-直播" };
+  if (platformData.bilibili)
+    return {
+      key: "bilibili",
+      label: platformData.bilibili.course_id ? "B站-课程" : "B站-视频",
+    };
+  if (platformData.neteaseMusic)
+    return {
+      key: "netease",
+      label: `网易云-${neteaseKind(platformData.neteaseMusic)}`,
+    };
+  if (platformData.websiteUrl?.includes("163.com"))
     return { key: "netease", label: "网易云" };
   return { key: null, label: platformData.subtitle ?? "" };
 }

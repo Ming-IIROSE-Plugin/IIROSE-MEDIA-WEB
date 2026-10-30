@@ -79,7 +79,9 @@ export function SourceCell({ platformData }: { platformData: PlatformData }) {
           className={`h-[7px] w-[7px] shrink-0 rounded-full ${deskSourceDots[source.key]}`}
         />
       )}
-      <span className="truncate">{source.label}</span>
+      <span className="truncate" title={source.label}>
+        {source.label}
+      </span>
     </span>
   );
 }
