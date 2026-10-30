@@ -164,7 +164,7 @@ export function ActionSheet({
         role="dialog"
         aria-modal="true"
         aria-label={`${platformData.title} 的操作`}
-        className={`absolute inset-x-0 bottom-0 overflow-hidden rounded-t-[16px] border-t border-solid pb-[env(safe-area-inset-bottom)] animate-[imwSheetRise_220ms_ease-out] motion-reduce:animate-[imwSheetFade_160ms_ease-out] ${deskRule} ${deskSheet}`}
+        className={`absolute inset-x-0 bottom-0 overflow-hidden rounded-t-[16px] border-t border-solid pb-[max(8px,env(safe-area-inset-bottom))] animate-[imwSheetRise_220ms_ease-out] motion-reduce:animate-[imwSheetFade_160ms_ease-out] ${deskRule} ${deskSheet}`}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={trapFocusWithin}
         {...stopHostGestures}

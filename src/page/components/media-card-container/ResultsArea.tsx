@@ -376,7 +376,7 @@ export function ResultsArea({
     <div className="h-full min-h-0">
       <div
         ref={scrollerRef}
-        className="h-full overflow-y-auto overflow-x-hidden pb-8"
+        className="h-full overflow-y-auto overflow-x-hidden pt-4 pb-8"
         data-imw-results="true"
         onScroll={handleScroll}
         onClick={handleAreaClick}

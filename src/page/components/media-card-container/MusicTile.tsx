@@ -63,9 +63,8 @@ export function MusicTile({
     onPlay();
   };
 
-  // 手机没有悬停：胶囊常显，保证「点播」可达（操作条接管的是卡片主体的点击）。
-  const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100 max-[768px]:opacity-100`;
-  const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto max-[768px]:pointer-events-auto`;
+  const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
+  const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto`;
 
   return (
     <div
@@ -101,7 +100,7 @@ export function MusicTile({
         )}
 
         <div
-          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 ${deskVideoScrim} max-[768px]:bg-transparent ${overlayVisibility}`}
+          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 ${deskVideoScrim} ${overlayVisibility}`}
         >
           <button
             type="button"

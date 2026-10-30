@@ -489,25 +489,6 @@ describe("音乐网格卡", () => {
     );
   });
 
-  it("手机没有悬停：胶囊常显且可点，遮罩不上色（story 4 操作条接管后回收）", async () => {
-    await mount(
-      withCtx(h(MusicTile, { platformData: song, onPlay: () => {} })),
-    );
-    const overlay = host.querySelector(".bg-\\[\\#0A090861\\]")!;
-    expect(overlay.getAttribute("class")).toContain("max-[768px]:opacity-100");
-    expect(overlay.getAttribute("class")).toContain(
-      "max-[768px]:bg-transparent",
-    );
-    const capsule = Array.from(host.querySelectorAll("button")).find(
-      (el) => el.textContent === "点播",
-    )!;
-    expect(capsule.getAttribute("class")).toContain(
-      "max-[768px]:pointer-events-auto",
-    );
-  });
-});
-
-describe("视频卡", () => {
   it("16:9 缩略图 + 右下等宽时长胶囊", async () => {
     await mount(
       withCtx(h(VideoTile, { platformData: video, onPlay: () => {} })),
@@ -565,16 +546,14 @@ describe("视频卡", () => {
     expect(onPlay).toHaveBeenCalledOnce();
   });
 
-  it("手机没有悬停：胶囊常显且可点（story 4 操作条接管后回收）", async () => {
-    const onPlay = vi.fn();
-    await mount(withCtx(h(VideoTile, { platformData: video, onPlay })));
+  it("手机不常显胶囊：点卡片走操作条，胶囊只在悬停/选中时出现", async () => {
+    await mount(
+      withCtx(h(VideoTile, { platformData: video, onPlay: () => {} })),
+    );
     const overlay = host.querySelector(".bg-\\[\\#0A090861\\]")!;
-    expect(overlay.getAttribute("class")).toContain("max-[768px]:opacity-100");
-    const capsule = Array.from(host.querySelectorAll("button")).find(
-      (el) => el.textContent === "点播到房间",
-    )!;
-    capsule.click();
-    expect(onPlay).toHaveBeenCalledOnce();
+    expect(overlay.getAttribute("class")).not.toContain(
+      "max-[768px]:opacity-100",
+    );
   });
 });
 
