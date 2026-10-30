@@ -366,6 +366,15 @@ describe("六种模式的现场", () => {
     const { ref } = await mount(MODE.favorites);
     const controller = (ref.current as unknown as Harness).controller;
     const before = favorites.loadFavorites.mock.calls.length;
+    // 已渲染的结果与本地缓存必须原样留着：逐字过滤不清列表、不闪骨架
+    const rendered = Promise.resolve({
+      platformData: [] as PlatformData[],
+      totalPage: 0,
+    });
+    const cached = [{ title: "某收藏" }] as unknown as PlatformData[];
+    await act(async () => {
+      ref.current!.setState({ mediaData: rendered, allMediaData: cached });
+    });
 
     await act(async () => {
       controller.filterLive("周杰伦");
@@ -377,6 +386,9 @@ describe("六种模式的现场", () => {
     expect(
       favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword,
     ).toBe("周杰伦");
+    // 即时过滤只改关键词：不清已渲染结果（清掉就每键闪一次骨架）
+    expect(state.mediaData).toBe(rendered);
+    expect(state.allMediaData).toBe(cached);
     // 只在本地收藏里过滤：网易云 / B 站搜索接口一次都没碰
     expect(netease.searchMusic).not.toHaveBeenCalled();
     expect(bilibili.snbclickSearchVideo).not.toHaveBeenCalled();
@@ -386,19 +398,32 @@ describe("六种模式的现场", () => {
     const { ref } = await mount(MODE.radio);
     const controller = (ref.current as unknown as Harness).controller;
     expect(radio.search).toHaveBeenCalledTimes(1);
+    // 本地列表是即时过滤的唯一数据源：清掉它会落回网络分支重新出网
+    const cached = [
+      { title: "Listen.moe" },
+      { title: "Vocaloid Radio" },
+    ] as unknown as PlatformData[];
+    const rendered = Promise.resolve({
+      platformData: cached,
+      totalPage: 1,
+    });
+    await act(async () => {
+      ref.current!.setState({ mediaData: rendered, allMediaData: cached });
+    });
 
     await act(async () => {
       controller.filterLive("vocaloid");
     });
+    const state = (ref.current as unknown as Harness).state;
     expect(radio.search).toHaveBeenCalledTimes(2);
     expect(radio.search).toHaveBeenLastCalledWith(
       expect.anything(),
       10,
       "japan",
     );
-    expect((ref.current as unknown as Harness).state.searchKeyword).toBe(
-      "vocaloid",
-    );
+    expect(state.searchKeyword).toBe("vocaloid");
+    expect(state.allMediaData).toBe(cached);
+    expect(state.mediaData).toBe(rendered);
   });
 
   it("进入收藏模式与关键词为空的音乐首屏都重跑当前范围", async () => {
@@ -423,6 +448,29 @@ describe("六种模式的现场", () => {
     });
     // 回到首屏按最新的点播历史重取
     expect(recent.load.mock.calls.length).toBe(musicCalls + 1);
+  });
+
+  it("关键词非空的音乐模式切回来不重跑（首屏才反映历史）", async () => {
+    const { ref } = await mount(MODE.music);
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      controller.runSearch("陈绮贞");
+    });
+    // 记录检索次数：切回音乐模式不该再提交一次
+    const searches = netease.searchMusic.mock.calls.length;
+    const recentCalls = recent.load.mock.calls.length;
+
+    await act(async () => {
+      render(h(Container, { ...props(MODE.video), ref } as object), root);
+    });
+    await act(async () => {
+      render(h(Container, { ...props(MODE.music), ref } as object), root);
+    });
+    expect(netease.searchMusic.mock.calls.length).toBe(searches);
+    expect(recent.load.mock.calls.length).toBe(recentCalls);
+    expect((ref.current as unknown as Harness).state.searchKeyword).toBe(
+      "陈绮贞",
+    );
   });
 
   it("电台模式复用无线电广播平台", async () => {

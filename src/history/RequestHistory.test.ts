@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { REQUEST_HISTORY_KEY, RequestHistory } from "./RequestHistory";
+import { Media } from "../iirose_func/Socket/Media";
 
 beforeEach(() => {
   localStorage.clear();
@@ -49,6 +50,81 @@ describe("报文解析", () => {
     expect(RequestHistory.load()).toEqual([]);
   });
 
+  it("真实 mediaEvent 产出的报文能解析：平台码、https 升级与媒体 id", () => {
+    // 报文形状只由生产的 `mediaEvent` 定义：这里用真模块产出，不手抄字段
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const mediaEvent = (media: Partial<MediaData>) =>
+        new Media().mediaEvent({
+          type: "music",
+          name: "",
+          singer: "",
+          cover: "",
+          link: "",
+          url: "",
+          duration: 0,
+          bitRate: 320,
+          color: "#000000",
+          ...media,
+        } as MediaData);
+
+      RequestHistory.recordPayload(
+        mediaEvent({
+          origin: "netease",
+          name: "晴天",
+          singer: "周杰伦",
+          cover: "https://a/c.jpg",
+          link: "https://music.163.com/#/song?id=1",
+          url: "https://a/b.mp3",
+          duration: 300,
+        }),
+      );
+      RequestHistory.recordPayload(
+        mediaEvent({
+          type: "video",
+          origin: "bilibili",
+          name: "某视频",
+          singer: "UP主",
+          cover: "http://a/c.jpg",
+          link: "https://www.bilibili.com/video/BV1xx411c7mD",
+          url: "https://a/v.mp4",
+          duration: 600,
+        }),
+      );
+      RequestHistory.recordPayload(
+        mediaEvent({
+          type: "video",
+          name: "无来源视频",
+          link: "https://example.com/v/1",
+          url: "https://example.com/v/1.mp4",
+          duration: 60,
+        }),
+      );
+
+      expect(RequestHistory.load()).toMatchObject([
+        {
+          source: "other",
+          kind: "other",
+          mediaId: null,
+          key: "other:无来源视频|",
+        },
+        {
+          source: "bilibili",
+          kind: "video",
+          mediaId: "BV1xx411c7mD",
+          cover: "https://a/c.jpg",
+          link: "https://www.bilibili.com/video/BV1xx411c7mD",
+        },
+        { source: "netease", kind: "music", mediaId: "1", key: "netease:1" },
+      ]);
+      expect(RequestHistory.recentMusic().map((entry) => entry.key)).toEqual([
+        "netease:1",
+      ]);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   it("标题为空或 JSON 解析失败一律不写", () => {
     RequestHistory.recordPayload(payload({ n: "   " }));
     RequestHistory.recordPayload("&1{不是 JSON");
@@ -65,12 +141,24 @@ describe("报文解析", () => {
         c: "s://example.com/a.png",
       }),
     );
+    // 没有媒体 id 时键退化为「来源:标题|歌手」：换一条流地址仍是同一条记录，移到最前
+    RequestHistory.recordPayload(
+      payload({
+        b: "=0",
+        n: "某电台",
+        r: "电台",
+        o: "s://example.com/stream-2",
+        c: "s://example.com/a.png",
+      }),
+    );
+    expect(RequestHistory.load()).toHaveLength(1);
     const [entry] = RequestHistory.load();
     expect(entry).toMatchObject({
       source: "other",
       kind: "other",
       mediaId: null,
       key: "other:某电台|电台",
+      link: "https://example.com/stream-2",
     });
     expect(RequestHistory.recentMusic()).toEqual([]);
   });

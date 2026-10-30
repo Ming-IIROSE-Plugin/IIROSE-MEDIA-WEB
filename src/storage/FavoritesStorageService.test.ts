@@ -233,9 +233,30 @@ describe("收藏查询", () => {
       websiteUrl: "https://music.163.com/#/playlist?id=8",
       neteaseMusic: { id: 8, fee: 0, isSongList: true },
     } as any);
+    // 另一来源的记录：用来验证「来源筛选」真的筛库，而不是只在调用参数上出现过
+    await svc.add({
+      title: "Vocaloid Live",
+      coverImg: "",
+      author: "UP主",
+      websiteUrl: "https://www.bilibili.com/video/BV1xx411c7mD",
+      bilibili: { aid: 7, bvid: "BV1xx411c7mD" },
+    } as any);
 
     const collection = await svc.query({ types: ["album", "playlist"] });
     expect(collection.map((r) => r.type).sort()).toEqual(["album", "playlist"]);
+
+    // 来源筛选：只剩该平台的记录，合并范围下也不会混进别的来源
+    expect(
+      (await svc.query({ platform: "bilibili" })).map((r) => r.title),
+    ).toEqual(["Vocaloid Live"]);
+    expect(
+      await svc.query({ platform: "bilibili", types: ["album", "playlist"] }),
+    ).toEqual([]);
+    expect(
+      (await svc.query({ platform: "netease", types: ["album", "playlist"] }))
+        .map((r) => r.type)
+        .sort(),
+    ).toEqual(["album", "playlist"]);
 
     // 与 type 并用取交集：视频类型下没有专辑/歌单
     expect(
@@ -247,6 +268,10 @@ describe("收藏查询", () => {
         (r) => r.title,
       ),
     ).toEqual(["某专辑"]);
+    // 关键词不区分大小写（收藏即时过滤的约定）
+    expect(
+      (await svc.query({ keyword: "vocaloid" })).map((r) => r.title),
+    ).toEqual(["Vocaloid Live"]);
 
     // 墓碑不进合并范围
     await svc.remove({
