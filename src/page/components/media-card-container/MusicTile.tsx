@@ -66,7 +66,7 @@ export function MusicTile({
     onPlay();
   };
 
-  // 点播进行中 / 刚发出 / 失败时胶囊保持可见，鼠标移开也看得到结果
+  // 点播进行中 / 失败时胶囊保持可见，鼠标移开也看得到结果
   const status = useRequestStatus(platformData);
   const shown = revealed || status !== "idle";
   const overlayVisibility = `${shown ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
@@ -120,13 +120,7 @@ export function MusicTile({
           >
             {status !== "idle" && (
               <DeskIcon
-                name={
-                  status === "pending"
-                    ? "spinner"
-                    : status === "sent"
-                      ? "check"
-                      : "refresh"
-                }
+                name={status === "pending" ? "spinner" : "refresh"}
                 size={16}
                 className={status === "pending" ? "animate-spin" : ""}
               />

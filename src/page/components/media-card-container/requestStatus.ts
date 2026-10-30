@@ -22,8 +22,6 @@ export function requestLabel(status: RequestStatus, idle: string): string {
   switch (status) {
     case "pending":
       return "点播中";
-    case "sent":
-      return "已点播";
     case "failed":
       return "重试";
     default:

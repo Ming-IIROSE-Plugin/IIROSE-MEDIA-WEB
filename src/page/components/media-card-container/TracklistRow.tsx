@@ -15,11 +15,8 @@ import {
   deskInk,
   deskInk2,
   deskInk3,
-  deskOnRose,
   deskRose,
   deskRoseFill,
-  deskRoseSolid,
-  deskRoseSolidBorder,
   deskRowHover,
   deskRule,
   deskSendHover,
@@ -97,23 +94,21 @@ export interface RequestButtonProps {
   status?: RequestStatus;
 }
 
-/** 按钮状态的外观：已点播转实心蔷薇红，失败晃一下并改蔷薇红字。 */
+/** 按钮状态的外观：点播中转圈不可点，失败晃一下并改蔷薇红字。 */
 const requestStateLook: Record<RequestStatus, string> = {
   idle: "",
   pending: "cursor-wait",
-  sent: `${deskRoseSolid} ${deskRoseSolidBorder} ${deskOnRose}`,
   failed: `${deskRose} animate-[imwShake_360ms_ease-in-out]`,
 };
 
 const requestStateIcon: Record<RequestStatus, DeskIconName> = {
   idle: "play",
   pending: "spinner",
-  sent: "check",
   failed: "refresh",
 };
 
 /** 点播按钮：桌面描边胶囊、悬停整行时转实心蔷薇红；手机 40px 方钮（点击区 44px）。
- *  点播中 / 已点播 / 重试三种状态原地显示，点播中不可再点。 */
+ *  点播中（转圈直到报文发出）/ 重试原地显示，点播中不可再点。 */
 export function RequestButton({
   supported = true,
   onPlay,

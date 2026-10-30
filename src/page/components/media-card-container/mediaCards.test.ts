@@ -420,7 +420,7 @@ describe("曲目表", () => {
     expect(onPlay).toHaveBeenCalledOnce();
   });
 
-  it("点播按钮状态：点播中不可再点，已点播转实心，重试晃一下", async () => {
+  it("点播按钮状态：点播中转圈不可再点，重试晃一下", async () => {
     const onPlay = vi.fn();
     await mount(withCtx(h(RequestButton, { onPlay, status: "pending" })));
     const pending = host.querySelector("button")!;
@@ -432,13 +432,6 @@ describe("曲目表", () => {
     );
     pending.click();
     expect(onPlay).not.toHaveBeenCalled();
-
-    render(null, host);
-    await mount(withCtx(h(RequestButton, { onPlay, status: "sent" })));
-    const sent = host.querySelector("button")!;
-    expect(sent.textContent).toBe("已点播");
-    expect(classesOf(sent)).toContain("bg-[#B42F3E]");
-    expect(classesOf(sent)).not.toContain("hov:group-hover:bg-[#B42F3E]");
 
     render(null, host);
     await mount(withCtx(h(RequestButton, { onPlay, status: "failed" })));

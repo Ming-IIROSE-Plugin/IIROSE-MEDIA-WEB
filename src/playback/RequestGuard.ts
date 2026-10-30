@@ -1,7 +1,7 @@
 // 点播守卫：面板内所有手动点播入口（曲目行、网格卡、视频卡、操作条、收藏、
 // 最近点播、电台、歌单「全部播放」）都经过这里。
-// - 进行中加锁：同一条目还没发完，再点无效（防连点刷屏）。
-// - 冷却：同一条目发出后 COOLDOWN_MS 内再点只提示，不再发送；不同条目互不影响。
+// - 进行中加锁：同一条目的点播报文还没发出，再点无效（防连点刷屏）；
+//   报文一发出立刻解锁，可以再点。不同条目互不影响。
 // - 结果判定不改平台层：以 `Socket.send` 观察到的 `&1` 点播报文为「真的发出去了」，
 //   以平台层弹出的提示（ShowMessage）为「失败」；两者都没有（如弹出了选集面板、
 //   正序/乱序菜单）按「交给下一步」回到空闲，不算失败。
@@ -9,14 +9,9 @@
 import { ShowMessage } from "../iirose_func/ShowMessage";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 
-export type RequestStatus = "idle" | "pending" | "sent" | "failed";
-export type RequestOutcome =
-  "sent" | "failed" | "handoff" | "busy" | "cooldown";
+export type RequestStatus = "idle" | "pending" | "failed";
+export type RequestOutcome = "sent" | "failed" | "handoff" | "busy";
 
-/** 同一条目发出后多久内不能再点。 */
-export const COOLDOWN_MS = 10_000;
-/** 「已点播」停留时长。 */
-export const SENT_SHOW_MS = 1_500;
 /** 「重试」停留时长。 */
 export const FAILED_SHOW_MS = 3_000;
 /** 平台函数已返回但报文还没到时，再等多久。 */
@@ -35,7 +30,6 @@ interface Pending {
 }
 
 const status = new Map<string, RequestStatus>();
-const sentAt = new Map<string, number>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
 const queue: Pending[] = [];
 const statusListeners = new Set<() => void>();
@@ -117,11 +111,6 @@ export async function guardedRequest(
   key: string = requestKey(data),
 ): Promise<RequestOutcome> {
   if (getRequestStatus(key) === "pending") return "busy";
-  const last = sentAt.get(key);
-  if (last !== undefined && Date.now() - last < COOLDOWN_MS) {
-    emitToast(`刚刚点过《${data.title}》了，稍等一会儿`);
-    return "cooldown";
-  }
 
   const messagesBefore = ShowMessage.shownCount;
   const entry: Pending = { key, sent: false };
@@ -140,20 +129,32 @@ export async function guardedRequest(
   }
 
   setStatus(key, "pending");
-  try {
-    if (!threw) await result;
-  } catch {
-    threw = true;
-  }
-  if (!entry.sent && !threw) await waitForSend(entry);
-  queue.splice(queue.indexOf(entry), 1);
-
-  if (entry.sent) {
-    sentAt.set(key, Date.now());
-    setStatus(key, "sent", SENT_SHOW_MS);
+  const finishSent = (): RequestOutcome => {
+    queue.splice(queue.indexOf(entry), 1);
+    setStatus(key, "idle");
     emitToast(`已点播《${data.title}》`);
     return "sent";
-  }
+  };
+
+  // 报文可能在平台函数里同步发出（等待还没挂上）：先查一次
+  if (entry.sent) return finishSent();
+  // 第一条报文一发出就结束转圈（整张歌单会继续在后台连发），不等平台函数整体返回。
+  const firstSend = new Promise<"sent">((resolve) => {
+    entry.onSent = () => resolve("sent");
+  });
+  const settled = threw
+    ? Promise.resolve<"threw">("threw")
+    : Promise.resolve(result).then(
+        () => "settled" as const,
+        () => "threw" as const,
+      );
+  const first = await Promise.race([firstSend, settled]);
+  if (first === "sent" || entry.sent) return finishSent();
+  if (first === "threw") threw = true;
+  else await waitForSend(entry);
+  if (entry.sent) return finishSent();
+  queue.splice(queue.indexOf(entry), 1);
+
   if (threw || ShowMessage.shownCount > messagesBefore) {
     setStatus(key, "failed", FAILED_SHOW_MS);
     return "failed";
@@ -167,7 +168,6 @@ export function resetRequestGuard(): void {
   timers.forEach((timer) => clearTimeout(timer));
   timers.clear();
   status.clear();
-  sentAt.clear();
   queue.length = 0;
   statusListeners.clear();
   toastListeners.clear();
