@@ -1,3 +1,4 @@
+import { noteMediaSent } from "../playback/RequestGuard";
 import { render } from "preact";
 import { MainAppControlLayer } from "./MainAppControlLayer";
 import { MediaProgress } from "./components/media-progress/MediaProgress";
@@ -156,6 +157,7 @@ function initMediaProgress() {
   const observeSocket = (data: string) => {
     memory?.record(data);
     RequestHistory.recordPayload(data);
+    noteMediaSent(data);
   };
   Socket.observe = observeSocket;
   shuffle = new ShuffleController(

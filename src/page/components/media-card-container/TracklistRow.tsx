@@ -6,14 +6,20 @@ import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
 import { formatDuration, isVideoItem, sourceOf } from "./mediaFormat";
 import { notifyRoomUnsupported } from "./roomSupport";
+import { requestLabel, useRequestStatus } from "./requestStatus";
+import type { RequestStatus } from "../../../playback/RequestGuard";
 import {
   DeskIcon,
+  type DeskIconName,
   deskFocusRing,
   deskInk,
   deskInk2,
   deskInk3,
+  deskOnRose,
   deskRose,
   deskRoseFill,
+  deskRoseSolid,
+  deskRoseSolidBorder,
   deskRowHover,
   deskRule,
   deskSendHover,
@@ -86,32 +92,58 @@ export interface RequestButtonProps {
   onPlay: () => void;
   /** 手机上的读屏名（桌面显示「点播」文字）。 */
   label?: string;
+  /** 点播守卫给的状态（缺省空闲）。 */
+  status?: RequestStatus;
 }
 
-/** 点播按钮：桌面描边胶囊、悬停整行时转实心蔷薇红；手机 40px 方钮（点击区 44px）。 */
+/** 按钮状态的外观：已点播转实心蔷薇红，失败晃一下并改蔷薇红字。 */
+const requestStateLook: Record<RequestStatus, string> = {
+  idle: "",
+  pending: "cursor-wait",
+  sent: `${deskRoseSolid} ${deskRoseSolidBorder} ${deskOnRose}`,
+  failed: `${deskRose} animate-[imwShake_360ms_ease-in-out]`,
+};
+
+const requestStateIcon: Record<RequestStatus, DeskIconName> = {
+  idle: "play",
+  pending: "spinner",
+  sent: "check",
+  failed: "refresh",
+};
+
+/** 点播按钮：桌面描边胶囊、悬停整行时转实心蔷薇红；手机 40px 方钮（点击区 44px）。
+ *  点播中 / 已点播 / 重试三种状态原地显示，点播中不可再点。 */
 export function RequestButton({
   supported = true,
   onPlay,
   label = "点播",
+  status = "idle",
 }: RequestButtonProps) {
+  const text = requestLabel(status, "点播");
   return (
     <button
       type="button"
-      aria-label={label}
-      aria-disabled={!supported}
+      aria-label={status === "idle" ? label : `${label}：${text}`}
+      aria-disabled={!supported || status === "pending"}
+      aria-busy={status === "pending"}
       title={supported ? "点播到房间" : "这个房间不支持点播"}
-      className={`relative flex w-full cursor-pointer items-center justify-center gap-1.5 border border-solid bg-transparent p-0 ${roundedRequestButton} ${deskRule} ${deskInk2} ${deskFocusRing} ${typeButtonSm} after:absolute after:-inset-[2px] after:content-[''] h-8 max-[768px]:h-10 max-[768px]:w-10 max-[768px]:justify-self-center ${supported ? deskSendHover : "opacity-40"}`}
+      className={`relative flex w-full cursor-pointer items-center justify-center gap-1.5 border border-solid bg-transparent p-0 ${roundedRequestButton} ${deskRule} ${deskInk2} ${deskFocusRing} ${typeButtonSm} after:absolute after:-inset-[2px] after:content-[''] h-8 transition-[background-color,border-color,color,transform] duration-150! ease-out active:scale-95 max-[768px]:h-10 max-[768px]:w-10 max-[768px]:justify-self-center ${supported ? (status === "idle" ? deskSendHover : "") : "opacity-40"} ${requestStateLook[status]}`}
       onClick={(event) => {
         event.stopPropagation();
         if (!supported) {
           notifyRoomUnsupported();
           return;
         }
+        if (status === "pending") return;
         onPlay();
       }}
     >
-      <DeskIcon name="play" size={14} />
-      <span className="max-[768px]:hidden">点播</span>
+      <DeskIcon
+        name={requestStateIcon[status]}
+        size={14}
+        className={status === "pending" ? "animate-spin" : ""}
+      />
+      <span className="max-[768px]:hidden">{text}</span>
     </button>
   );
 }
@@ -139,6 +171,7 @@ export function TracklistRow({
   onActivate,
 }: TracklistRowProps) {
   const radio = variant === "radio";
+  const status = useRequestStatus(platformData);
   const duration = formatDuration(platformData.duration);
 
   return (
@@ -210,6 +243,7 @@ export function TracklistRow({
         supported={supported}
         label={`点播 ${platformData.title}`}
         onPlay={onPlay}
+        status={status}
       />
     </div>
   );

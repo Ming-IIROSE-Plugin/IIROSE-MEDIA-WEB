@@ -3,6 +3,7 @@
 // 「点播到房间」胶囊。MV、B 站视频、多源剧集与直播共用本组件。
 // 多 P / 多集的选集由插件自有面板接管（story 5）；只有面板服务不了的 B 站课程卡
 // 仍带一个「选集」文字钮，走内页钻取。
+import { requestLabel, useRequestStatus } from "./requestStatus";
 import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
 import {
@@ -29,6 +30,7 @@ import {
   typeVideoMeta,
   typeVideoTitle,
 } from "../floating-panel/tokens";
+import { DeskIcon } from "../floating-panel/tokens";
 
 export interface VideoTileProps {
   platformData: PlatformData;
@@ -77,8 +79,11 @@ export function VideoTile({
     onPlay();
   };
 
-  const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
-  const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto`;
+  // 点播进行中 / 刚发出 / 失败时胶囊保持可见，鼠标移开也看得到结果
+  const status = useRequestStatus(platformData);
+  const shown = revealed || status !== "idle";
+  const overlayVisibility = `${shown ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
+  const overlayHit = `${shown ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto`;
 
   return (
     <div
@@ -132,13 +137,28 @@ export function VideoTile({
         >
           <button
             type="button"
-            className={`flex h-[38px] items-center justify-center rounded-full border-0 px-5 max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"}`}
+            aria-busy={status === "pending"}
+            className={`flex h-[38px] items-center justify-center gap-1.5 rounded-full border-0 px-5 transition-transform duration-150! ease-out active:scale-95 max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"} ${status === "pending" ? "cursor-wait" : ""} ${status === "failed" ? "animate-[imwShake_360ms_ease-in-out]" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
+              if (status === "pending") return;
               onPlay();
             }}
           >
-            点播到房间
+            {status !== "idle" && (
+              <DeskIcon
+                name={
+                  status === "pending"
+                    ? "spinner"
+                    : status === "sent"
+                      ? "check"
+                      : "refresh"
+                }
+                size={16}
+                className={status === "pending" ? "animate-spin" : ""}
+              />
+            )}
+            {requestLabel(status, "点播到房间")}
           </button>
           {onSelectEpisodes && (
             <button

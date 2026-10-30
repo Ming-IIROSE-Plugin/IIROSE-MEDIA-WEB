@@ -1,5 +1,6 @@
 // 结果区容器：Promise 状态机（loading / error / 空 / 未搜索）+ 按模式与范围选形态。
 // 取代旧的 `MediaCard`：曲目表 / 音乐网格 / 视频网格 / 专辑·歌单行 / 状态部件都在这里选。
+import { guardedRequest } from "../../../playback/RequestGuard";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { SettingsCards } from "../settings/SettingsGroup";
 import { MediaContainerContext } from "../media-container-context/MediaContainerContext";
@@ -196,7 +197,8 @@ export function ResultsArea({
       notifyRoomUnsupported();
       return;
     }
-    currentOnDemandPlay(platformData);
+    // 守卫：进行中加锁、同一条目 10 秒冷却、按钮显示点播中 / 已点播 / 重试
+    void guardedRequest(platformData, currentOnDemandPlay);
   };
 
   /** 行 / 卡的主体点击：手机上挂操作条，桌面不动作。触发元素用于收起后归还焦点。 */

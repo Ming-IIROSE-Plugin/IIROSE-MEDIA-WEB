@@ -1,5 +1,6 @@
 // 音乐网格卡（DESIGN.md `music-tile`）：1:1 封面、无卡片框，悬停/聚焦/点按选中时
 // 覆遮罩并出现「点播」胶囊；标题单行截断，副行「歌手 · 等宽时长」，桌面在标题行右端放收藏星。
+import { requestLabel, useRequestStatus } from "./requestStatus";
 import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
 import { formatDuration, isPhoneLayout, isTapToReveal } from "./mediaFormat";
@@ -22,6 +23,7 @@ import {
   typeVideoMeta,
   typeVideoTitle,
 } from "../floating-panel/tokens";
+import { DeskIcon } from "../floating-panel/tokens";
 
 export interface MusicTileProps {
   platformData: PlatformData;
@@ -63,8 +65,11 @@ export function MusicTile({
     onPlay();
   };
 
-  const overlayVisibility = `${revealed ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
-  const overlayHit = `${revealed ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto`;
+  // 点播进行中 / 刚发出 / 失败时胶囊保持可见，鼠标移开也看得到结果
+  const status = useRequestStatus(platformData);
+  const shown = revealed || status !== "idle";
+  const overlayVisibility = `${shown ? "opacity-100" : "opacity-0"} hov:group-hover:opacity-100 group-focus-within:opacity-100`;
+  const overlayHit = `${shown ? "pointer-events-auto" : "pointer-events-none"} hov:group-hover:pointer-events-auto group-focus-within:pointer-events-auto`;
 
   return (
     <div
@@ -104,13 +109,28 @@ export function MusicTile({
         >
           <button
             type="button"
-            className={`flex h-[38px] items-center justify-center rounded-full border-0 px-5 max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"}`}
+            aria-busy={status === "pending"}
+            className={`flex h-[38px] items-center justify-center gap-1.5 rounded-full border-0 px-5 transition-transform duration-150! ease-out active:scale-95 max-[768px]:h-11 ${deskRoseSolid} ${deskOnRose} ${typeLabelStrong} ${deskFocusRingOnRose} ${overlayHit} ${supported ? "" : "opacity-40"} ${status === "pending" ? "cursor-wait" : ""} ${status === "failed" ? "animate-[imwShake_360ms_ease-in-out]" : ""}`}
             onClick={(event) => {
               event.stopPropagation();
+              if (status === "pending") return;
               onPlay();
             }}
           >
-            点播
+            {status !== "idle" && (
+              <DeskIcon
+                name={
+                  status === "pending"
+                    ? "spinner"
+                    : status === "sent"
+                      ? "check"
+                      : "refresh"
+                }
+                size={16}
+                className={status === "pending" ? "animate-spin" : ""}
+              />
+            )}
+            {requestLabel(status, "点播")}
           </button>
         </div>
       </div>

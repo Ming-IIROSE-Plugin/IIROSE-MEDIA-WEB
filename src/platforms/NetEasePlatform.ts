@@ -878,8 +878,9 @@ export class NetEasePlatform extends Platform {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
       // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
-      void Announce.runSingleAnnounce(() => this.finalODSONG([id])).catch((e) =>
-        Announce.showBatchItemError(e),
+      // 返回发送过程：点播守卫据此显示「点播中 / 已点播」
+      return Announce.runSingleAnnounce(() => this.finalODSONG([id])).catch(
+        (e) => Announce.showBatchItemError(e),
       );
     } catch (error) {
       ShowMessage.show((error as Error).message);

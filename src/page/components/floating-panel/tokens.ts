@@ -133,6 +133,8 @@ export const deskSendHover =
 
 /** 搜索栏几乎不可见的抬升线（DESIGN.md Elevation & Depth，不承载信息）。 */
 export const deskSearchShadow = "shadow-[0_1px_0_#00000005]";
+/** 面板提示条：浮在结果区上方的柔和投影。 */
+export const deskToastShadow = "shadow-[0_6px_20px_#0000002E]";
 
 /** 平台来源圆点：只做 7px 圆点，从不整片铺色，不随主题变化。 */
 export const deskSourceDots = {
@@ -260,6 +262,9 @@ export type DeskIconName =
   | "sort"
   | "shuffle"
   | "repeat"
+  // 点播按钮状态（点播中 / 已点播）
+  | "check"
+  | "spinner"
   // 设置行 / 关于卡（DESIGN 的 symbol 表未覆盖，同风格补：描边 1.6–1.9、currentColor）
   | "user"
   | "users"
@@ -302,6 +307,8 @@ export const DESK_ICON_NAMES: readonly DeskIconName[] = [
   "sort",
   "shuffle",
   "repeat",
+  "check",
+  "spinner",
   "user",
   "users",
   "clock",
@@ -343,6 +350,10 @@ const ICON_INNER: Record<DeskIconName, string> = {
   right:
     '<path d="M9.5 6.5L15 12l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   play: '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/>',
+  check:
+    '<path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  spinner:
+    '<path d="M12 4a8 8 0 1 1-8 8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
   send: '<path d="M20.4 4.2L3.9 11.1l6.3 2.6 2.6 6.3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M20.4 4.2l-10.2 9.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   close:
     '<path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',

@@ -285,6 +285,34 @@
 }
 
 /* 手机操作条从视口底部升起（DESIGN.md `action-sheet`）；减少动态时只留淡入。 */
+/* 点播失败：按钮左右轻晃一下（点播守卫置「重试」时） */
+@keyframes imwShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-3px);
+  }
+  40%,
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+/* 面板提示条从下方 8px 淡入 */
+@keyframes imwToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes imwSheetRise {
   from {
     transform: translateY(100%);

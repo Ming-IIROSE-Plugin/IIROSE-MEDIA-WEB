@@ -139,8 +139,11 @@ export class Announce {
     if (
       cause === Announce.batchItemErrorToastMessage &&
       now - Announce.batchItemErrorToastAt < 10000
-    )
+    ) {
+      // 提示被去重吞掉，失败仍要记账：点播守卫靠这个计数把按钮置为「重试」
+      ShowMessage.shownCount++;
       return;
+    }
     Announce.batchItemErrorToastMessage = cause;
     Announce.batchItemErrorToastAt = now;
     ShowMessage.show(label ? `《${label}》播放失败：${cause}` : cause);

@@ -416,6 +416,35 @@ describe("曲目表", () => {
     expect(onPlay).toHaveBeenCalledOnce();
   });
 
+  it("点播按钮状态：点播中不可再点，已点播转实心，重试晃一下", async () => {
+    const onPlay = vi.fn();
+    await mount(withCtx(h(RequestButton, { onPlay, status: "pending" })));
+    const pending = host.querySelector("button")!;
+    expect(pending.textContent).toBe("点播中");
+    expect(pending.getAttribute("aria-busy")).toBe("true");
+    expect(pending.getAttribute("aria-disabled")).toBe("true");
+    expect(host.querySelector("svg")!.getAttribute("class")).toContain(
+      "animate-spin",
+    );
+    pending.click();
+    expect(onPlay).not.toHaveBeenCalled();
+
+    render(null, host);
+    await mount(withCtx(h(RequestButton, { onPlay, status: "sent" })));
+    const sent = host.querySelector("button")!;
+    expect(sent.textContent).toBe("已点播");
+    expect(classesOf(sent)).toContain("bg-[#B42F3E]");
+    expect(classesOf(sent)).not.toContain("hov:group-hover:bg-[#B42F3E]");
+
+    render(null, host);
+    await mount(withCtx(h(RequestButton, { onPlay, status: "failed" })));
+    const failed = host.querySelector("button")!;
+    expect(failed.textContent).toBe("重试");
+    expect(classesOf(failed)).toContain("animate-[imwShake_360ms_ease-in-out]");
+    failed.click();
+    expect(onPlay).toHaveBeenCalledOnce();
+  });
+
   it("房间不支持点播：roomSupportsRequest / notifyRoomUnsupported 是唯一出口", () => {
     const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
     expect(roomSupportsRequest()).toBe(true);

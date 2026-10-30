@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetRequestGuard } from "../playback/RequestGuard";
 import { createRef, h, render, type ComponentType } from "preact";
 import { act } from "preact/test-utils";
 
@@ -891,6 +892,22 @@ describe("专辑 / 歌单内页", () => {
       "shuffle",
     );
 
+    // 点播守卫：上一次整张播放还没有结果时，再点被锁住，不会再发一整张
+    const lockedTrigger = Array.from(root.querySelectorAll("button")).find(
+      (el) => el.textContent?.includes("全部播放"),
+    )!;
+    await act(async () => {
+      lockedTrigger.click();
+    });
+    const lockedAsc = Array.from(
+      document.querySelectorAll('[role="menuitem"]'),
+    ).find((el) => el.textContent === "正序播放") as HTMLElement;
+    await act(async () => {
+      lockedAsc.click();
+    });
+    expect(neteasePlatform.playCollectionAll).toHaveBeenCalledTimes(1);
+
+    resetRequestGuard();
     const triggerAgain = Array.from(root.querySelectorAll("button")).find(
       (el) => el.textContent?.includes("全部播放"),
     )!;

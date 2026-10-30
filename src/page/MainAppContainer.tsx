@@ -1,4 +1,6 @@
 import { setPanelFocus } from "../playback/PanelFocus";
+import { DeskToast } from "./components/desk/DeskToast";
+import { guardedRequest, requestKey } from "../playback/RequestGuard";
 import { Component, createRef } from "preact";
 import { ResultsArea } from "./components/media-card-container/ResultsArea";
 import { CollectionHeader } from "./components/media-card-container/CollectionHeader";
@@ -236,7 +238,8 @@ export class MainAppContainer extends Component<
   };
 
   private playFromSheet = (platformData: PlatformData) => {
-    this.state.currentOnDemandPlay(platformData);
+    // 操作条随即收起，结果由面板提示条告知（已点播 / 刚刚点过了）
+    void guardedRequest(platformData, this.state.currentOnDemandPlay);
     this.closeSheet();
   };
 
@@ -291,7 +294,11 @@ export class MainAppContainer extends Component<
       notifyRoomUnsupported();
       return;
     }
-    void NetEasePlatform.playCollectionAll(collection, order);
+    void guardedRequest(
+      collection,
+      () => NetEasePlatform.playCollectionAll(collection, order),
+      `${requestKey(collection)}:all`,
+    );
   };
 
   render() {
@@ -426,6 +433,7 @@ export class MainAppContainer extends Component<
                 onRetry={this.handleRetry}
                 onClearSearch={this.handleClearSearch}
               />
+              <DeskToast />
             </div>
 
             {/* 底部条 / 迷你条：桌面三栏、手机迷你条 + 展开层（story 3） */}
