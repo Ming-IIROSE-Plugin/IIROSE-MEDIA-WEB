@@ -5,9 +5,15 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import type { MediaHost } from "../../../media-progress/HostMediaBridge";
 import { HostMediaBridge } from "../../../media-progress/HostMediaBridge";
+import type { FavoriteRecord } from "../../../storage/FavoritesStorageService";
 import { MediaProgress } from "../media-progress/MediaProgress";
 import { ShufflePicker } from "../shuffle-picker/ShufflePicker";
-import { deskFocusRingOnRose, deskOnRose, deskRoseSolid } from "./tokens";
+import {
+  deskFocusRingOnRose,
+  deskInk,
+  deskOnRose,
+  deskRoseSolid,
+} from "./tokens";
 
 let host: MediaHost;
 let root: HTMLDivElement;
@@ -54,21 +60,49 @@ function mountProgress() {
   return bridge;
 }
 
-async function mountShuffle(dark: boolean) {
+/** 一条最小可用收藏：把列表与勾选框渲染出来（配色断言需要真实节点）。 */
+const favorite = {
+  id: "netease:song:1",
+  platform: "netease",
+  type: "song",
+  title: "晴天",
+  coverImg: "http://p1.music.126.net/cover.jpg",
+  author: "周杰伦",
+  websiteUrl: "",
+  createdAt: 1,
+  updatedAt: 1,
+  platformData: {
+    title: "",
+    coverImg: "",
+    author: "",
+    websiteUrl: "",
+    neteaseMusic: { id: 1, fee: 0 },
+  },
+} as unknown as FavoriteRecord;
+
+async function mountShuffle(
+  dark: boolean,
+  options: { records?: FavoriteRecord[]; error?: string } = {},
+) {
   await act(async () => {
     render(
       h(ShufflePicker, {
         platforms: ["netease"],
         initialPlatform: "netease",
         dark,
-        load: async () => ({ records: [], saved: null }),
+        load: async () => ({ records: options.records ?? [], saved: null }),
+        error: options.error,
         onConfirm: () => {},
         onCancel: () => {},
       }),
       root,
     );
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  // 收藏在 `load` 的 then 里落地：每拍单独 act，等列表/勾选框真正渲染。
+  for (let tick = 0; tick < 4; tick += 1)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
 }
 
 beforeEach(() => {
@@ -198,6 +232,52 @@ describe("两个浮窗外框与强调色", () => {
         "imw-dark:focus-visible:shadow-[inset_0_0_0_2px_#141312]",
       ]),
     );
+  });
+});
+
+describe("实底蔷薇红零件（勾选、权重分段、错误行）", () => {
+  const solidTokens = `${deskRoseSolid} ${deskOnRose}`.split(/\s+/);
+
+  it("勾选选中：描边与实底取蔷薇红、字色 on-rose", async () => {
+    await mountShuffle(true, { records: [favorite] });
+    // 单条收藏初始即选中：勾选框内层方块直接取实底蔷薇红。
+    const box = shuffleDialog().querySelector<HTMLElement>(
+      '[role="checkbox"][aria-checked="true"] > span',
+    )!;
+    const list = classesOf(box);
+    expect(list).toContain("border-[#B42F3E]");
+    expect(list).toContain("imw-dark:border-[#E3606C]");
+    for (const token of solidTokens) expect(list).toContain(token);
+  });
+
+  it("权重分段选中：实底蔷薇红；未选中走按压底色", async () => {
+    await mountShuffle(true);
+    const radios = Array.from(
+      shuffleDialog().querySelectorAll<HTMLElement>('[role="radio"]'),
+    );
+    const selected = radios.find(
+      (radio) => radio.getAttribute("aria-checked") === "true",
+    )!;
+    const idle = radios.find(
+      (radio) => radio.getAttribute("aria-checked") === "false",
+    )!;
+    for (const token of solidTokens)
+      expect(classesOf(selected)).toContain(token);
+    expect(classesOf(idle)).toContain("hov:hover:bg-[#EFEBE3]");
+    expect(classesOf(idle)).not.toContain("bg-[#B42F3E]");
+  });
+
+  it("底栏错误行：保留 role=alert，字色取 ink 令牌（不用蔷薇红）", async () => {
+    await mountShuffle(true, {
+      records: [favorite],
+      error: "保存失败，请重试",
+    });
+    const alert = shuffleDialog().querySelector<HTMLElement>('[role="alert"]')!;
+    expect(alert.textContent).toBe("保存失败，请重试");
+    for (const token of deskInk.split(/\s+/))
+      expect(classesOf(alert)).toContain(token);
+    expect(classesOf(alert)).not.toContain("text-red-500");
+    expect(classesOf(alert)).not.toContain("text-[#B42F3E]");
   });
 });
 
