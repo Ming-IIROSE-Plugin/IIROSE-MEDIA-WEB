@@ -2,6 +2,13 @@
 // 0～1 项不渲染；2～3 项等宽分段（首尾自动圆角）；4 项及以上为可横向滑动的胶囊。
 import { useEffect, useRef, useState } from "preact/hooks";
 import { focusRing } from "../floating-panel/floatingPanel";
+import {
+  deskOnRose,
+  deskPressTone,
+  deskRoseBorder,
+  deskRoseSolid,
+  deskRule,
+} from "../floating-panel/tokens";
 
 export interface PlatformTabItem<T extends string = string> {
   id: T;
@@ -32,7 +39,6 @@ export function PlatformTabs<T extends string>({
   items,
   selected,
   onSelect,
-  dark,
   disabled = false,
   tabId,
   controls,
@@ -99,7 +105,7 @@ export function PlatformTabs<T extends string>({
     select(next, true);
   };
 
-  const idle = dark ? "border-white/15" : "border-black/10";
+  const idle = deskRule;
 
   return (
     <div
@@ -110,19 +116,19 @@ export function PlatformTabs<T extends string>({
       data-layout={pills ? "pills" : "segmented"}
       className={
         pills
-          ? `relative flex gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${more ? "[mask-image:linear-gradient(to_right,#000_calc(100%_-_32px),transparent)]" : ""}`
+          ? `relative flex gap-2 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${more ? "[mask-image:linear-gradient(to_right,black_calc(100%_-_32px),transparent)]" : ""}`
           : "flex"
       }
       onScroll={pills ? measure : undefined}
     >
       {items.map((item, index) => {
         const isSelected = index === selectedIndex;
-        const border = isSelected ? "border-sky-500" : idle;
+        const border = isSelected ? deskRoseBorder : idle;
         const fill = isSelected
-          ? "bg-sky-500 font-semibold text-white"
+          ? `${deskRoseSolid} font-semibold ${deskOnRose}`
           : disabled
             ? ""
-            : "hov:hover:bg-sky-500/8 active:bg-sky-500/15";
+            : deskPressTone;
         const shape = pills
           ? "rounded-full px-4 whitespace-nowrap"
           : `w-full ${index === 0 ? "rounded-l-lg" : ""} ${index === count - 1 ? "rounded-r-lg" : ""} ${index > 0 ? "border-l-0" : ""}`;

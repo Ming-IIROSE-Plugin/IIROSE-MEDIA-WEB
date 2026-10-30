@@ -18,17 +18,17 @@ import {
   DragGrip,
   PanelHeader,
   panelFrame,
-  panelTheme,
+  panelSurface,
   secondaryButton,
   startsOnControl,
   stopHostGestures,
   Svg,
   type DragHandleProps,
 } from "../floating-panel/floatingPanel";
+import { deskAccent, deskInk2, deskThumb } from "../floating-panel/tokens";
 
 // 快进快退：共享的描边次要按钮，保留原有尺寸、字号与禁用态。
-const stepClass = (dark: boolean) =>
-  `${secondaryButton(dark)} min-w-[44px] px-2 text-[13px] disabled:cursor-not-allowed disabled:opacity-35`;
+const stepClass = `${secondaryButton} min-w-[44px] px-2 text-[13px] disabled:cursor-not-allowed disabled:opacity-35`;
 
 const ClockIcon = () => (
   <Svg size={22}>
@@ -248,7 +248,8 @@ export function MediaProgress({
       role="dialog"
       aria-labelledby="imw-media-progress-title"
       tabIndex={-1}
-      className={`fixed z-[90001] w-[320px] overflow-auto font-sans text-[14px] max-[768px]:w-[320px] ${panelFrame} ${panelTheme(media.dark)}`}
+      data-imw-theme={media.dark ? "dark" : "light"}
+      className={`fixed z-[90001] w-[320px] overflow-auto font-sans text-[14px] max-[768px]:w-[320px] ${panelFrame} ${panelSurface}`}
       style={{ left: position.x, top: position.y }}
       {...stopHostGestures}
       onKeyDown={(event) => {
@@ -278,7 +279,9 @@ export function MediaProgress({
       />
       <div className="px-4 pb-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-sky-500/15">
+          <div
+            className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl ${deskThumb} ${deskInk2}`}
+          >
             {media.playing && media.cover && failedCover !== media.cover ? (
               <img
                 className="h-full w-full object-cover"
@@ -309,7 +312,7 @@ export function MediaProgress({
             >
               {media.playing ? media.title : "暂无播放内容"}
             </div>
-            <div className="mt-1 text-[12px] tabular-nums opacity-65">
+            <div className={`mt-1 text-[12px] tabular-nums ${deskInk2}`}>
               {formatTime(media.playing ? time : null)} /{" "}
               {formatTime(media.playing ? media.duration : null)}
               {state.preview !== null ? " · 预览" : ""}
@@ -325,7 +328,7 @@ export function MediaProgress({
           step={1}
           value={time ?? 0}
           disabled={disabled}
-          className="m-0 mt-2 h-[44px] w-full touch-none cursor-pointer accent-sky-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className={`m-0 mt-2 h-[44px] w-full touch-none cursor-pointer ${deskAccent} disabled:cursor-not-allowed disabled:opacity-40`}
           onInput={(event) => {
             if (
               seekPointer.current !== undefined ||
@@ -448,7 +451,7 @@ export function MediaProgress({
               key={seconds}
               type="button"
               disabled={disabled}
-              className={stepClass(media.dark)}
+              className={stepClass}
               aria-label={`${seconds > 0 ? "快进" : "快退"}${Math.abs(seconds) === 60 ? "1分钟" : "1秒"}`}
               onClick={() => session.current?.step(seconds)}
             >
@@ -458,12 +461,12 @@ export function MediaProgress({
           ))}
         </div>
         {media.controlNotice && (
-          <div className="mt-2 text-[11px] leading-4 opacity-65">
+          <div className={`mt-2 text-[11px] leading-4 ${deskInk2}`}>
             {media.controlNotice}
           </div>
         )}
         <div
-          className="mt-2 min-h-8 text-[11px] leading-4 opacity-65"
+          className={`mt-2 min-h-8 text-[11px] leading-4 ${deskInk2}`}
           role="status"
         >
           {unavailable ||

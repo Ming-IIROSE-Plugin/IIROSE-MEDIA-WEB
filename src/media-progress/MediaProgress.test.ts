@@ -962,7 +962,8 @@ describe("浮窗外观与收藏随机统一（CAP-6）", () => {
       expect.arrayContaining(["h-12", "pl-4", "cursor-grab", "touch-none"]),
     );
     const [icon, title, close] = Array.from(header.children);
-    expect(icon.className).toContain("text-sky-500");
+    expect(icon.className).toContain("text-[#B42F3E]");
+    expect(icon.className).toContain("imw-dark:text-[#E3606C]");
     expect(icon.querySelector("svg")).not.toBeNull();
     expect(title.textContent).toBe("播放进度");
     expect(classes(title)).toEqual(
@@ -1033,31 +1034,39 @@ describe("浮窗外观与收藏随机统一（CAP-6）", () => {
     });
   });
 
-  it("快进快退为描边次要按钮，深浅主题各取对应描边与底色", () => {
+  it("快进快退为描边次要按钮，外框与按钮取成对令牌（深色取同名 -dark）", () => {
     for (const button of steps())
       expect(classes(button)).toEqual(
         expect.arrayContaining([
           "rounded-lg",
           "border",
           "bg-transparent",
-          "border-white/15",
-          "hov:hover:bg-sky-500/8",
-          "active:bg-sky-500/15",
+          "border-[#E2DCD1]",
+          "imw-dark:border-[#2B2825]",
+          "hov:hover:bg-[#EFEBE3]",
+          "active:bg-[#E6E0D6]",
+          "imw-dark:hov:hover:bg-[#201E1C]",
+          "imw-dark:active:bg-[#262320]",
           "min-h-[44px]",
           "disabled:opacity-35",
         ]),
       );
     expect(classes(panel()!)).toEqual(
-      expect.arrayContaining(["rounded-2xl", "bg-[#242a34]"]),
+      expect.arrayContaining([
+        "rounded-2xl",
+        "border-solid",
+        "bg-[#FBFAF7]",
+        "imw-dark:bg-[#1C1A18]",
+        "border-[#E2DCD1]",
+      ]),
     );
+    expect(panel()!.getAttribute("data-imw-theme")).toBe("dark");
     Object.assign(window, { theme: 1 });
     try {
       reopen();
-      for (const button of steps()) {
-        expect(classes(button)).toContain("border-black/10");
-        expect(classes(button)).not.toContain("bg-black/5");
-      }
-      expect(classes(panel()!)).toContain("bg-[#fafbfe]");
+      expect(classes(panel()!)).toContain("bg-[#FBFAF7]");
+      expect(classes(panel()!)).not.toContain("bg-black/5");
+      expect(panel()!.getAttribute("data-imw-theme")).toBe("light");
     } finally {
       delete (window as { theme?: unknown }).theme;
     }

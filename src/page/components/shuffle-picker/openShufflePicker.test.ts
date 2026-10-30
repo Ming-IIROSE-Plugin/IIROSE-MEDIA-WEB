@@ -585,14 +585,21 @@ describe("openShufflePicker", () => {
     expect(root()).not.toBeNull();
   });
 
-  it("深浅主题取 !window.theme", async () => {
+  it("深浅主题取 !window.theme：根节点写 data-imw-theme，外框取成对令牌", async () => {
     (window as unknown as { theme: unknown }).theme = 0;
     await open();
-    expect(dialog().className).toContain("bg-[#242a34]");
+    expect(root()!.firstElementChild!.getAttribute("data-imw-theme")).toBe(
+      "dark",
+    );
+    expect(dialog().className).toContain("imw-dark:bg-[#1C1A18]");
+    expect(dialog().className).toContain("border-[#E2DCD1]");
     act(() => releaseShufflePicker());
     (window as unknown as { theme: unknown }).theme = 1;
     await open();
-    expect(dialog().className).toContain("bg-[#fafbfe]");
+    expect(root()!.firstElementChild!.getAttribute("data-imw-theme")).toBe(
+      "light",
+    );
+    expect(dialog().className).toContain("bg-[#FBFAF7]");
   });
 });
 

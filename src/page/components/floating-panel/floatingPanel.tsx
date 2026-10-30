@@ -1,61 +1,47 @@
 // 插件浮窗（收藏随机、播放进度）共用的外观：样式常量与无状态小组件，不含业务逻辑。
-// 以收藏随机的视觉为准（shuffle-picker-panel.md「视觉规范」）；两窗只从这里取外观。
+// 外观一律取 tokens.ts 的成对令牌（纸 / 墨 / 蔷薇红），与主面板视觉同源（CAP-12）。
 import type { JSX } from "preact";
-import { deskFocusRing } from "./tokens";
+import {
+  deskFocusRing,
+  deskFocusRingOnRose,
+  deskInk,
+  deskOnRose,
+  deskPressTone,
+  deskRose,
+  deskRoseSolid,
+  deskRule,
+  deskSheet,
+} from "./tokens";
 
 // 焦点环：2px ink 外圈、2px 间隔（DESIGN.md components.focus-ring）。
-// 浮窗的其余配色归 story 8，本 story 只换环。
 export const focusRing = deskFocusRing;
 // 同一属性的 Tailwind 类不能同时出现（顺序由 Tailwind 决定，不由书写顺序）：
 // 底色、文字色、描边各自按用途补，不放进公共基类。
 export const resetButton = `m-0 cursor-pointer p-0 font-[inherit] ${focusRing}`;
 export const plainButton = `${resetButton} border-0 bg-transparent`;
-export const iconButton = `${plainButton} text-inherit flex h-11 w-11 shrink-0 items-center justify-center rounded-lg hov:hover:bg-sky-500/8 active:bg-sky-500/15`;
-export const textButton = `${plainButton} min-h-[44px] rounded-lg px-3 text-[13px] text-sky-500 hov:hover:bg-sky-500/8 active:bg-sky-500/15`;
+export const iconButton = `${plainButton} text-inherit flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${deskPressTone}`;
+export const textButton = `${plainButton} min-h-[44px] rounded-lg px-3 text-[13px] ${deskRose} ${deskPressTone}`;
 
-/** 描边色：分隔线、输入框、次要按钮共用（宿站 `window.theme` 假值即深色）。 */
-export const borderTone = (dark: boolean) =>
-  dark ? "border-white/15" : "border-black/10";
+/** 面板底色、文字色与描边色（sheet 底、ink 字、rule 描边）。 */
+export const panelSurface = `${deskSheet} ${deskInk} ${deskRule}`;
 
-/** 面板底色、文字色与描边色。 */
-export const panelTheme = (dark: boolean) =>
-  dark
-    ? "border-white/15 bg-[#242a34] text-[#f4f6fa]"
-    : "border-black/10 bg-[#fafbfe] text-[#253047]";
+/** 描边色：分隔线、输入框、次要按钮共用（rule）。 */
+export const panelBorder = deskRule;
 
-/** 外框：圆角、描边、阴影（不含尺寸与定位，配色另取 panelTheme）。 */
-export const panelFrame =
-  "rounded-2xl border border-solid shadow-[0_12px_40px_rgba(0,0,0,0.25)] outline-none";
+/** 外框：圆角、描边（浮层靠 sheet 底 + 1px rule，不用投影）。 */
+export const panelFrame = "rounded-2xl border border-solid outline-none";
 
 /**
- * 次要按钮（透明底 + 描边，悬停淡天蓝、按压加深）。
+ * 次要按钮（透明底 + rule 描边，悬停淡底色、按压加深）。
  * 不含内边距与字号，由使用处补，避免同属性类并存。
  */
-export const secondaryButton = (dark: boolean) =>
-  `${resetButton} min-h-[44px] rounded-lg border border-solid bg-transparent text-inherit hov:hover:bg-sky-500/8 active:bg-sky-500/15 ${borderTone(dark)}`;
+export const secondaryButton = `${resetButton} min-h-[44px] rounded-lg border border-solid bg-transparent text-inherit ${deskPressTone} ${panelBorder}`;
 
-/** 主按钮（天蓝底白字）；不含内边距与字号。 */
-export const primaryButton = `${resetButton} min-h-[44px] rounded-lg border-0 bg-sky-500 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40`;
+/** 主按钮（蔷薇红实底 + on-rose 字色，焦点环带 paper 内环）；不含内边距与字号。 */
+export const primaryButton = `m-0 cursor-pointer p-0 font-[inherit] min-h-[44px] rounded-lg border-0 font-semibold ${deskRoseSolid} ${deskOnRose} ${deskFocusRingOnRose} disabled:cursor-not-allowed disabled:opacity-40`;
 
-// ---- 主题变体版：给插件主面板用 ----
-// 主面板不逐个组件传 dark，而是根节点写 `data-imw-theme`，由 `imw-dark:` 变体
-// （注册在 src/app.css）切深色；取值与上面的 panelTheme / borderTone 一致。
-
-/** 主面板根节点 `data-imw-theme` 的取值。 */
+/** 主面板根节点 `data-imw-theme` 的取值（浮窗根也写同一个值）。 */
 export const themeAttr = (dark: boolean) => (dark ? "dark" : "light");
-
-/** 强调色实底白字（不含交互反馈；禁用态直接用它再补 opacity）。 */
-export const accentFill = "border-0 bg-(color:--imw-accent) text-white";
-
-/** 强调色实心按钮（白字，悬停/按压减淡）；不含尺寸、圆角与字号。 */
-export const accentFillButton = `${accentFill} hov:hover:opacity-90 active:opacity-80`;
-
-/** 强调色描边次要按钮；不含尺寸、圆角与字号。 */
-export const accentOutlineButton =
-  "border border-solid border-(color:--imw-accent)/45 bg-transparent text-(color:--imw-accent-ink) hov:hover:bg-(color:--imw-accent)/8 active:bg-(color:--imw-accent)/15";
-
-/** 封面占位底（图片未加载或透明处）。 */
-export const coverPlaceholder = "bg-black/10 imw-dark:bg-white/[0.06]";
 
 /** 拖动手柄的光标与触控行为。 */
 export const dragHandleClass = (dragging: boolean) =>
@@ -157,7 +143,7 @@ export function DragGrip({
 }
 
 /**
- * 头部行：天蓝图标 + 15px semibold 标题 + 右侧 44×44 关闭钮；整行是拖动手柄，
+ * 头部行：蔷薇红图标 + 15px semibold 标题 + 右侧 44×44 关闭钮；整行是拖动手柄，
  * handle 的实现用 startsOnControl 排除关闭钮。
  */
 export function PanelHeader({
@@ -182,7 +168,7 @@ export function PanelHeader({
       className={`flex h-12 shrink-0 items-center gap-2 pl-4 pr-1 ${dragHandleClass(dragging)}`}
       {...handle}
     >
-      <span className="text-sky-500">{icon}</span>
+      <span className={deskRose}>{icon}</span>
       <span id={titleId} className="text-[15px] font-semibold">
         {title}
       </span>

@@ -47,13 +47,12 @@ import {
   pointerPosition,
 } from "../../../media-progress/viewport";
 import {
-  borderTone,
   DragGrip,
   focusRing,
   iconButton,
   PanelHeader,
   panelFrame,
-  panelTheme,
+  panelSurface,
   primaryButton,
   resetButton,
   secondaryButton,
@@ -62,6 +61,18 @@ import {
   Svg,
   textButton,
 } from "../floating-panel/floatingPanel";
+import {
+  deskInk,
+  deskInk2,
+  deskOnRose,
+  deskPressTone,
+  deskRoseBorder,
+  deskRoseBorderFocus,
+  deskRoseSolid,
+  deskRule,
+  deskSkeleton,
+  deskThumb,
+} from "../floating-panel/tokens";
 import {
   readShufflePickerPosition,
   saveShufflePickerPosition,
@@ -201,7 +212,7 @@ function Checkbox({
       }}
     >
       <span
-        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 border-solid ${on ? "border-sky-500 bg-sky-500 text-white" : "border-current/40 bg-transparent"}`}
+        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 border-solid ${on ? `${deskRoseBorder} ${deskRoseSolid} ${deskOnRose}` : "border-current/40 bg-transparent"}`}
       >
         {check === "all" && (
           <Svg size={14} strokeWidth={3}>
@@ -222,7 +233,9 @@ function Cover({ record }: { record: FavoriteRecord }) {
   const [failed, setFailed] = useState(false);
   const src = (record.coverImg || "").replace(/^http:\/\//, "https://");
   return (
-    <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-sky-500/15 text-sky-500">
+    <span
+      className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg ${deskThumb} ${deskInk2}`}
+    >
       {src && !failed ? (
         <img
           className="block h-full w-full object-cover"
@@ -634,7 +647,7 @@ export function ShufflePicker({
 
   const visibleNow = shown && !exiting;
   // 面板自身接收指针（定位层不拦截）；退场中不再接收。
-  const cardBase = `flex max-h-[70%] w-[400px] max-w-[calc(100%-24px)] flex-col overflow-hidden ${panelFrame} ease-out ${exiting ? "pointer-events-none" : "pointer-events-auto"} ${panelTheme(dark)}`;
+  const cardBase = `flex max-h-[70%] w-[400px] max-w-[calc(100%-24px)] flex-col overflow-hidden ${panelFrame} ease-out ${exiting ? "pointer-events-none" : "pointer-events-auto"} ${panelSurface}`;
   const motion = `transition-[opacity,scale] motion-reduce:transition-opacity ${visibleNow ? "scale-100 opacity-100 duration-[180ms]" : "scale-95 opacity-0 duration-[90ms] motion-reduce:scale-100"}`;
   // 有已存位置：桌面与移动端都是浮动卡片，入场淡入 + scale-95→100（减弱动效只淡入）。
   // 无已存位置：桌面居中；移动端浮动卡片停在视口上半部（距顶 12px），不挡底部聊天输入栏。
@@ -654,8 +667,8 @@ export function ShufflePicker({
           key={key}
           className="flex h-11 animate-pulse items-center gap-3 pl-[52px] pr-3"
         >
-          <span className="h-5 w-5 shrink-0 rounded-md bg-current opacity-10" />
-          <span className="h-3 flex-1 rounded bg-current opacity-10" />
+          <span className={`h-5 w-5 shrink-0 rounded-md ${deskSkeleton}`} />
+          <span className={`h-3 flex-1 rounded ${deskSkeleton}`} />
         </div>
       ));
     else if (failed.has(record.id))
@@ -691,7 +704,7 @@ export function ShufflePicker({
         return (
           <div
             key={track.id}
-            className="flex h-11 cursor-pointer items-center gap-1 pl-[40px] pr-3 hov:hover:bg-sky-500/8 active:bg-sky-500/15"
+            className={`flex h-11 cursor-pointer items-center gap-1 pl-[40px] pr-3 ${deskPressTone}`}
             onClick={toggle}
           >
             <Checkbox
@@ -720,6 +733,7 @@ export function ShufflePicker({
   return (
     <div
       ref={layer}
+      data-imw-theme={dark ? "dark" : "light"}
       className="pointer-events-none fixed inset-0 z-[90010] flex items-center justify-center font-sans text-[14px] leading-normal max-[768px]:items-start"
     >
       <div
@@ -764,7 +778,7 @@ export function ShufflePicker({
 
         <div className="shrink-0 px-3">
           <div
-            className={`flex h-11 items-center rounded-lg border border-solid pl-3 ${borderTone(dark)} focus-within:border-sky-500`}
+            className={`flex h-11 items-center rounded-lg border border-solid pl-3 ${deskRule} ${deskRoseBorderFocus}`}
           >
             <SearchIcon />
             <input
@@ -814,7 +828,7 @@ export function ShufflePicker({
             <div
               role="radiogroup"
               aria-label="随机权重"
-              className={`flex h-8 overflow-hidden rounded-lg border border-solid ${borderTone(dark)}`}
+              className={`flex h-8 overflow-hidden rounded-lg border border-solid ${deskRule}`}
             >
               {(["entry", "song"] as const).map((weight) => {
                 const selected = state.weight === weight;
@@ -825,7 +839,7 @@ export function ShufflePicker({
                     role="radio"
                     aria-checked={selected ? "true" : "false"}
                     tabIndex={selected ? 0 : -1}
-                    className={`${resetButton} relative h-full border-0 px-3 text-[13px] before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] max-[768px]:text-[12px] ${selected ? "bg-sky-500 text-white" : "bg-transparent text-inherit hov:hover:bg-sky-500/8"}`}
+                    className={`${resetButton} relative h-full border-0 px-3 text-[13px] before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] max-[768px]:text-[12px] ${selected ? `${deskRoseSolid} ${deskOnRose}` : `bg-transparent text-inherit ${deskPressTone}`}`}
                     onClick={() => setState((prev) => ({ ...prev, weight }))}
                     onKeyDown={(event) => {
                       if (
@@ -866,7 +880,7 @@ export function ShufflePicker({
           aria-labelledby={
             showTabs ? tabId(platform) : "imw-shuffle-picker-title"
           }
-          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain border-0 border-y border-solid ${borderTone(dark)}`}
+          className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain border-0 border-y border-solid ${deskRule}`}
         >
           {!records && loadFailed.has(platform) ? (
             <div className="flex h-28 flex-col items-center justify-center gap-1">
@@ -928,7 +942,7 @@ export function ShufflePicker({
               return (
                 <div key={record.id}>
                   <div
-                    className={`flex h-14 items-center gap-1 pl-1 pr-1 ${disabled ? "" : "cursor-pointer hov:hover:bg-sky-500/8 active:bg-sky-500/15"}`}
+                    className={`flex h-14 items-center gap-1 pl-1 pr-1 ${disabled ? "" : `cursor-pointer ${deskPressTone}`}`}
                     onClick={toggle}
                   >
                     <Checkbox
@@ -992,7 +1006,7 @@ export function ShufflePicker({
             <div className="flex gap-2 max-[768px]:grid max-[768px]:grid-cols-2">
               <button
                 type="button"
-                className={`${secondaryButton(dark)} px-4 text-[14px]`}
+                className={`${secondaryButton} px-4 text-[14px]`}
                 onClick={() => !exiting && onCancel()}
               >
                 取消
@@ -1015,7 +1029,7 @@ export function ShufflePicker({
             {error && (
               <div
                 role="alert"
-                className="mt-1 text-right text-[11px] leading-4 text-red-500"
+                className={`mt-1 text-right text-[11px] leading-4 ${deskInk}`}
               >
                 {error}
               </div>
