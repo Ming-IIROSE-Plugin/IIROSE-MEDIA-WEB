@@ -11,7 +11,14 @@
 /.agents
 /.claude
 /_bmad
-/_bmad-output
+/_bmad-output/*
+# 「点歌台」UX 规格（DESIGN.md / EXPERIENCE.md）入库；其余 BMAD 产物仍只留本机
+!/_bmad-output/initiative-media-desk-redesign/
+/_bmad-output/initiative-media-desk-redesign/*
+!/_bmad-output/initiative-media-desk-redesign/ux-media-desk/
+/_bmad-output/initiative-media-desk-redesign/ux-media-desk/*
+!/_bmad-output/initiative-media-desk-redesign/ux-media-desk/DESIGN.md
+!/_bmad-output/initiative-media-desk-redesign/ux-media-desk/EXPERIENCE.md
 /.opencode
 /.bmad-loop
 
