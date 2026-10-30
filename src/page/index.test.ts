@@ -324,12 +324,61 @@ describe("收藏随机选择面板接线", () => {
       await settle();
       expect(pickerRoot()).toBeNull();
     });
+
+    // 底部条的「收藏随机」与侧栏行共用 `openShuffle`：真实面板、真实回顾焦。
+    it("底部条的收藏随机也走同一个选择面板：取消回焦点、确认点亮", async () => {
+      (window as unknown as { Utils: Record<string, unknown> }).Utils.sync =
+        () => {};
+      const show = Gesture.ShowHideMainApp as unknown as () => Promise<void>;
+      await act(async () => {
+        await show();
+      });
+      await settle();
+
+      const deckShuffle = () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-imw-deck="room"] [data-imw-mode="shuffle"]',
+        )!;
+      expect(deckShuffle()).not.toBeNull();
+      deckShuffle().getClientRects = () =>
+        [{ width: 1, height: 1 }] as unknown as DOMRectList;
+
+      act(() => deckShuffle().click());
+      await settle();
+      expect(pickerRoot()).not.toBeNull();
+      expect(shuffleButton().getAttribute("aria-pressed")).toBe("false");
+
+      act(() => footerButton("取消").click());
+      await settle();
+      expect(pickerRoot()).toBeNull();
+      expect(document.activeElement).toBe(deckShuffle());
+
+      act(() => deckShuffle().click());
+      await settle();
+      act(() => footerButton("开始随机").click());
+      await settle();
+      expect(shuffleButton().getAttribute("aria-pressed")).toBe("true");
+    });
   });
 });
 
 describe("面板底部条会话接线", () => {
   const mainContainer = () =>
     document.getElementById("mainContainer") as HTMLDivElement;
+
+  it("会话里的 playback 就是侧栏行驱动的那一份实例", () => {
+    IMCInit.init(mainContainer());
+    const session = mediaSession()!;
+    const row = document.getElementById("imw-toggle-loop") as HTMLButtonElement;
+    // 本夹具没有播放结束报文缓存，循环默认灰化；打开可用性再点，验证两份是同一实例
+    act(() =>
+      session.playback.setAvailability("loop", { enabled: true, reason: "" }),
+    );
+    expect(row.getAttribute("aria-disabled")).toBe("false");
+    act(() => row.click());
+    expect(session.playback.mode).toBe("loop");
+    expect(row.getAttribute("aria-pressed")).toBe("true");
+  });
 
   it("init 后提供页面会话（底部条随之渲染），pagehide 后释放", async () => {
     IMCInit.init(mainContainer());

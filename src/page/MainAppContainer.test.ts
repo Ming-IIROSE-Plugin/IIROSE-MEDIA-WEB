@@ -87,6 +87,13 @@ vi.mock("../sync/SyncManager", () => ({
 
 import { MainAppContainer } from "./MainAppContainer";
 import { MODE } from "./components/desk/deskModes";
+import type { HostMediaBridge } from "../media-progress/HostMediaBridge";
+import {
+  provideMediaSession,
+  releaseMediaSession,
+} from "../media-progress/MediaSession";
+import { PlaybackMode } from "../playback/PlaybackMode";
+import { snapshot } from "../playback/fixtures";
 
 interface Harness {
   state: MainAppContainerState;
@@ -540,5 +547,66 @@ describe("清除搜索", () => {
       favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword,
     ).toBe("");
     expect(favorites.loadFavorites).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("底部条接线", () => {
+  // 最小会话替身：底部条只要 `read` / `subscribe` 与一份 PlaybackMode。
+  function deckSession() {
+    const media = snapshot();
+    const bridge = {
+      current: media,
+      read: () => ({ ...bridge.current }),
+      subscribe(listener: (next: typeof media) => void) {
+        listener(bridge.current);
+        return () => {};
+      },
+      send: () => true,
+      controlUnavailable: false,
+      controlUnavailableMessage: "",
+    };
+    const playback = new PlaybackMode();
+    playback.setMediaPresent(true);
+    playback.applySnapshot(media);
+    return {
+      bridge: bridge as unknown as HostMediaBridge,
+      playback,
+      pickShuffle: () => {},
+    };
+  }
+
+  it("关面板与切模式都收起展开层（active / mode 透传到 RoomDeck）", async () => {
+    provideMediaSession(deckSession());
+    try {
+      const { ref } = await mount(MODE.music);
+      const miniBody = () =>
+        root.querySelector<HTMLElement>('[data-imw-deck="mini"] button')!;
+      expect(miniBody()).not.toBeNull();
+
+      act(() => miniBody().click());
+      expect(root.querySelector('[data-imw-deck="expanded"]')).not.toBeNull();
+
+      // 关面板：active=false 透传下去，展开层收起
+      await act(async () => {
+        render(
+          h(Container, { ...props(MODE.music), active: false, ref } as object),
+          root,
+        );
+      });
+      expect(root.querySelector('[data-imw-deck="expanded"]')).toBeNull();
+
+      // 重新打开并切模式：mode 变化同样收起
+      await act(async () => {
+        render(h(Container, { ...props(MODE.music), ref } as object), root);
+      });
+      act(() => miniBody().click());
+      expect(root.querySelector('[data-imw-deck="expanded"]')).not.toBeNull();
+      await act(async () => {
+        render(h(Container, { ...props(MODE.video), ref } as object), root);
+      });
+      expect(root.querySelector('[data-imw-deck="expanded"]')).toBeNull();
+    } finally {
+      releaseMediaSession();
+    }
   });
 });

@@ -120,6 +120,12 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
     if (expanded) closeButton.current?.focus();
   }, [expanded]);
 
+  // 房间停播时收起展开层：与「无播放时点主体不展开」对称，别让拦截层继续盖着列表。
+  const idleNow = deck ? !deck.media.playing : false;
+  useEffect(() => {
+    if (idleNow) collapse(false);
+  }, [idleNow]);
+
   if (!deck) return null;
   const { media, progress, playback, seekable, live, idle } = deck;
   const requester = requesterOf(media);
@@ -271,6 +277,8 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
                 className={`absolute top-0 bottom-0 left-0 ${deskDeckProgress}`}
                 style={{
                   width: `${percentOf(progress.preview ?? media.current, media.duration)}%`,
+                  // 同桌面轨道：绕开通配过渡，否则进度线永远慢半拍。
+                  transition: "none",
                 }}
               />
             </span>
@@ -308,6 +316,14 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
           </button>
 
           {togglesFor(true)}
+
+          {/* 迷你条自己的读屏状态区：桌面那块被 `display:none` 移出无障碍树，
+              展开层又只在打开时存在——收起态下手机的提示与待命原因没有别处播报。 */}
+          {active && !expanded && (
+            <span role="status" className="sr-only">
+              {deck.status}
+            </span>
+          )}
         </div>
 
         {expanded && (
@@ -349,7 +365,10 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
                     {title}
                   </div>
                   {requester && (
-                    <div className="mt-px truncate text-[12px] opacity-60">
+                    <div
+                      className="mt-px truncate text-[12px] opacity-60"
+                      data-imw-deck-requester="true"
+                    >
                       {requester}
                     </div>
                   )}

@@ -57,6 +57,11 @@ class FakeBridge {
     this.current = { ...this.current, ...patch };
     for (const listener of [...this.listeners]) listener(this.read());
   }
+
+  /** 当前监听者数量：用例据此确认卸载后没有残留订阅（不新建第二份轮询）。 */
+  get listenerCount(): number {
+    return this.listeners.size;
+  }
 }
 
 let host: HTMLDivElement;
@@ -156,6 +161,51 @@ describe("会话尚未提供", () => {
     // 两个挂载点 id 保留（三形态的落点）
     expect(host.querySelector("#imw-desk-room-deck")).not.toBeNull();
     expect(host.querySelector("#imw-desk-mini-deck")).not.toBeNull();
+  });
+});
+
+describe("订阅与手势隔离", () => {
+  it("卸载后不再持有桥接订阅（不新建第二份轮询回调）", () => {
+    const { session, bridge } = harness();
+    provideMediaSession(session);
+    mount();
+    const subscribed = bridge.listenerCount;
+    // 底部条自己那份进度会话确实挂上了
+    expect(subscribed).toBeGreaterThan(1);
+
+    act(() => {
+      render(null, host);
+    });
+    expect(bridge.listenerCount).toBe(subscribed - 1);
+  });
+
+  it("面板内触摸与鼠标事件不冒泡到 document（不触发宿站滑动识别）", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+
+    const types = [
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "mousedown",
+      "mouseup",
+    ];
+    const hostGesture = vi.fn();
+    for (const type of types) document.addEventListener(type, hostGesture);
+    try {
+      const targets = [deck("room")!, deck("mini")!];
+      act(() => {
+        for (const target of targets)
+          for (const type of types)
+            target.dispatchEvent(
+              new Event(type, { bubbles: true, cancelable: true }),
+            );
+      });
+      expect(hostGesture).not.toHaveBeenCalled();
+    } finally {
+      for (const type of types) document.removeEventListener(type, hostGesture);
+    }
   });
 });
 
@@ -412,6 +462,63 @@ describe("迷你条与展开的底部条", () => {
     expect(deck("expanded")).not.toBeNull();
     mount(false, 1);
     expect(deck("expanded")).toBeNull();
+  });
+
+  it("房间停播时自动收起展开层（与「无播放时点主体不展开」对称）", () => {
+    const { session, bridge } = harness();
+    provideMediaSession(session);
+    mount();
+    act(() => {
+      miniBody().click();
+    });
+    expect(deck("expanded")).not.toBeNull();
+
+    act(() => {
+      bridge.emit({ playing: false });
+    });
+    expect(deck("expanded")).toBeNull();
+    expect(host.querySelector("[data-imw-deck-backdrop]")).toBeNull();
+  });
+
+  it("展开层的点播者行与桌面同用一套钩子", () => {
+    const { session } = harness({ owner: "小飞鱼", ownMedia: false });
+    provideMediaSession(session);
+    mount();
+    act(() => {
+      miniBody().click();
+    });
+    const requester = deck("expanded")!.querySelector(
+      "[data-imw-deck-requester]",
+    );
+    expect(requester?.textContent).toContain("小飞鱼 点播");
+  });
+
+  it("收起态由迷你条自己播报：桌面那块在手机上不在无障碍树里", () => {
+    const { session } = harness({ owner: "小飞鱼", ownMedia: false });
+    provideMediaSession(session);
+    mount();
+    expect(deck("mini")!.querySelector('[role="status"]')).not.toBeNull();
+
+    act(() => {
+      toggleIn("mini", "loop")!.click();
+    });
+    expect(
+      deck("mini")!.querySelector('[role="status"]')!.textContent,
+    ).toContain("当前曲目由他人点播，暂不自动续播");
+
+    // 展开后由展开层自己播报，两者不同时存在于无障碍树
+    act(() => {
+      miniBody().click();
+    });
+    expect(deck("mini")!.querySelector('[role="status"]')).toBeNull();
+    expect(deck("expanded")!.querySelector('[role="status"]')).not.toBeNull();
+  });
+
+  it("面板关闭时不播报：两处状态区都不渲染", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount(false);
+    expect(host.querySelector('[role="status"]')).toBeNull();
   });
 });
 

@@ -134,17 +134,19 @@ export function DeckProgress({
           aria-hidden="true"
           className={`absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full ${deskDeckTrack}`}
         />
+        {/* `transition: none` 覆盖 `.IIROSE_MEDIA_CONTAINER *` 的 0.5s 通配过渡：
+            填充与拖柄每 250ms 改一次宽度/位置，过渡会让拖动预览滞后半秒。 */}
         <span
           aria-hidden="true"
           data-imw-deck-fill="true"
           className={`absolute top-1/2 left-0 h-1 -translate-y-1/2 rounded-full ${deskDeckProgress}`}
-          style={{ width: `${ratio * 100}%` }}
+          style={{ width: `${ratio * 100}%`, transition: "none" }}
         />
         {seekable && (
           <span
             aria-hidden="true"
             className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ${deskOnRoseFill} ${deskDeckThumbRing}`}
-            style={{ left: `${ratio * 100}%` }}
+            style={{ left: `${ratio * 100}%`, transition: "none" }}
           />
         )}
       </div>
