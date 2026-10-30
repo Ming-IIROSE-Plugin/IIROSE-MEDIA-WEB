@@ -15,6 +15,7 @@ import {
   DeskIcon,
   deskDeckProgress,
   deskDeckRing,
+  deskDeckSheetShadow,
   deskDeckSurface,
   deskDeckText,
   deskDeckTrack,
@@ -60,7 +61,7 @@ function percentOf(current: number | null, duration: number): number {
   return Math.min(100, Math.max(0, ((current ?? 0) / duration) * 100));
 }
 
-/** 标签行：蔷薇红圆点 + 等宽大写 `Now in room`（只有文字 55% 不透明度）。 */
+/** 标签行：蔷薇红圆点 + 等宽大写 `Now in room`（文字 65% 不透明度：浅色 sheet 底上对比 5.3，达 AA）。 */
 function DeckLabel() {
   return (
     <div className={`flex items-center gap-1.5 ${typeDeckLabel}`}>
@@ -68,7 +69,7 @@ function DeckLabel() {
         aria-hidden="true"
         className={`h-[7px] w-[7px] shrink-0 rounded-full ${deskRoseFill}`}
       />
-      <span className="opacity-[0.55]">{LABEL}</span>
+      <span className="opacity-[0.65]">{LABEL}</span>
     </div>
   );
 }
@@ -89,6 +90,9 @@ function LiveRow({ media }: { media: MediaSnapshot }) {
   );
 }
 
+/** 展开的底部条收起动画时长（滑出后再卸载）。 */
+export const DECK_COLLAPSE_MS = 200;
+
 export function RoomDeck({ active, mode }: RoomDeckProps) {
   const deck = useDeck();
   const [expanded, setExpanded] = useState(false);
@@ -96,15 +100,36 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
   const miniButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
 
+  /** 收起动画进行中：展开层先向下滑出，再真正卸载。 */
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearCloseTimer = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+  };
+  useEffect(() => clearCloseTimer, []);
+
   const setOpen = (open: boolean) => {
+    clearCloseTimer();
+    setClosing(false);
     expandedRef.current = open;
     setExpanded(open);
   };
   // 收起：`restoreFocus` 时把焦点还给迷你条主体（点外侧、切模式、点收起钮）。
-  const collapse = (restoreFocus: boolean) => {
+  // `animate` 为假（面板整体关闭）时直接卸载，不播滑出动画。
+  const collapse = (restoreFocus: boolean, animate = true) => {
     if (!expandedRef.current) return;
-    setOpen(false);
-    if (restoreFocus) miniButton.current?.focus();
+    expandedRef.current = false;
+    const finish = () => {
+      setOpen(false);
+      if (restoreFocus) miniButton.current?.focus({ preventScroll: true });
+    };
+    if (!animate) {
+      finish();
+      return;
+    }
+    setClosing(true);
+    closeTimer.current = setTimeout(finish, DECK_COLLAPSE_MS);
   };
 
   // 切模式收起并把焦点还给迷你条主体；首次挂载时没有展开层，什么都不做。
@@ -114,12 +139,12 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
 
   // 关面板：一并收起（焦点还给面板内元素没有意义）。
   useEffect(() => {
-    if (!active) collapse(false);
+    if (!active) collapse(false, false);
   }, [active]);
 
   // 展开时焦点移入收起钮（EXPERIENCE：浮层打开即移入、关闭后归还触发元素）。
   useEffect(() => {
-    if (expanded) closeButton.current?.focus();
+    if (expanded) closeButton.current?.focus({ preventScroll: true });
   }, [expanded]);
 
   // 展开即登记「展开的底部条」层：`Esc` 与宿站返回键先收起它，而不是关掉面板。
@@ -146,7 +171,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
   const toggle = (kind: PlaybackModeKind, element: HTMLButtonElement) =>
     deck.toggle(kind, element);
 
-  const togglesFor = (compact: boolean) => (
+  const togglesFor = (compact: boolean, sheet = false) => (
     <>
       {TOGGLES.map((item) => {
         const active = playback.mode === item.kind;
@@ -164,6 +189,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
                 : availability.reason || item.label
             }
             compact={compact}
+            sheet={sheet}
             onToggle={toggle}
           />
         );
@@ -331,7 +357,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
               aria-modal="true"
               aria-label={deckName}
               onKeyDown={trapFocusWithin}
-              className={`absolute inset-x-0 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
+              className={`absolute inset-x-0 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing} ${deskDeckSheetShadow} ${closing ? "animate-[imwSheetSink_200ms_var(--imw-ease)_forwards] motion-reduce:animate-[imwSheetFadeOut_160ms_ease-out_forwards]" : "animate-[imwSheetRise_260ms_var(--imw-ease)] motion-reduce:animate-[imwSheetFade_160ms_ease-out]"}`}
               {...stopHostGestures}
             >
               <div className="flex items-start gap-3">
@@ -382,7 +408,9 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-2">{togglesFor(false)}</div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {togglesFor(false, true)}
+              </div>
 
               {/* 面板关闭后（只是移出视口）不再留在无障碍树里播报 */}
               {active && (

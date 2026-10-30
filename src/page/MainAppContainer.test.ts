@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DECK_COLLAPSE_MS } from "./components/room-deck/RoomDeck";
 import { resetRequestGuard } from "../playback/RequestGuard";
 import { createRef, h, render, type ComponentType } from "preact";
 import { act } from "preact/test-utils";
@@ -1081,6 +1082,12 @@ describe("底部条接线", () => {
       expect(root.querySelector('[data-imw-deck="expanded"]')).not.toBeNull();
       await act(async () => {
         render(h(Container, { ...props(MODE.video), ref } as object), root);
+      });
+      // 切模式收起带滑出动画：等动画走完再断言已卸载
+      await act(async () => {
+        await new Promise((resolve) =>
+          setTimeout(resolve, DECK_COLLAPSE_MS + 20),
+        );
       });
       expect(root.querySelector('[data-imw-deck="expanded"]')).toBeNull();
     } finally {

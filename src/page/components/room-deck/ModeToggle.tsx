@@ -13,6 +13,9 @@ import {
   deskPress,
   deskInk2,
   deskPressTone,
+  deskHover,
+  deskRose,
+  deskRoseTint,
 } from "../floating-panel/tokens";
 import type { PlaybackModeKind } from "../../../playback/PlaybackMode";
 
@@ -30,6 +33,8 @@ export interface ModeToggleProps {
   hint: string;
   /** 迷你条的纯图标形态（文字由 `aria-label` 承担）。 */
   compact?: boolean;
+  /** 手机展开底部条的形态：无描边的柔和胶囊，开启为蔷薇红淡底（描边方框在浅色底板上太硬）。 */
+  sheet?: boolean;
   onToggle: (kind: PlaybackModeKind, element: HTMLButtonElement) => void;
 }
 
@@ -40,8 +45,25 @@ export function ModeToggle({
   enabled,
   hint,
   compact = false,
+  sheet = false,
   onToggle,
 }: ModeToggleProps) {
+  if (sheet) {
+    return (
+      <button
+        type="button"
+        data-imw-mode={kind}
+        className={`flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full border-0 px-4 ${typeButtonSm} ${active ? `${deskRoseTint} ${deskRose} font-semibold` : `${deskHover} ${deskInk2}`} ${deskPress} ${deskFocusRingOnDeck} ${enabled ? "" : "opacity-40"}`}
+        aria-pressed={active}
+        aria-disabled={!enabled}
+        title={hint}
+        onClick={(event) => onToggle(kind, event.currentTarget)}
+      >
+        <DeskIcon name={ICONS[kind]} size={17} />
+        <span className="whitespace-nowrap">{label}</span>
+      </button>
+    );
+  }
   const base = compact
     ? `flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border border-solid bg-transparent p-0 ${roundedLg}`
     : `flex h-8 shrink-0 cursor-pointer items-center gap-1.5 border border-solid bg-transparent px-2.5 max-[768px]:h-11 ${roundedMd} ${typeButtonSm}`;

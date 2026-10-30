@@ -363,6 +363,27 @@
   }
 }
 
+/* 展开的底部条收起：向下滑出 */
+@keyframes imwSheetSink {
+  from {
+    transform: translateY(0);
+  }
+
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes imwSheetFadeOut {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes imwSheetFade {
   from {
     opacity: 0;

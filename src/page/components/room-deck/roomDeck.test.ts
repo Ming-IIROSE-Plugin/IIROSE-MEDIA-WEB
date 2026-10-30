@@ -16,7 +16,7 @@ import { PlaybackMode } from "../../../playback/PlaybackMode";
 import { SidebarPlaybackRow } from "../../../playback/SidebarPlaybackRow";
 import { snapshot } from "../../../playback/fixtures";
 import { closePanelTier, pushOverlayLayer } from "../desk/overlayLayers";
-import { RoomDeck } from "./RoomDeck";
+import { DECK_COLLAPSE_MS, RoomDeck } from "./RoomDeck";
 
 // 底部条的桥接替身：与宿站桥接同一个形状（read / subscribe / send），
 // 只在测试里改快照与记录报文；真实的 250ms 轮询与宿站钩子由 HostMediaBridge 自己测。
@@ -98,6 +98,13 @@ const toggleIn = (
   kind: "loop" | "shuffle",
 ) => deck(name)?.querySelector<HTMLButtonElement>(`[data-imw-mode="${kind}"]`);
 const miniBody = () => deck("mini")!.querySelector("button")!;
+
+/** 走完展开层的收起动画（滑出后才卸载）。 */
+function settleCollapse() {
+  act(() => {
+    vi.advanceTimersByTime(DECK_COLLAPSE_MS);
+  });
+}
 
 function mount(active = true, mode = 0) {
   act(() => {
@@ -367,6 +374,9 @@ describe("桌面三栏（room-deck）", () => {
 });
 
 describe("迷你条与展开的底部条", () => {
+  // 收起有 200ms 滑出动画：用假时钟把动画走完再断言已卸载
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
   it("迷你条：标题 + 「某某 点播 · 时间」+ 两个图标开关 + 顶边进度线", () => {
     const { session } = harness({
       owner: "小飞鱼",
@@ -408,8 +418,56 @@ describe("迷你条与展开的底部条", () => {
     act(() => {
       close.click();
     });
+    settleCollapse();
     expect(deck("expanded")).toBeNull();
     expect(document.activeElement).toBe(miniBody());
+  });
+
+  it("展开从底部升起；收起先向下滑出，动画结束才卸载", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+    act(() => {
+      miniBody().click();
+    });
+    expect(deck("expanded")!.getAttribute("class")).toContain("imwSheetRise");
+
+    act(() => {
+      deck("expanded")!
+        .querySelector<HTMLButtonElement>('[aria-label="收起"]')!
+        .click();
+    });
+    // 滑出期间仍在
+    expect(deck("expanded")!.getAttribute("class")).toContain("imwSheetSink");
+    settleCollapse();
+    expect(deck("expanded")).toBeNull();
+  });
+
+  it("展开层的模式开关是无描边的柔和胶囊（桌面条仍是描边小按钮）", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+    act(() => {
+      miniBody().click();
+    });
+    const loop = toggleIn("expanded", "loop")!;
+    expect(loop.getAttribute("class")).toContain("rounded-full");
+    expect(loop.getAttribute("class")).toContain("border-0");
+    expect(loop.textContent).toBe("单曲循环");
+    expect(toggleIn("room", "loop")!.getAttribute("class")).toContain(
+      "border-solid",
+    );
+  });
+
+  it("面板整个关闭时直接卸载，不播滑出动画", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+    act(() => {
+      miniBody().click();
+    });
+    mount(false);
+    expect(deck("expanded")).toBeNull();
   });
 
   it("展开层内 Tab 首尾循环，不走到拦截层背后的元素", () => {
@@ -463,6 +521,7 @@ describe("迷你条与展开的底部条", () => {
     act(() => {
       backdrop.click();
     });
+    settleCollapse();
     expect(deck("expanded")).toBeNull();
     expect(document.activeElement).toBe(miniBody());
   });
@@ -485,6 +544,7 @@ describe("迷你条与展开的底部条", () => {
         }),
       );
     });
+    settleCollapse();
     expect(deck("expanded")).toBeNull();
     expect(document.activeElement).toBe(miniBody());
     // 展开层注销后栈为空：再按 Esc 不会被这一层吃掉
@@ -518,6 +578,7 @@ describe("迷你条与展开的底部条", () => {
     act(() => {
       closePanelTier("sheet");
     });
+    settleCollapse();
     expect(deck("expanded")).toBeNull();
   });
 
@@ -531,6 +592,7 @@ describe("迷你条与展开的底部条", () => {
     expect(deck("expanded")).not.toBeNull();
 
     mount(true, 1);
+    settleCollapse();
     expect(deck("expanded")).toBeNull();
 
     act(() => {
@@ -538,6 +600,7 @@ describe("迷你条与展开的底部条", () => {
     });
     expect(deck("expanded")).not.toBeNull();
     mount(false, 1);
+    settleCollapse();
     expect(deck("expanded")).toBeNull();
   });
 
@@ -553,6 +616,7 @@ describe("迷你条与展开的底部条", () => {
     act(() => {
       bridge.emit({ playing: false });
     });
+    settleCollapse();
     expect(deck("expanded")).toBeNull();
     expect(host.querySelector("[data-imw-deck-backdrop]")).toBeNull();
   });

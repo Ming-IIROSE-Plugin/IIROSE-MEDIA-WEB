@@ -43,6 +43,8 @@ export const deskInk3Border = "border-[#6B655D] imw-dark:border-[#8F887E]";
 export const deskRose = "text-[#B42F3E] imw-dark:text-[#E3606C]";
 /** 蔷薇红图形：竖栏指示条、标签栏选中图标（rose）。 */
 export const deskRoseFill = "bg-[#B42F3E] imw-dark:bg-[#E3606C]";
+/** 蔷薇红淡底（选中但不抢眼：展开底部条里已开启的模式开关）。 */
+export const deskRoseTint = "bg-[#B42F3E1A] imw-dark:bg-[#E3606C26]";
 /** 暗淡填充（ink3 色）：已停止的批量点播进度条。 */
 export const deskMutedFill = "bg-[#6B655D] imw-dark:bg-[#8F887E]";
 /** 蔷薇红实底控件的描边：与实底同值（浅 rose、深 rose-fill-dark），见 DESIGN 实底控件。 */
@@ -86,6 +88,9 @@ export const deskDeckText = "text-[#1C1916] imw-dark:text-[#EDE7DD]";
 /** 底部条顶边细线（rule），用阴影画，不占布局。 */
 export const deskDeckRing =
   "shadow-[0_-1px_0_#E2DCD1] imw-dark:shadow-[0_-1px_0_#2B2825]";
+/** 手机展开的底部条：向上的柔和投影，和下面的列表分开层次。 */
+export const deskDeckSheetShadow =
+  "shadow-[0_-8px_24px_#1C191614] imw-dark:shadow-[0_-8px_24px_#00000059]";
 /** 进度填充（rose）。 */
 export const deskDeckProgress = "bg-[#B42F3E] imw-dark:bg-[#E3606C]";
 /** 进度轨（rule）。 */
