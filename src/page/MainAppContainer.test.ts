@@ -662,24 +662,39 @@ describe("六种模式的现场", () => {
     }
   });
 
-  it("电台模式不分页，收藏只有列表视图", async () => {
+  it("电台模式不分页，视图切换锁定为列表；收藏可切换", async () => {
     await mount(MODE.radio);
     expect(root.querySelector('[role="tablist"]')).not.toBeNull();
     expect(root.querySelector('[aria-label="上一页"]')).toBeNull();
+    const radioGroup = root.querySelector('[role="radiogroup"]')!;
+    expect(radioGroup.getAttribute("title")).toBe("这里只有列表视图");
+    expect(
+      radioGroup
+        .querySelector('[aria-label="网格"]')!
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
 
     render(null, root);
     await mount(MODE.favorites);
-    expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+    const favorites = root.querySelector('[role="radiogroup"]')!;
+    expect(favorites.getAttribute("title")).toBeNull();
+    expect(
+      favorites
+        .querySelector('[aria-label="网格"]')!
+        .hasAttribute("aria-disabled"),
+    ).toBe(false);
   });
 
-  it("视图切换：视频显示，音乐首屏与 MV 范围不显示", async () => {
+  it("视图切换常驻：视频、音乐首屏可切，MV 锁定为网格，不会消失", async () => {
     await mount(MODE.video);
     expect(root.querySelector('[role="radiogroup"]')).not.toBeNull();
 
     render(null, root);
     const music = await mount(MODE.music);
-    // 音乐首屏（关键词为空）固定曲目表，没有两种视图可切
-    expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+    // 音乐首屏（最近点播）也能切列表 / 网格
+    const home = root.querySelector('[role="radiogroup"]')!;
+    expect(home).not.toBeNull();
+    expect(home.getAttribute("title")).toBeNull();
     await act(async () => {
       (music.ref.current as unknown as Harness).controller.runSearch("陈绮贞");
     });
@@ -687,7 +702,9 @@ describe("六种模式的现场", () => {
     await act(async () => {
       (music.ref.current as unknown as Harness).controller.selectScope(3); // MV
     });
-    expect(root.querySelector('[role="radiogroup"]')).toBeNull();
+    const mv = root.querySelector('[role="radiogroup"]')!;
+    expect(mv).not.toBeNull();
+    expect(mv.getAttribute("title")).toBe("这里只有网格视图");
   });
 
   it("底部条挂载点随容器渲染：没有会话时整块空渲染，不影响其余布局", async () => {

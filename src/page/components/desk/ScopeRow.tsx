@@ -30,6 +30,8 @@ interface ScopeRowProps {
   /** 视图切换：传 null 表示该范围只有一种视图，不显示切换。 */
   viewMode?: "card" | "list" | null;
   onToggleView?: () => void;
+  /** 该范围只有一种视图：切换仍在原位，灰色不可点并说明原因。 */
+  viewLocked?: boolean;
   currentPage: number;
   totalPage: number;
   /** 分页：设置 / 关于不分页。 */
@@ -48,6 +50,7 @@ export function ScopeRow({
   onChange,
   viewMode = null,
   onToggleView,
+  viewLocked = false,
   currentPage,
   totalPage,
   showPager = true,
@@ -116,6 +119,13 @@ export function ScopeRow({
           <div
             role="radiogroup"
             aria-label="视图"
+            title={
+              viewLocked
+                ? viewMode === "list"
+                  ? "这里只有列表视图"
+                  : "这里只有网格视图"
+                : undefined
+            }
             className={`flex overflow-hidden border border-solid ${roundedMd} ${deskRule}`}
           >
             {(
@@ -125,16 +135,20 @@ export function ScopeRow({
               ] as const
             ).map(([value, name, icon]) => {
               const active = viewMode === value;
+              const lockedTitle =
+                viewMode === "list" ? "这里只有列表视图" : "这里只有网格视图";
               return (
                 <button
                   key={value}
                   type="button"
                   role="radio"
                   aria-checked={active}
+                  aria-disabled={viewLocked || undefined}
                   aria-label={name}
-                  className={`grid h-[30px] w-[34px] cursor-pointer place-items-center border-0 bg-transparent p-0 max-[768px]:h-11 max-[768px]:w-11 ${deskFocusRing} ${active ? `${deskSheet} ${deskInk}` : deskInk3}`}
+                  title={viewLocked ? lockedTitle : name}
+                  className={`grid h-[30px] w-[34px] place-items-center border-0 bg-transparent p-0 transition-[background-color,color,transform] duration-150! ease-out max-[768px]:h-11 max-[768px]:w-11 ${deskFocusRing} ${viewLocked ? "cursor-not-allowed" : "cursor-pointer active:scale-90"} ${active ? `${deskSheet} ${deskInk}` : deskInk3} ${viewLocked && !active ? "opacity-40" : ""}`}
                   onClick={() => {
-                    if (!active) onToggleView?.();
+                    if (!active && !viewLocked) onToggleView?.();
                   }}
                 >
                   <DeskIcon name={icon} size={17} />

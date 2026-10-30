@@ -407,7 +407,8 @@ export class MainAppContainer extends Component<
                   items={scopes}
                   activeIndex={scopeIndex}
                   onChange={this.controller.selectScope}
-                  viewMode={this.viewToggleMode()}
+                  viewMode={this.viewToggle().value}
+                  viewLocked={this.viewToggle().locked}
                   onToggleView={this.controller.toggleSearchViewMode}
                   currentPage={currentPage}
                   totalPage={totalPage}
@@ -475,22 +476,20 @@ export class MainAppContainer extends Component<
   }
 
   /**
-   * 视图切换只在「该范围有两种视图」时出现：
-   * 音乐的单曲范围可切列表/网格（首屏「最近点播」固定曲目表）；
-   * 专辑、歌单只有列表，MV 只有网格；
-   * 视频的推荐/视频/直播两种视图都在（收藏只有列表，多源剧集只有列表）。
+   * 视图切换常驻范围行（不再时有时无，分页不跳）：
+   * 音乐单曲（含首屏「最近点播」）、视频（含多源）、收藏可切列表/网格；
+   * 专辑、歌单、电台只有列表，MV 只有网格——显示为灰色锁定并说明原因。
    */
-  private viewToggleMode(): "card" | "list" | null {
-    if (this.state.mode === MODE.video) {
-      return this.currentPlatform()?.shortTitle === "多源"
-        ? null
-        : this.state.searchViewMode;
+  private viewToggle(): { value: "card" | "list"; locked: boolean } {
+    const free = { value: this.state.searchViewMode, locked: false };
+    const { mode, SubNavBarIndex } = this.state;
+    if (mode === MODE.radio) return { value: "list", locked: true };
+    if (mode === MODE.music) {
+      if (SubNavBarIndex === 1 || SubNavBarIndex === 2)
+        return { value: "list", locked: true };
+      if (SubNavBarIndex === 3) return { value: "card", locked: true };
     }
-    if (this.state.mode !== MODE.music || this.state.SubNavBarIndex !== 0)
-      return null;
-    // 首屏（关键词为空）固定曲目表，不出现视图切换
-    if (!this.state.searchKeyword.trim()) return null;
-    return this.state.searchViewMode;
+    return free;
   }
 
   /** 当前模式的下标 → 分类表。 */

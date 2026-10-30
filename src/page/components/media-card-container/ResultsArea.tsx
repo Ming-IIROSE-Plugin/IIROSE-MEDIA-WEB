@@ -49,7 +49,8 @@ type Shape =
   | "videoGrid"
   | "collections"
   | "radio"
-  | "favorites";
+  | "favorites"
+  | "favoritesGrid";
 
 type Load =
   | { status: "idle" }
@@ -76,7 +77,8 @@ export function shapeOf(options: {
   if (isInnerPage) return "tracklist";
   if (mode === MODE.settings || mode === MODE.about) return "settings";
   if (mode === MODE.radio) return "radio";
-  if (mode === MODE.favorites) return "favorites";
+  if (mode === MODE.favorites)
+    return viewMode === "list" ? "favorites" : "favoritesGrid";
   if (mode === MODE.video)
     return viewMode === "list" ? "tracklist" : "videoGrid";
   if (mode === MODE.music) {
@@ -121,13 +123,13 @@ export function ResultsArea({
 
   const supported = roomSupportsRequest();
   const trimmedKeyword = keyword.trim();
-  /** 音乐首屏（单曲范围、关键词为空、非内页）：列出「最近点播」，固定曲目表。 */
+  /** 音乐首屏（单曲范围、关键词为空、非内页）：列出「最近点播」，列表 / 网格随视图切换。 */
   const firstScreen =
     mode === MODE.music && scopeIndex === 0 && !trimmedKeyword && !isInnerPage;
   const shape = shapeOf({
     mode,
     scopeIndex,
-    viewMode: firstScreen ? "list" : viewMode,
+    viewMode,
     isInnerPage,
   });
 
@@ -230,7 +232,7 @@ export function ResultsArea({
     if (isInnerPage) return { message: "这张列表没有曲目。" };
     if (firstScreen)
       return { message: "还没有点播记录。搜索歌名或歌手，点播到房间。" };
-    if (shape === "favorites") {
+    if (shape === "favorites" || shape === "favoritesGrid") {
       return trimmedKeyword
         ? { message: "没有匹配的收藏", action: "清除搜索" }
         : { message: "还没有收藏。在曲目旁点星标即可收藏。" };
@@ -272,7 +274,8 @@ export function ResultsArea({
     items.map((platformData, index) => {
       const key = `${index}:${platformData.title}`;
       const revealed = revealedKey === key;
-      return shape === "musicGrid" ? (
+      // 收藏网格里歌曲、视频、专辑混排：统一方形卡（视频封面方形裁切）
+      return shape === "musicGrid" || shape === "favoritesGrid" ? (
         <MusicTile
           key={key}
           platformData={platformData}
@@ -319,6 +322,9 @@ export function ResultsArea({
         <StateMessage message="加载失败" action="重试" onAction={onRetry} />
       );
 
+    // 方形卡网格：音乐网格与收藏网格
+    const square = shape === "musicGrid" || shape === "favoritesGrid";
+
     if (load.status === "loading") {
       return shape === "tracklist" ||
         shape === "collections" ||
@@ -329,11 +335,11 @@ export function ResultsArea({
         </div>
       ) : (
         <div
-          className={`${deskGutter} ${shape === "musicGrid" ? musicGridClass : videoGridClass}`}
+          className={`${deskGutter} ${square ? musicGridClass : videoGridClass}`}
         >
           <SkeletonTiles
-            count={shape === "musicGrid" ? 10 : 8}
-            aspect={shape === "musicGrid" ? "square" : "video"}
+            count={square ? 10 : 8}
+            aspect={square ? "square" : "video"}
           />
         </div>
       );
@@ -351,23 +357,24 @@ export function ResultsArea({
       );
     }
 
-    if (shape === "musicGrid" || shape === "videoGrid") {
+    const recentHeading = firstScreen && (
+      <h2 className={`mb-1 mt-4 ${typeLabelStrong} ${deskInk}`}>最近点播</h2>
+    );
+
+    if (square || shape === "videoGrid") {
       return (
-        <div
-          className={`${deskGutter} ${shape === "musicGrid" ? musicGridClass : videoGridClass}`}
-        >
-          {renderTiles(items)}
+        <div className={deskGutter}>
+          {recentHeading}
+          <div className={square ? musicGridClass : videoGridClass}>
+            {renderTiles(items)}
+          </div>
         </div>
       );
     }
 
     return (
       <div className={deskGutter}>
-        {firstScreen && items.length > 0 && (
-          <h2 className={`mb-1 mt-4 ${typeLabelStrong} ${deskInk}`}>
-            最近点播
-          </h2>
-        )}
+        {recentHeading}
         {shape !== "radio" && <TracklistHeader durationLabel={durationLabel} />}
         {renderRows(items)}
       </div>

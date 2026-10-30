@@ -189,6 +189,10 @@ describe("纯函数派生", () => {
     );
     expect(shapeOf({ ...base, mode: MODE.radio })).toBe("radio");
     expect(shapeOf({ ...base, mode: MODE.favorites })).toBe("favorites");
+    // 收藏网格：混排条目统一方形卡
+    expect(shapeOf({ ...base, mode: MODE.favorites, viewMode: "card" })).toBe(
+      "favoritesGrid",
+    );
     expect(shapeOf({ ...base, mode: MODE.settings })).toBe("settings");
   });
 
@@ -1081,10 +1085,10 @@ describe("结果区状态机", () => {
 });
 
 describe("音乐首屏「最近点播」", () => {
-  it("固定曲目表：标题在表头之前、行照常渲染（忽略网格视图）", async () => {
+  it("列表视图：标题在表头之前、行照常渲染", async () => {
     const songs = ready([song]);
     await mount(
-      results({ ...resultsBase, viewMode: "card", mediaData: songs }),
+      results({ ...resultsBase, viewMode: "list", mediaData: songs }),
       songs,
     );
     const heading = host.querySelector("h2")!;
@@ -1099,6 +1103,17 @@ describe("音乐首屏「最近点播」", () => {
     ).toBeTruthy();
     expect(host.querySelectorAll("[data-imw-tracklist-row]")).toHaveLength(1);
     expect(host.querySelectorAll("[data-imw-tile]")).toHaveLength(0);
+  });
+
+  it("网格视图：标题照常显示，条目渲染为方形卡", async () => {
+    const songs = ready([song]);
+    await mount(
+      results({ ...resultsBase, viewMode: "card", mediaData: songs }),
+      songs,
+    );
+    expect(host.querySelector("h2")!.textContent).toBe("最近点播");
+    expect(host.querySelectorAll('[data-imw-tile="music"]')).toHaveLength(1);
+    expect(host.querySelectorAll("[data-imw-tracklist-row]")).toHaveLength(0);
   });
 
   it("首屏没有历史：只给新文案，不出现「最近点播」标题", async () => {
