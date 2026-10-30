@@ -9,11 +9,15 @@ import type { FavoriteRecord } from "../../../storage/FavoritesStorageService";
 import { MediaProgress } from "../media-progress/MediaProgress";
 import { ShufflePicker } from "../shuffle-picker/ShufflePicker";
 import {
+  deskCaret,
   deskFocusRingOnRose,
   deskInk,
   deskInk2,
+  deskInk3,
   deskOnRose,
+  deskPlaceholder,
   deskPressTone,
+  deskRose,
   deskRoseBorderFocus,
   deskRoseSolid,
   deskRoseSolidBorder,
@@ -214,6 +218,25 @@ describe("浮窗根节点的 data-imw-theme", () => {
     await mountShuffle(false);
     expect(shuffleLayer().getAttribute("data-imw-theme")).toBe("light");
   });
+
+  it("收藏随机：打开期间宿站换主题，面板不跟着变", async () => {
+    await mountShuffle(true, { records: [favorite] });
+    const before = shuffleLayer().getAttribute("data-imw-theme");
+    host.theme = 0;
+    Object.assign(window, { theme: 0 });
+    try {
+      // 触发一次状态更新（重渲染）后，仍应停在打开时的取值上。
+      const row =
+        shuffleDialog().querySelector<HTMLElement>('[role="checkbox"]')!;
+      await act(async () => {
+        row.click();
+      });
+      expect(shuffleLayer().getAttribute("data-imw-theme")).toBe("dark");
+      expect(before).toBe("dark");
+    } finally {
+      delete (window as { theme?: unknown }).theme;
+    }
+  });
 });
 
 describe("两个浮窗外框与强调色", () => {
@@ -298,7 +321,7 @@ describe("实底蔷薇红零件（勾选、权重分段、错误行）", () => {
     for (const token of solidTokens) expect(list).toContain(token);
   });
 
-  it("权重分段选中：实底蔷薇红；未选中走按压底色", async () => {
+  it("权重分段选中：实底蔷薇红，焦点环带 paper 内环；未选中走按压底色", async () => {
     await mountShuffle(true);
     const radios = Array.from(
       shuffleDialog().querySelectorAll<HTMLElement>('[role="radio"]'),
@@ -310,6 +333,8 @@ describe("实底蔷薇红零件（勾选、权重分段、错误行）", () => {
       (radio) => radio.getAttribute("aria-checked") === "false",
     )!;
     for (const token of solidTokens)
+      expect(classesOf(selected)).toContain(token);
+    for (const token of deskFocusRingOnRose.split(/\s+/))
       expect(classesOf(selected)).toContain(token);
     expect(classesOf(idle)).toContain("hov:hover:bg-[#EFEBE3]");
     expect(classesOf(idle)).not.toContain("bg-[#B42F3E]");
@@ -354,19 +379,79 @@ describe("平台标签行、搜索框与占位件", () => {
     expect(classes(idleSpan)).not.toMatch(/sky-/);
   });
 
-  it("搜索框：rule 描边，聚焦时蔷薇红描边（focus-within）", async () => {
+  it("搜索框：rule 描边，聚焦时蔷薇红描边（focus-within），占位与光标取令牌", async () => {
     await mountShuffle(true);
     const search = shuffleDialog().querySelector("input")!.parentElement!;
     for (const token of `${deskRule} ${deskRoseBorderFocus}`.split(/\s+/))
       expect(classesOf(search)).toContain(token);
     expect(classesOf(search)).not.toContain("focus-within:border-sky-500");
+    const input = shuffleDialog().querySelector("input")!;
+    for (const token of `${deskPlaceholder} ${deskCaret}`.split(/\s+/))
+      expect(classesOf(input)).toContain(token);
+    expect(classesOf(input)).not.toContain("placeholder:text-current");
+  });
+
+  it("次要文字与淡图标：取 ink2 / ink3 令牌", async () => {
+    const bridge = mountProgress();
+    try {
+      // 时长行与状态行（原 `opacity-65`）：二级文字。
+      const duration = progressPanel().querySelector<HTMLElement>(
+        '[class*="tabular-nums"]',
+      )!;
+      for (const token of deskInk2.split(/\s+/))
+        expect(classesOf(duration)).toContain(token);
+      const status =
+        progressPanel().querySelector<HTMLElement>('[role="status"]')!;
+      for (const token of deskInk2.split(/\s+/))
+        expect(classesOf(status)).toContain(token);
+      expect(classes(progressPanel())).not.toContain("opacity-65");
+    } finally {
+      render(null, root);
+      bridge.dispose();
+    }
+    await mountShuffle(true, { records: [favorite] });
+    // 搜索框的淡图标（原 `opacity-55`）：三级图形。
+    const searchIcon = shuffleDialog()
+      .querySelector("input")!
+      .parentElement!.querySelector("svg")!;
+    for (const token of deskInk3.split(/\s+/))
+      expect(classesOf(searchIcon)).toContain(token);
+    expect(classesOf(searchIcon)).not.toContain("opacity-55");
+  });
+
+  it("文字钮与关闭钮：蔷薇红文字 + 按压底色，外框取 rule", async () => {
+    await mountShuffle(true, { records: [favorite] });
+    const bulk = Array.from(
+      shuffleDialog().querySelectorAll<HTMLButtonElement>("button"),
+    ).find((button) => button.textContent?.trim() === "全选")!;
+    for (const token of `${deskRose} ${deskPressTone}`.split(/\s+/))
+      expect(classesOf(bulk)).toContain(token);
+    const close = shuffleDialog().querySelector<HTMLElement>(
+      '[aria-label="关闭收藏随机"]',
+    )!;
+    for (const token of deskPressTone.split(/\s+/))
+      expect(classesOf(close)).toContain(token);
+    const group = shuffleDialog().querySelector<HTMLElement>(
+      '[role="radiogroup"]',
+    )!;
+    for (const token of deskRule.split(/\s+/))
+      expect(classesOf(group)).toContain(token);
+    const list = shuffleDialog().querySelector<HTMLElement>(
+      '[id^="imw-shuffle-picker-tracks-"], [role="tabpanel"], [aria-labelledby]',
+    )!;
+    for (const token of deskRule.split(/\s+/))
+      expect(classesOf(list)).toContain(token);
   });
 
   it("封面占位：thumb 底 + ink2 图标", async () => {
     await mountShuffle(true, { records: [plainFavorite] });
     const cover = Array.from(
       shuffleDialog().querySelectorAll<HTMLElement>("span"),
-    ).find((element) => classesOf(element).includes("w-10"))!;
+    ).find(
+      (element) =>
+        classesOf(element).includes("w-10") &&
+        classesOf(element).includes("h-10"),
+    )!;
     for (const token of `${deskThumb} ${deskInk2}`.split(/\s+/))
       expect(classesOf(cover)).toContain(token);
   });
@@ -382,7 +467,7 @@ describe("平台标签行、搜索框与占位件", () => {
     const region = shuffleDialog().querySelector<HTMLElement>(
       '[id^="imw-shuffle-picker-tracks-"]',
     )!;
-    const bar = region.querySelector("span")!;
+    const bar = region.querySelector('[class*="animate-pulse"] span')!;
     for (const token of deskSkeleton.split(/\s+/))
       expect(classesOf(bar)).toContain(token);
   });
@@ -409,8 +494,7 @@ describe("零裸色值", () => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name);
         if (entry.isDirectory()) walk(path);
-        else if (entry.name.endsWith(".tsx") && entry.name !== "tokens.ts")
-          files.push(path);
+        else if (entry.name.endsWith(".tsx")) files.push(path);
       }
     };
     walk(base);

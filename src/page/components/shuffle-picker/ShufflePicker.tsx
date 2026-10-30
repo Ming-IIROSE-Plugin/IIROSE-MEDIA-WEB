@@ -54,7 +54,7 @@ import {
   panelFrame,
   panelSurface,
   primaryButton,
-  resetButton,
+  resetBase,
   secondaryButton,
   startsOnControl,
   stopHostGestures,
@@ -64,6 +64,7 @@ import {
 } from "../floating-panel/floatingPanel";
 import {
   deskCaret,
+  deskFocusRingOnRose,
   deskInk,
   deskInk2,
   deskInk3,
@@ -846,7 +847,7 @@ export function ShufflePicker({
                     role="radio"
                     aria-checked={selected ? "true" : "false"}
                     tabIndex={selected ? 0 : -1}
-                    className={`${resetButton} relative h-full border-0 px-3 text-[13px] before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] max-[768px]:text-[12px] ${selected ? `${deskRoseSolid} ${deskOnRose}` : `bg-transparent text-inherit ${deskPressTone}`}`}
+                    className={`${resetBase} ${selected ? deskFocusRingOnRose : focusRing} relative h-full border-0 px-3 text-[13px] before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] max-[768px]:text-[12px] ${selected ? `${deskRoseSolid} ${deskOnRose}` : `bg-transparent text-inherit ${deskPressTone}`}`}
                     onClick={() => setState((prev) => ({ ...prev, weight }))}
                     onKeyDown={(event) => {
                       if (
