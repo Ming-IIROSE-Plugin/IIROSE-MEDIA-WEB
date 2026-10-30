@@ -1,6 +1,8 @@
 import { CMSAPI } from "../Api/AllVideosAPI/CMS";
-import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
-import { ShowMessage } from "../iirose_func/ShowMessage";
+import {
+  openEpisodePicker,
+  type EpisodePickEntry,
+} from "../page/components/episode-picker/openEpisodePicker";
 import { Socket } from "../iirose_func/Socket";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
@@ -51,7 +53,7 @@ export class AllVideosPlatform extends Platform {
 
   /**
    * Video 平台 (茅台资源等) 点播逻辑
-   * 支持 PENDING 状态检查、单集直接播放、多集弹出选择框
+   * 支持 PENDING 状态检查、单集直接播放、多集开插件自有选集面板
    */
   public static async VOD(platformData: PlatformData) {
     // 1. 拦截 PENDING 状态
@@ -71,78 +73,93 @@ export class AllVideosPlatform extends Platform {
     const playList = status as PlayItem[];
     if (playList.length === 0) return;
 
-    // 封装核心播放动作
-    const VOD_ACTION = async (select: number) => {
-      try {
-        if (select === 1) {
-          // --- 正序点播全部 ---
-          await Announce.runBatchAnnounce(
-            platformData.title,
-            playList.length,
-            async () => {
-              for (const item of playList) {
-                try {
-                  // 每一个分集都需要获取时长 (如果不需要精准时长可以设为默认值以提升速度)
-                  const duration = await ParseMediaMetaData.getM3U8Duration(
-                    item.url,
-                  );
-
-                  // 构造分集数据
-                  const tempPD: PlatformData = {
-                    ...platformData,
-                    title: `${platformData.title}`,
-                    author: `${item.episode}`,
-                  };
-                  await AllVideosPlatform.sendVideoMedia(
-                    tempPD,
-                    item.url,
-                    duration,
-                  );
-
-                  // 呼吸时间，防止 Socket 拥塞
-                  await new Promise((resolve) => setTimeout(resolve, 150));
-                } catch (error) {
-                  // 单项失败：带分集名提示（同因 10 秒去重）后跳过，剩余分集照播
-                  Announce.showBatchItemError(error, item.episode);
-                }
-              }
-            },
-          );
-        } else {
-          // --- 默认点播单集 (第一集) ---
-
-          const tempPD: PlatformData = {
-            ...platformData,
-            title: `${platformData.title}`,
-            author: `${platformData.author || platformData.subtitle}`,
-          };
-
-          const duration = await ParseMediaMetaData.getM3U8Duration(
-            playList[0].url,
-          );
-          // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
-          await Announce.runSingleAnnounce(async () => {
-            await AllVideosPlatform.sendVideoMedia(
-              tempPD,
-              playList[0].url,
-              duration,
-            );
-          });
-        }
-      } catch (error) {
-        console.error("[Video VOD Action Error]:", error);
-        ShowMessage.show((error as Error).message);
-      }
-    };
-
-    // 2. 判断逻辑：单集 vs 多集
-    if (playList.length === 1) {
-      // 只有一集，直接播放
-      await VOD_ACTION(0);
-    } else if (playList.length > 1) {
-      // 多集，弹出选择框
-      await this.buildVideoSelect(VOD_ACTION);
+    // 2. 多集：插件自有选集面板（点选顺序 = 播放顺序）；单集：直接点播
+    if (playList.length > 1) {
+      AllVideosPlatform.selectEpisodes(platformData, playList);
+      return;
     }
+    await AllVideosPlatform.playEpisode(platformData, playList[0], true);
+  }
+
+  /**
+   * 多集选集（CAP-8）：条目即 `playList` 的集名；面板自己取播放列表，
+   * 已拿到时由调用方直接传入。
+   */
+  public static selectEpisodes(
+    platformData: PlatformData,
+    preloaded?: PlayItem[],
+  ) {
+    let playList: PlayItem[] = preloaded ?? [];
+    const toEntries = (list: PlayItem[]): EpisodePickEntry[] =>
+      list.map((item, index) => ({ id: String(index), title: item.episode }));
+
+    openEpisodePicker({
+      unit: "集",
+      load: async () => {
+        if (preloaded) return toEntries(preloaded);
+        playList = (await platformData.playList) ?? [];
+        return toEntries(playList);
+      },
+      onConfirm: (chosen) => {
+        // 按面板给的顺序回填：点选顺序即播放顺序
+        const picked = chosen
+          .map((entry) => playList[Number(entry.id)])
+          .filter((item): item is PlayItem => Boolean(item));
+        if (!picked.length) return;
+
+        if (picked.length === 1) {
+          // 单项：`playEpisode` 内部包单曲播报窗口，卡片不被并行批量抑制吞掉
+          void AllVideosPlatform.playEpisode(
+            platformData,
+            picked[0],
+            true,
+          ).catch((error) =>
+            Announce.showBatchItemError(error, picked[0].episode),
+          );
+          return;
+        }
+
+        void Announce.runBatchAnnounce(
+          platformData.title,
+          picked.length,
+          async () => {
+            for (const item of picked) {
+              try {
+                await AllVideosPlatform.playEpisode(platformData, item);
+                // 呼吸时间，防止 Socket 拥塞
+                await new Promise((resolve) => setTimeout(resolve, 150));
+              } catch (error) {
+                // 单项失败：带集名提示（同因 10 秒去重）后跳过，剩余集照播
+                Announce.showBatchItemError(error, item.episode);
+              }
+            }
+          },
+        );
+      },
+    });
+  }
+
+  /**
+   * 点播单集：解析时长后发卡片 + 报文。
+   * `singleAnnounce` 为真时包单曲播报窗口（手动单曲点播），否则由调用方的批量窗口管档位。
+   */
+  private static async playEpisode(
+    platformData: PlatformData,
+    item: PlayItem,
+    singleAnnounce = false,
+  ) {
+    // 每一个分集都需要获取时长（缓存命中很快，未命中才真的探流）
+    const duration = await ParseMediaMetaData.getM3U8Duration(item.url);
+    const tempPD: PlatformData = {
+      ...platformData,
+      title: `${platformData.title}`,
+      author: `${item.episode || platformData.author || platformData.subtitle}`,
+    };
+    const send = () =>
+      AllVideosPlatform.sendVideoMedia(tempPD, item.url, duration);
+    // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
+    if (singleAnnounce) await Announce.runSingleAnnounce(send);
+    else await send();
   }
 
   /**
@@ -171,35 +188,5 @@ export class AllVideosPlatform extends Platform {
     Announce.sendMediaCard(socket, media.mediaCard(mediaData));
     socket.send(media.mediaEvent(mediaData));
     console.log(`[VOD] Sent: ${pd.title}`);
-  }
-
-  /**
-   * 构建视频选择器 (目前仅支持正序)
-   */
-  private static async buildVideoSelect(
-    action: (select: number) => Promise<void>,
-  ) {
-    const select = [
-      [
-        1,
-        "正序点播",
-        `<div class="mdi-sort-alphabetical-variant" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-    ];
-
-    IIROSEUtils.buildSelect2(
-      null, // startElement
-      select, // 选项列表
-      (_t: HTMLElement, s: string) => {
-        const selectNumber = parseInt(s);
-        action(selectNumber);
-      }, // cb 回调
-      false, // allowClear
-      true, // showIcon
-      null, // top
-      false, // multiSelect
-      null, // bottom
-      () => {}, // enterCB
-    );
   }
 }

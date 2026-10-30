@@ -1,12 +1,10 @@
 // 视频卡（DESIGN.md `video-tile`）：16:9 缩略图、无卡片框；右下角等宽时长胶囊，
 // 直播换「直播」徽章且不显示时长；悬停 / 键盘聚焦 / 无悬停宽屏点按选中时覆遮罩并出现
 // 「点播到房间」胶囊。MV、B 站视频、多源剧集与直播共用本组件。
-import { useEffect, useState } from "preact/hooks";
 import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
 import {
   formatDuration,
-  hasMultiPage,
   isLiveItem,
   isPhoneLayout,
   isTapToReveal,
@@ -19,7 +17,6 @@ import {
   deskInk3,
   deskOnRose,
   deskOnRoseFill,
-  deskRose,
   deskRoseSolid,
   deskSelectedRing,
   deskVideoScrim,
@@ -41,7 +38,6 @@ export interface VideoTileProps {
   onPlay: () => void;
   /** 手机点缩略图（点播按钮以外）= 操作条挂点（触发元素用于收起后归还焦点）。 */
   onActivate?: (trigger: HTMLElement) => void;
-  onSelectEpisodes?: () => void;
 }
 
 export function VideoTile({
@@ -52,20 +48,7 @@ export function VideoTile({
   onReveal,
   onPlay,
   onActivate,
-  onSelectEpisodes,
 }: VideoTileProps) {
-  const [multipage, setMultipage] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    void hasMultiPage(platformData).then((value) => {
-      if (alive) setMultipage(value);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [platformData]);
-
   const live = isLiveItem(platformData);
   // 手机点主体出操作条（story 4）、无悬停宽屏只选中：两种情况都不是「点播」，读屏名随之改。
   const bodyLabel = `${
@@ -150,18 +133,6 @@ export function VideoTile({
           >
             点播到房间
           </button>
-          {multipage && onSelectEpisodes && (
-            <button
-              type="button"
-              className={`border-0 bg-transparent p-0 ${deskOnRose} ${typeLabelStrong} underline ${overlayHit}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelectEpisodes();
-              }}
-            >
-              选集
-            </button>
-          )}
         </div>
       </div>
 

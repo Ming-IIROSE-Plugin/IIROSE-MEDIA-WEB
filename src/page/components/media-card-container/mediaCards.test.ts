@@ -1151,41 +1151,28 @@ describe("收藏星", () => {
   });
 });
 
-describe("多 P / 多集的「选集」入口", () => {
-  it("multiPage 落地后才出现「选集」，点击走钻取回调", async () => {
-    const onSelectEpisodes = vi.fn();
+describe("多 P / 多集的选集入口已退场", () => {
+  it("卡片上不再有过渡「选集」钮（story 5 换成操作条 / 点播直接开面板）", async () => {
     const multi = {
       ...video,
       multiPage: Promise.resolve({ platform: "bilibili" }),
     } as unknown as PlatformData;
     await mount(
-      withCtx(
-        h(VideoTile, {
-          platformData: multi,
-          onPlay: () => {},
-          onSelectEpisodes,
-        }),
-      ),
+      withCtx(h(VideoTile, { platformData: multi, onPlay: () => {} })),
       multi.multiPage,
     );
     await act(async () => {
       await Promise.resolve();
     });
-    const episodes = Array.from(host.querySelectorAll("button")).find(
-      (el) => el.textContent === "选集",
-    )!;
-    episodes.click();
-    expect(onSelectEpisodes).toHaveBeenCalledOnce();
+    expect(
+      Array.from(host.querySelectorAll("button")).find(
+        (el) => el.textContent === "选集",
+      ),
+    ).toBeUndefined();
 
     render(null, host);
     await mount(
-      withCtx(
-        h(VideoTile, {
-          platformData: video,
-          onPlay: () => {},
-          onSelectEpisodes,
-        }),
-      ),
+      withCtx(h(MusicTile, { platformData: song, onPlay: () => {} })),
     );
     expect(
       Array.from(host.querySelectorAll("button")).find(
@@ -1194,25 +1181,26 @@ describe("多 P / 多集的「选集」入口", () => {
     ).toBeUndefined();
   });
 
-  it("multiPage 拒绝时按「没有多集」处理，不抛错也不出按钮", async () => {
-    let reject: (error: Error) => void = () => {};
-    const pending = new Promise<undefined>((_resolve, r) => {
-      reject = r;
-    });
+  it("多 P 条目的卡片只剩「点播到房间」：点播由平台开面板", async () => {
+    const onPlay = vi.fn();
     await mount(
       withCtx(
         h(MusicTile, {
-          platformData: { ...song, multiPage: pending } as PlatformData,
-          onPlay: () => {},
-          onSelectEpisodes: () => {},
+          platformData: {
+            ...song,
+            multiPage: Promise.resolve({ platform: "neteasemusic" }),
+          } as PlatformData,
+          onPlay,
         }),
       ),
     );
+    const play = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "点播",
+    )!;
     await act(async () => {
-      reject(new Error("分 P 探测失败"));
-      await Promise.resolve();
-      await Promise.resolve();
+      play.click();
     });
+    expect(onPlay).toHaveBeenCalledOnce();
     expect(
       Array.from(host.querySelectorAll("button")).find(
         (el) => el.textContent === "选集",

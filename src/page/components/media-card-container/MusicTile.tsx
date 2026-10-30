@@ -1,14 +1,8 @@
 // 音乐网格卡（DESIGN.md `music-tile`）：1:1 封面、无卡片框，悬停/聚焦/点按选中时
 // 覆遮罩并出现「点播」胶囊；标题单行截断，副行「歌手 · 等宽时长」，桌面在标题行右端放收藏星。
-import { useEffect, useState } from "preact/hooks";
 import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
-import {
-  formatDuration,
-  hasMultiPage,
-  isPhoneLayout,
-  isTapToReveal,
-} from "./mediaFormat";
+import { formatDuration, isPhoneLayout, isTapToReveal } from "./mediaFormat";
 import { NowPlayingBars } from "./TracklistRow";
 import {
   deskDurationPill,
@@ -39,8 +33,6 @@ export interface MusicTileProps {
   onPlay: () => void;
   /** 手机点卡片（点播按钮以外）= 操作条挂点（触发元素用于收起后归还焦点）。 */
   onActivate?: (trigger: HTMLElement) => void;
-  /** 多 P / 多集条目的过渡「选集」入口（story 5 由选集面板取代）。 */
-  onSelectEpisodes?: () => void;
 }
 
 export function MusicTile({
@@ -51,20 +43,7 @@ export function MusicTile({
   onReveal,
   onPlay,
   onActivate,
-  onSelectEpisodes,
 }: MusicTileProps) {
-  const [multipage, setMultipage] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    void hasMultiPage(platformData).then((value) => {
-      if (alive) setMultipage(value);
-    });
-    return () => {
-      alive = false;
-    };
-  }, [platformData]);
-
   const duration = formatDuration(platformData.duration);
   // 手机点主体出操作条（story 4）、无悬停宽屏只选中：两种情况都不是「点播」，读屏名随之改。
   const bodyLabel = `${
@@ -134,18 +113,6 @@ export function MusicTile({
           >
             点播
           </button>
-          {multipage && onSelectEpisodes && (
-            <button
-              type="button"
-              className={`border-0 bg-transparent p-0 ${deskOnRose} ${typeLabelStrong} underline ${overlayHit}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onSelectEpisodes();
-              }}
-            >
-              选集
-            </button>
-          )}
         </div>
       </div>
 

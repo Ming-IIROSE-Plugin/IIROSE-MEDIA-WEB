@@ -56,7 +56,11 @@
 #imw-shuffle-picker-root,
 #imw-shuffle-picker-root *,
 #imw-shuffle-picker-root *::before,
-#imw-shuffle-picker-root *::after {
+#imw-shuffle-picker-root *::after,
+#imw-episode-picker-root,
+#imw-episode-picker-root *,
+#imw-episode-picker-root *::before,
+#imw-episode-picker-root *::after {
   box-sizing: border-box;
 }
 
@@ -285,6 +289,14 @@
 
   to {
     opacity: 1;
+  }
+}
+
+/* 选集面板：桌面卡片本来就淡入，手机是底部抽屉（`imwSheetRise`）。
+   减少动态时手机也退回淡入——两个断点变体叠在同一元素上，用这里兜住优先级。 */
+@media (prefers-reduced-motion: reduce) {
+  #imw-episode-picker-root [data-imw-episode-picker-card] {
+    animation-name: imwSheetFade;
   }
 }
 

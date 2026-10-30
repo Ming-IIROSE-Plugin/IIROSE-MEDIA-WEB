@@ -42,7 +42,7 @@ export interface ActionSheetProps {
   onClose: () => void;
   /** 点播到房间：与行内点播同一链路（房间不支持时由本组件先行拦截）。 */
   onPlay: () => void;
-  /** 选集：沿用 `switchToMultiPage` 钻取（story 5 换成插件自有选集面板）。 */
+  /** 选集：插件自有选集面板（不再经 `buildSelect2`，也不再 `switchToMultiPage` 钻取）。 */
   onSelectEpisodes?: () => void;
 }
 

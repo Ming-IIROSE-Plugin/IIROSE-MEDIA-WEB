@@ -271,7 +271,6 @@ export function ResultsArea({
           onReveal={() => setRevealedKey(key)}
           onPlay={() => play(platformData)}
           onActivate={(trigger) => activate(platformData, trigger)}
-          onSelectEpisodes={() => openCollection(platformData)}
         />
       ) : (
         <VideoTile
@@ -283,7 +282,6 @@ export function ResultsArea({
           onReveal={() => setRevealedKey(key)}
           onPlay={() => play(platformData)}
           onActivate={(trigger) => activate(platformData, trigger)}
-          onSelectEpisodes={() => openCollection(platformData)}
         />
       );
     });

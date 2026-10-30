@@ -32,6 +32,7 @@ import { SearchBar, type SearchSource } from "./components/desk/SearchBar";
 import { ScopeRow, type ScopeItem } from "./components/desk/ScopeRow";
 import { ActionSheet } from "./components/action-sheet/ActionSheet";
 import { RoomDeck } from "./components/room-deck/RoomDeck";
+import { restoreFocus } from "./components/desk/focusTrap";
 import {
   closePanelTier,
   pushOverlayLayer,
@@ -235,10 +236,31 @@ export class MainAppContainer extends Component<
     this.closeSheet();
   };
 
-  /** 操作条的「选集」：沿用 `switchToMultiPage` 钻取（story 5 换成选集面板）。 */
+  /** 操作条的「选集」：收起操作条，按条目形态开插件自有的选集面板（CAP-8）。 */
   private selectEpisodesFromSheet = (platformData: PlatformData) => {
+    const trigger = this.state.sheetTrigger;
     this.closeSheet();
-    void this.controller.openInnerPage(platformData);
+    // 面板开在 body 上、记住打开时的焦点元素：先把焦点还给行体，别让它记成
+    // 即将卸载的操作条按钮（否则关闭面板后焦点落回 body）。
+    restoreFocus(trigger);
+    // B 站课程没有分 P 详情 / 播放流接口（课程流走 `BiliBiliCourseApi`）：仍按内页钻取，
+    // 面板只接普通多 P 与多源剧集。
+    if (platformData.bilibili?.course_id) {
+      void this.controller.updateCurrentInMultiPageStatus(true);
+      void this.controller.switchToMultiPage(platformData);
+      return;
+    }
+    // 分派不出条目形态就不开面板（「选集」本就只在多 P / 多集条目上出现）
+    if (platformData.bilibili) {
+      BilibiliPlatform.selectEpisodes(platformData);
+    } else if ((platformData.playList?.length ?? 0) > 0) {
+      AllVideosPlatform.selectEpisodes(platformData);
+    } else if (
+      platformData.neteaseMusic?.isSongList ||
+      platformData.neteaseMusic?.isAlbum
+    ) {
+      NetEasePlatform.selectEpisodes(platformData);
+    }
   };
 
   /** 重试：内页重载内页，否则重发当前范围。 */
@@ -717,15 +739,7 @@ export class MainAppContainer extends Component<
     },
 
     /**
-     * @description 进入内页：先标记内页再载入集合（与结果区的专辑行同一路径）。
-     */
-    openInnerPage: async (platformData: PlatformData) => {
-      await this.controller.updateCurrentInMultiPageStatus(true);
-      void this.controller.switchToMultiPage(platformData);
-    },
-
-    /**
-     * @description 切换到多集页面
+     * @description 切换到多集页面（专辑 / 歌单内页与多 P / 多集列表共用）
      */
     switchToMultiPage: async (
       platformData: PlatformData,

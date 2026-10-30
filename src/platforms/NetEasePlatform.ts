@@ -1,6 +1,10 @@
 import { NeteaseMusicAPI } from "../Api/NeteaseAPI/NeteaseMusic";
 import { NeteaseSearchAPI } from "../Api/NeteaseAPI/NeteaseSearch";
 import { SearchData } from "../Api/NeteaseAPI/NeteaseSearch/SearchInterface";
+import {
+  openEpisodePicker,
+  type EpisodePickEntry,
+} from "../page/components/episode-picker/openEpisodePicker";
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { ShowMessage } from "../iirose_func/ShowMessage";
 import { Socket } from "../iirose_func/Socket";
@@ -8,6 +12,17 @@ import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { NetEaseSettings } from "../settings/neteaseSettings/NetEaseSettings";
 import { Platform } from "./Platform";
+
+/** 歌单 / 专辑详情里的曲目（两套端点返回同一形状的 song 对象，只取用到的字段）。 */
+interface CollectionTrack {
+  id: number;
+  name?: string;
+  ar?: { name: string }[];
+  al?: { picUrl?: string };
+  /** 毫秒（song 对象上的 `dt` / `duration` 都是毫秒）。 */
+  dt?: number;
+  duration?: number;
+}
 
 export class NetEasePlatform extends Platform {
   public static buildSelect = (action: (select: number) => Promise<void>) => {
@@ -57,37 +72,83 @@ export class NetEasePlatform extends Platform {
   };
 
   /**
-   * 选集多选完成后的二次排序确认选择器
+   * 选集（CAP-8）：插件自有选集面板——歌单 / 专辑曲目按点选顺序点播。
+   * 详情在面板的 `load` 里取（失败留在面板里可重试），一级菜单（正序 / 乱序 / 选集）保留：
+   * 「整张点播」在收藏里只靠它。
    */
-  public static buildOrderConfirmSelect = (
-    action: (select: number) => Promise<void> | void,
-  ) => {
-    const select = [
-      [
-        0,
-        "正序播放",
-        `<div class="mdi-sort-alphabetical-variant" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-      [
-        1,
-        "乱序播放",
-        `<div class="mdi-sort" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-    ];
+  public static selectEpisodes = (platformData: PlatformData) => {
+    if (!platformData.neteaseMusic) {
+      ShowMessage.show("没有网易云音乐数据");
+      return;
+    }
+    const id = platformData.neteaseMusic.id;
+    const isSongList = !!platformData.neteaseMusic.isSongList;
+    /** `load` 里记下的集合信息：确认时拼批量播报的标题 / 简介。 */
+    let collection = { title: platformData.title, description: "" };
+    let songsID: number[] = [];
 
-    IIROSEUtils.buildSelect2(
-      null,
-      select,
-      (_t: HTMLElement, s: string) => {
-        action(parseInt(s));
+    const tracksOf = (tracks: CollectionTrack[]): EpisodePickEntry[] =>
+      tracks.map((track, index) => ({
+        id: String(track.id),
+        title: track.name || `曲目 ${index + 1}`,
+        meta: track.ar?.map((artist) => artist.name).join("/") || "",
+        duration:
+          typeof track.dt === "number"
+            ? Math.round(track.dt / 1000)
+            : typeof track.duration === "number"
+              ? Math.round(track.duration / 1000)
+              : undefined,
+      }));
+
+    openEpisodePicker({
+      unit: "首",
+      load: async () => {
+        if (isSongList) {
+          const detail = await NeteaseMusicAPI.getSongListDetail(id);
+          if (!detail) throw new Error("获取歌单失败");
+          const { playlist } = detail;
+          collection = {
+            title: playlist.name,
+            description: playlist.description ?? "",
+          };
+          songsID = playlist.trackIds.map((item) => item.id);
+          const tracks: CollectionTrack[] = playlist.tracks ?? [];
+          // 详情没带曲目时按 id 退化成「曲目 N」：数量与顺序仍与 trackIds 一致
+          return tracksOf(
+            tracks.length > 0
+              ? tracks
+              : songsID.map((trackId) => ({ id: trackId })),
+          );
+        }
+
+        const detail = await NeteaseMusicAPI.getAlbumDetail(id);
+        if (!detail) throw new Error("获取专辑失败");
+        collection = {
+          title: detail.album.name,
+          description: detail.album.description ?? "",
+        };
+        const songs: CollectionTrack[] = detail.songs ?? [];
+        songsID = songs.map((song) => song.id);
+        return tracksOf(songs);
       },
-      false,
-      true,
-      null,
-      false,
-      null,
-      () => {},
-    );
+      onConfirm: (chosen) => {
+        const ids = chosen.map((entry) => Number(entry.id));
+        if (ids.length === 1) {
+          // 单项：单曲播报窗口，卡片不被并行批量抑制吞掉
+          void Announce.runSingleAnnounce(() =>
+            NetEasePlatform.finalODSONG(ids),
+          ).catch((error) => Announce.showBatchItemError(error));
+          return;
+        }
+        // `finalODSONG` 按入参顺序重排详情结果，这里传的就是点选顺序
+        void Announce.runBatchAnnounce(
+          collection.title,
+          ids.length,
+          () => NetEasePlatform.finalODSONG(ids),
+          collection.description,
+        );
+      },
+    });
   };
 
   private static Search = async (
@@ -764,79 +825,9 @@ export class NetEasePlatform extends Platform {
         return;
       }
 
+      // 选集：插件自有面板（详情在面板里取，点选顺序 = 播放顺序）
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
-      const id = platformData.neteaseMusic.id;
-      const songListDetail = await NeteaseMusicAPI.getSongListDetail(id);
-
-      // 失败提示已由统一入口发出，这里静默结束本次点播
-      if (!songListDetail) return;
-
-      const trackIds = songListDetail.playlist.trackIds;
-      const trackID = trackIds.map((item) => item.id);
-
-      if (select === 2) {
-        // 选集多选点播
-        const tracks = songListDetail.playlist.tracks || [];
-        const playlistCover =
-          (await platformData.coverImg) ||
-          songListDetail.playlist.coverImgUrl ||
-          "";
-        const selectOptions = (tracks.length > 0 ? tracks : trackIds).map(
-          (item: any, idx: number) => {
-            const songId = item.id;
-            const name = item.name || `曲目 ${idx + 1}`;
-            const ar = item.ar?.map((a: any) => a.name).join("/") || "";
-            const cover =
-              item.al?.picUrl || item.album?.picUrl || playlistCover;
-            return [
-              songId,
-              `${idx + 1}. ${name}${ar ? ` - ${ar}` : ""}`,
-              IIROSEUtils.generatePicHtml(cover, "mdi-music-note"),
-            ];
-          },
-        );
-
-        IIROSEUtils.buildSelect2(
-          null,
-          selectOptions,
-          (_t: HTMLElement, selected: any) => {
-            const rawArr = Array.isArray(selected) ? selected : [selected];
-            const checkedIds = rawArr
-              .filter((x: any) => x !== "" && x !== null && x !== undefined)
-              .map(Number);
-            if (checkedIds.length === 0) {
-              ShowMessage.show("未选择任何曲目");
-              return;
-            }
-            if (checkedIds.length === 1) {
-              // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
-              void Announce.runSingleAnnounce(() =>
-                NetEasePlatform.finalODSONG(checkedIds),
-              ).catch((e) => Announce.showBatchItemError(e));
-              return;
-            }
-            setTimeout(() => {
-              NetEasePlatform.buildOrderConfirmSelect((order) => {
-                if (order === 1) {
-                  checkedIds.sort(() => Math.random() - 0.5);
-                }
-                void Announce.runBatchAnnounce(
-                  songListDetail.playlist.name,
-                  checkedIds.length,
-                  () => NetEasePlatform.finalODSONG(checkedIds),
-                  songListDetail.playlist.description,
-                );
-              });
-            }, 300);
-          },
-          false,
-          true,
-          null,
-          true,
-          null,
-          () => {},
-        );
-      }
+      NetEasePlatform.selectEpisodes(platformData);
     };
 
     try {
@@ -862,71 +853,9 @@ export class NetEasePlatform extends Platform {
         return;
       }
 
+      // 选集：插件自有面板（详情在面板里取，点选顺序 = 播放顺序）
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
-      const id = platformData.neteaseMusic.id;
-      const albumDetails = await NeteaseMusicAPI.getAlbumDetail(id);
-
-      if (!albumDetails) return;
-
-      const Songs = albumDetails.songs;
-
-      if (select === 2) {
-        // 专辑选集多选点播
-        const albumCover =
-          albumDetails.album.picUrl || (await platformData.coverImg) || "";
-        const selectOptions = Songs.map((item: any, idx: number) => {
-          const songId = item.id;
-          const name = item.name || `曲目 ${idx + 1}`;
-          const ar = item.ar?.map((a: any) => a.name).join("/") || "";
-          const cover = item.al?.picUrl || albumCover;
-          return [
-            songId,
-            `${idx + 1}. ${name}${ar ? ` - ${ar}` : ""}`,
-            IIROSEUtils.generatePicHtml(cover, "mdi-music-note"),
-          ];
-        });
-
-        IIROSEUtils.buildSelect2(
-          null,
-          selectOptions,
-          (_t: HTMLElement, selected: any) => {
-            const rawArr = Array.isArray(selected) ? selected : [selected];
-            const checkedIds = rawArr
-              .filter((x: any) => x !== "" && x !== null && x !== undefined)
-              .map(Number);
-            if (checkedIds.length === 0) {
-              ShowMessage.show("未选择任何曲目");
-              return;
-            }
-            if (checkedIds.length === 1) {
-              // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
-              void Announce.runSingleAnnounce(() =>
-                NetEasePlatform.finalODSONG(checkedIds),
-              ).catch((e) => Announce.showBatchItemError(e));
-              return;
-            }
-            setTimeout(() => {
-              NetEasePlatform.buildOrderConfirmSelect((order) => {
-                if (order === 1) {
-                  checkedIds.sort(() => Math.random() - 0.5);
-                }
-                void Announce.runBatchAnnounce(
-                  albumDetails.album.name,
-                  checkedIds.length,
-                  () => NetEasePlatform.finalODSONG(checkedIds),
-                  albumDetails.album.description,
-                );
-              });
-            }, 300);
-          },
-          false,
-          true,
-          null,
-          true,
-          null,
-          () => {},
-        );
-      }
+      NetEasePlatform.selectEpisodes(platformData);
     };
 
     try {

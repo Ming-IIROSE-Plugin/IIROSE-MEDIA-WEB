@@ -3,13 +3,24 @@ import { BiliBiliCourseApi } from "../Api/BilibiliAPI/bilibili-course/BiliBiliCo
 import { BiliBiliLiveApi } from "../Api/BilibiliAPI/BiliBiliLive";
 import { BiliBiliSearchApi } from "../Api/BilibiliAPI/BiliBiliSearch";
 import { BiliBiliVideoApi } from "../Api/BilibiliAPI/BiliBiliVideoAPI";
-import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
+import {
+  openEpisodePicker,
+  type EpisodePickEntry,
+} from "../page/components/episode-picker/openEpisodePicker";
 import { ShowMessage } from "../iirose_func/ShowMessage";
 import { Socket } from "../iirose_func/Socket";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { BiliBiliSettings } from "../settings/bilibiliSettings/BiliBiliSettings";
 import { Platform } from "./Platform";
+
+/** B 站分 P（`BiliBiliVideoApi.getBilibiliVideoData` 的 `pages` 项）。 */
+type BiliPage = {
+  page: number;
+  part: string;
+  duration: number;
+  cid: number;
+};
 
 export class BilibiliPlatform extends Platform {
   private static timeToSeconds(timeString: string) {
@@ -425,12 +436,7 @@ export class BilibiliPlatform extends Platform {
       }
 
       // 2. 普通视频：获取视频数据与分 P 列表
-      let pages: {
-        page: number;
-        part: string;
-        duration: number;
-        cid: number;
-      }[] = [];
+      let pages: BiliPage[] = [];
       const res = await BiliBiliVideoApi.getBilibiliVideoData(
         aid || null,
         bvid,
@@ -479,151 +485,10 @@ export class BilibiliPlatform extends Platform {
       }
 
       if (isMultiPage && pages.length > 1) {
-        await BilibiliPlatform.buildBiliSelect(async (select: number) => {
-          if (select === 0) {
-            // 正序点播所有分 P
-            void Announce.runBatchAnnounce(
-              platformData.title,
-              pages.length,
-              async () => {
-                for (const item of pages) {
-                  try {
-                    await BilibiliPlatform.playBiliPage(
-                      platformData,
-                      item,
-                      aid,
-                      bvid,
-                    );
-                  } catch (error) {
-                    // 单项失败：带分P名提示（同因 10 秒去重）后跳过，剩余分 P 照播
-                    Announce.showBatchItemError(
-                      error,
-                      `P${item.page} ${item.part}`,
-                    );
-                  }
-                }
-              },
-              res?.data?.desc,
-            );
-          } else if (select === 1) {
-            // 乱序点播所有分 P
-            const shuffled = [...pages].sort(() => Math.random() - 0.5);
-            void Announce.runBatchAnnounce(
-              platformData.title,
-              shuffled.length,
-              async () => {
-                for (const item of shuffled) {
-                  try {
-                    await BilibiliPlatform.playBiliPage(
-                      platformData,
-                      item,
-                      aid,
-                      bvid,
-                    );
-                  } catch (error) {
-                    // 单项失败：带分P名提示（同因 10 秒去重）后跳过，剩余分 P 照播
-                    Announce.showBatchItemError(
-                      error,
-                      `P${item.page} ${item.part}`,
-                    );
-                  }
-                }
-              },
-              res?.data?.desc,
-            );
-          } else if (select === 2) {
-            // 选集多选点播：等待 buildBiliSelect 菜单淡出（250ms）后唤起多选列表
-            setTimeout(async () => {
-              const defaultCover =
-                (res && res.data && res.data.pic) ||
-                (await platformData.coverImg) ||
-                "";
-              const selectOptions = pages.map((item) => [
-                item.page,
-                `P${item.page} ${item.part}`,
-                IIROSEUtils.generatePicHtml(
-                  (item as any).first_frame || defaultCover,
-                  "mdi-video",
-                ),
-              ]);
-
-              IIROSEUtils.buildSelect2(
-                null,
-                selectOptions,
-                (_t: HTMLElement, selected: any) => {
-                  const rawArr = Array.isArray(selected)
-                    ? selected
-                    : [selected];
-                  const checkedPages = rawArr
-                    .filter(
-                      (x: any) => x !== "" && x !== null && x !== undefined,
-                    )
-                    .map(Number);
-                  if (checkedPages.length === 0) {
-                    ShowMessage.show("未选择任何分P");
-                    return;
-                  }
-
-                  let chosenPages = checkedPages
-                    .map((pageNo) => pages.find((p) => p.page === pageNo))
-                    .filter((p): p is (typeof pages)[0] => Boolean(p));
-                  if (chosenPages.length === 1) {
-                    // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
-                    void Announce.runSingleAnnounce(() =>
-                      BilibiliPlatform.playBiliPage(
-                        platformData,
-                        chosenPages[0],
-                        aid,
-                        bvid,
-                      ),
-                    ).catch((e) => Announce.showBatchItemError(e));
-                    return;
-                  }
-
-                  setTimeout(() => {
-                    BilibiliPlatform.buildOrderConfirmSelect(
-                      (order: number) => {
-                        if (order === 1) {
-                          chosenPages = [...chosenPages].sort(
-                            () => Math.random() - 0.5,
-                          );
-                        }
-                        void Announce.runBatchAnnounce(
-                          platformData.title,
-                          chosenPages.length,
-                          async () => {
-                            for (const item of chosenPages) {
-                              try {
-                                await BilibiliPlatform.playBiliPage(
-                                  platformData,
-                                  item,
-                                  aid,
-                                  bvid,
-                                );
-                              } catch (error) {
-                                // 单项失败：带分P名提示（同因 10 秒去重）后跳过，剩余分 P 照播
-                                Announce.showBatchItemError(
-                                  error,
-                                  `P${item.page} ${item.part}`,
-                                );
-                              }
-                            }
-                          },
-                          res?.data?.desc,
-                        );
-                      },
-                    );
-                  }, 300);
-                },
-                false,
-                true,
-                null,
-                true,
-                null,
-                () => {},
-              );
-            }, 300);
-          }
+        // 多分 P：直接开插件自有选集面板（CAP-5 J3），不再有宿站一级菜单与二次排序确认
+        BilibiliPlatform.selectEpisodes(platformData, {
+          pages,
+          description: res?.data?.desc,
         });
         return;
       }
@@ -649,77 +514,77 @@ export class BilibiliPlatform extends Platform {
   }
 
   /**
-   * 构建 Bilibili 专用选择器 (正序 / 乱序 / 选集)
+   * 多分 P 选集（CAP-8）：插件自有选集面板，点选顺序 = 播放顺序。
+   * `VOD` 已拿到 `pages` 时直接传入；手机操作条只有条目本身，由面板的 `load` 现取。
    */
-  public static async buildBiliSelect(
-    action: (select: number) => Promise<void> | void,
+  public static selectEpisodes(
+    platformData: PlatformData,
+    preloaded?: { pages: BiliPage[]; description?: string | null },
   ) {
-    const select = [
-      [
-        0,
-        "正序点播",
-        `<div class="mdi-sort-alphabetical-variant" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-      [
-        1,
-        "乱序点播",
-        `<div class="mdi-sort" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-      [
-        2,
-        "选集点播",
-        `<div class="mdi-playlist-check" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-    ];
+    const { aid, bvid } = platformData.bilibili ?? {};
+    let pages: BiliPage[] = preloaded?.pages ?? [];
+    let description: string | null = preloaded?.description ?? null;
+    const toEntry = (item: BiliPage): EpisodePickEntry => ({
+      id: String(item.page),
+      title: `P${item.page} ${item.part}`,
+      duration: item.duration,
+    });
 
-    IIROSEUtils.buildSelect2(
-      null, // startElement
-      select, // 选项列表
-      (_t: HTMLElement, s: string) => {
-        const selectNumber = parseInt(s);
-        action(selectNumber);
-      }, // cb 回调
-      false, // allowClear
-      true, // showIcon
-      null, // top
-      false, // multiSelect
-      null, // bottom
-      () => {}, // enterCB
-    );
-  }
-
-  /**
-   * 选集多选完成后的二次排序确认选择器
-   */
-  public static async buildOrderConfirmSelect(
-    action: (select: number) => Promise<void> | void,
-  ) {
-    const select = [
-      [
-        0,
-        "正序播放",
-        `<div class="mdi-sort-alphabetical-variant" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-      [
-        1,
-        "乱序播放",
-        `<div class="mdi-sort" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      ],
-    ];
-
-    IIROSEUtils.buildSelect2(
-      null,
-      select,
-      (_t: HTMLElement, s: string) => {
-        action(parseInt(s));
+    openEpisodePicker({
+      unit: "集",
+      load: async () => {
+        if (preloaded?.pages?.length) return preloaded.pages.map(toEntry);
+        if (!bvid && !aid) throw new Error("没有 bilibili 数据");
+        const res = await BiliBiliVideoApi.getBilibiliVideoData(
+          aid ?? null,
+          bvid,
+        );
+        if (!res || res.code !== 0 || !res.data?.pages?.length)
+          throw new Error("获取视频信息失败");
+        pages = res.data.pages;
+        description = res.data.desc;
+        return pages.map(toEntry);
       },
-      false,
-      true,
-      null,
-      false,
-      null,
-      () => {},
-    );
+      onConfirm: (chosen) => {
+        // 按面板给的顺序回填分 P：点选顺序即播放顺序（乱序已在面板里置换）
+        const picked = chosen
+          .map((entry) => pages.find((item) => String(item.page) === entry.id))
+          .filter((item): item is BiliPage => Boolean(item));
+        if (!picked.length) return;
+        const label = (item: BiliPage) => `P${item.page} ${item.part}`;
+
+        if (picked.length === 1) {
+          // 单项：单曲播报窗口，卡片不被并行批量抑制吞掉
+          void Announce.runSingleAnnounce(() =>
+            BilibiliPlatform.playBiliPage(platformData, picked[0], aid, bvid),
+          ).catch((error) =>
+            Announce.showBatchItemError(error, label(picked[0])),
+          );
+          return;
+        }
+
+        void Announce.runBatchAnnounce(
+          platformData.title,
+          picked.length,
+          async () => {
+            for (const item of picked) {
+              try {
+                await BilibiliPlatform.playBiliPage(
+                  platformData,
+                  item,
+                  aid,
+                  bvid,
+                );
+              } catch (error) {
+                // 单项失败：带分P名提示（同因 10 秒去重）后跳过，剩余分 P 照播
+                Announce.showBatchItemError(error, label(item));
+              }
+            }
+          },
+          description,
+        );
+      },
+    });
   }
 
   /**

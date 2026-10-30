@@ -36,6 +36,16 @@ const neteasePlatform = vi.hoisted(() => ({
   getSongListMultiPageData: vi.fn(),
   playCollectionAll: vi.fn(),
   MOD: vi.fn(),
+  selectEpisodes: vi.fn(),
+}));
+const bilibiliPlatform = vi.hoisted(() => ({
+  getMultiPageBasicsData: vi.fn(async () => ({
+    platformData: [],
+    allPlatformData: [],
+    totalPage: 0,
+  })),
+  VOD: vi.fn(),
+  selectEpisodes: vi.fn(),
 }));
 
 vi.mock("./MainAppContainerServices/NetEaseService", () => ({
@@ -104,6 +114,9 @@ vi.mock("./components/media-card-container/ResultsArea", async () => {
 });
 vi.mock("../platforms/NetEasePlatform", () => ({
   NetEasePlatform: neteasePlatform,
+}));
+vi.mock("../platforms/BilibiliPlatform", () => ({
+  BilibiliPlatform: bilibiliPlatform,
 }));
 vi.mock("../playback/PanelFocus", () => ({ setPanelFocus: () => {} }));
 const favoriteStorage = vi.hoisted(() => ({
@@ -808,7 +821,7 @@ describe("手机操作条", () => {
     }
   });
 
-  it("多 P / 多集条目多一行「选集」，点击进入内页", async () => {
+  it("多 P / 多集条目多一行「选集」，点击调平台 selectEpisodes、不开内页", async () => {
     const { ref } = await mount(MODE.music);
     await activate(ref, song);
     expect(labels()).toEqual(["点播到房间", "收藏"]);
@@ -825,11 +838,69 @@ describe("手机操作条", () => {
     await act(async () => {
       (option("选集") as HTMLButtonElement).click();
     });
+    // 委托给网易云平台的选集面板（不再 `switchToMultiPage` 钻取内页）
+    expect(neteasePlatform.selectEpisodes).toHaveBeenCalledWith(album);
     const state = (ref.current as unknown as Harness).state;
-    expect(state.isCurrentInMultiPage).toBe(true);
-    expect(state.innerCollection).toBe(album);
+    expect(state.isCurrentInMultiPage).toBe(false);
+    expect(state.innerCollection).toBeNull();
     expect(sheet()).toBeNull();
-    expect(root.querySelector("[data-imw-collection-header]")).not.toBeNull();
+    expect(root.querySelector("[data-imw-collection-header]")).toBeNull();
+  });
+
+  it("B 站多 P 条目：选集走平台 selectEpisodes，不开内页", async () => {
+    const multiVideo = {
+      title: "某多 P 视频",
+      author: "某 UP",
+      coverImg: "",
+      websiteUrl: "https://www.bilibili.com/video/BV1",
+      duration: 60,
+      bilibili: { bvid: "BV1" },
+      multiPage: Promise.resolve({ platform: "bilibili" }),
+    } as unknown as PlatformData;
+    const { ref } = await mount(MODE.video);
+    await activate(ref, multiVideo);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(labels()).toContain("选集");
+
+    await act(async () => {
+      (option("选集") as HTMLButtonElement).click();
+    });
+    expect(bilibiliPlatform.selectEpisodes).toHaveBeenCalledWith(multiVideo);
+    expect((ref.current as unknown as Harness).state.isCurrentInMultiPage).toBe(
+      false,
+    );
+    expect(sheet()).toBeNull();
+  });
+
+  it("B 站课程没有分 P 接口：仍按内页钻取", async () => {
+    const course = {
+      title: "某课程",
+      author: "某 UP",
+      coverImg: "",
+      websiteUrl: "https://www.bilibili.com/cheese/play/ss1",
+      bilibili: { aid: 1, course_id: 9 },
+      multiPage: Promise.resolve({ platform: "bilibili" }),
+    } as unknown as PlatformData;
+    const { ref } = await mount(MODE.video);
+    await activate(ref, course);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(labels()).toContain("选集");
+
+    await act(async () => {
+      (option("选集") as HTMLButtonElement).click();
+    });
+    expect(bilibiliPlatform.selectEpisodes).not.toHaveBeenCalled();
+    expect(bilibiliPlatform.getMultiPageBasicsData).toHaveBeenCalledWith(
+      course,
+    );
+    expect((ref.current as unknown as Harness).state.isCurrentInMultiPage).toBe(
+      true,
+    );
+    expect(sheet()).toBeNull();
   });
 
   it("Esc 只关操作条；切模式与关面板也一并收起", async () => {

@@ -5,7 +5,13 @@
 // 关闭顺序：选集 / 收藏随机面板（独立根，自己管）> 操作条 / 展开的底部条 / 顺序菜单
 //（主面板内最上层，三者互斥）> 专辑·歌单内页 > 主面板。
 
-export type OverlayLayerKind = "sheet" | "deck" | "order" | "inner";
+export type OverlayLayerKind =
+  | "sheet"
+  | "deck"
+  | "order"
+  | "inner"
+  /** 独立根的选集面板（`z-[90010]`）：压在面板内浮层之上，但不进 `PANEL_TIER`。 */
+  | "episode";
 
 interface OverlayLayer {
   kind: OverlayLayerKind;
@@ -164,7 +170,15 @@ function ensureBackHook(page: BackWindow): boolean {
 export function setPanelBackHandler(handler: (() => void) | null): void {
   panelBackHandler = handler;
   if (!handler) return;
+  ensureOverlayBackHook();
+}
+
+/**
+ * 保证宿站返回键已被接管（不登记面板处理器）。平台层 / 操作条直接打开独立根的
+ * 选集面板时主面板可能没开，此时也要让「返回」只关那一层。
+ */
+export function ensureOverlayBackHook(): boolean {
   const page = window as BackWindow;
   page[BACK_DISPATCH_KEY] = dispatchBack;
-  ensureBackHook(page);
+  return ensureBackHook(page);
 }

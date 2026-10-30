@@ -12,15 +12,21 @@ const announce = vi.hoisted(() => ({
   runSingleAnnounce: vi.fn(),
   showBatchItemError: vi.fn(),
 }));
+const episodePicker = vi.hoisted(() => ({ openEpisodePicker: vi.fn() }));
 
 vi.mock("../Api/NeteaseAPI/NeteaseMusic", () => ({
   NeteaseMusicAPI: neteaseMusic,
 }));
 vi.mock("../iirose_func/Socket/Announce", () => ({ Announce: announce }));
+vi.mock(
+  "../page/components/episode-picker/openEpisodePicker",
+  () => episodePicker,
+);
 
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { ShowMessage } from "../iirose_func/ShowMessage";
 import { NetEasePlatform } from "./NetEasePlatform";
+import type { EpisodePickEntry } from "../page/components/episode-picker/EpisodePicker";
 
 const songList = {
   title: "冬日歌单",
@@ -136,5 +142,122 @@ describe("playCollectionAll（整张点播）", () => {
     await NetEasePlatform.playCollectionAll(album, "shuffle");
     expect(buildSelect2).not.toHaveBeenCalled();
     expect(finalODSONG).toBeDefined();
+  });
+});
+
+// —— 选集（story 5）：MLOD / AOD 的 select===2 委托插件自有面板 ——
+// 一级菜单（正序 / 乱序 / 选集）保留：收藏里「整张点播」只靠它；选集本身不再走宿站
+// 多选弹窗与二次排序确认（没有 `buildOrderConfirmSelect`、没有跨弹窗 300ms 延迟）。
+describe("选集委托", () => {
+  const lastOptions = () =>
+    episodePicker.openEpisodePicker.mock.lastCall?.[0] as {
+      unit: string;
+      load: () => Promise<EpisodePickEntry[]>;
+      onConfirm: (entries: EpisodePickEntry[]) => void;
+    };
+
+  /** 触发一级菜单的某一项，返回被替换掉的宿站调用（用于断言单选）。 */
+  const choose = async (run: () => void, select: number) => {
+    const build = vi
+      .spyOn(IIROSEUtils, "buildSelect2")
+      .mockImplementation(() => {});
+    run();
+    const cb = build.mock.lastCall?.[2] as (
+      target: HTMLElement,
+      value: string,
+    ) => Promise<void>;
+    await cb(null as unknown as HTMLElement, String(select));
+    return build;
+  };
+
+  beforeEach(() => {
+    episodePicker.openEpisodePicker.mockClear();
+    // 单曲播报入口在实现里接 `.catch`：替身要还回一个 promise
+    announce.runSingleAnnounce.mockResolvedValue(undefined);
+  });
+
+  it("MLOD 选集：开面板（单位「首」），条目取歌单曲目", async () => {
+    await choose(() => NetEasePlatform.MLOD(songList), 2);
+
+    expect(episodePicker.openEpisodePicker).toHaveBeenCalledOnce();
+    expect(lastOptions().unit).toBe("首");
+    const entries = await lastOptions().load();
+    expect(entries.map((entry) => entry.id)).toEqual(["1", "2", "3"]);
+    expect(neteaseMusic.getSongListDetail).toHaveBeenCalledWith(7);
+  });
+
+  it("歌单详情带 tracks 时用曲名与歌手", async () => {
+    neteaseMusic.getSongListDetail.mockResolvedValue({
+      playlist: {
+        name: "冬日歌单",
+        description: "冬天听",
+        trackIds: [{ id: 1 }, { id: 2 }],
+        tracks: [
+          { id: 1, name: "晴天", ar: [{ name: "周杰伦" }], dt: 269000 },
+          { id: 2, name: "鱼", ar: [{ name: "陈绮贞" }], dt: 240000 },
+        ],
+      },
+    });
+    await choose(() => NetEasePlatform.MLOD(songList), 2);
+
+    expect(await lastOptions().load()).toEqual([
+      { id: "1", title: "晴天", meta: "周杰伦", duration: 269 },
+      { id: "2", title: "鱼", meta: "陈绮贞", duration: 240 },
+    ]);
+  });
+
+  it("确认顺序 = 点选顺序：批量播报按该顺序交给 finalODSONG", async () => {
+    await choose(() => NetEasePlatform.MLOD(songList), 2);
+    const entries = await lastOptions().load();
+    lastOptions().onConfirm([entries[2], entries[0]]);
+
+    expect(announce.runBatchAnnounce).toHaveBeenCalledWith(
+      "冬日歌单",
+      2,
+      expect.any(Function),
+      "冬天听",
+    );
+    expect(await playedIds()).toEqual([3, 1]);
+  });
+
+  it("只选 1 首：单曲播报窗口", async () => {
+    await choose(() => NetEasePlatform.MLOD(songList), 2);
+    const entries = await lastOptions().load();
+    lastOptions().onConfirm([entries[1]]);
+
+    expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
+    expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
+    const loop = announce.runSingleAnnounce.mock.lastCall?.[0] as () => void;
+    await loop();
+    expect(vi.mocked(finalODSONG).mock.lastCall?.[0]).toEqual([2]);
+  });
+
+  it("AOD 选集：走专辑端点，确认顺序保序", async () => {
+    await choose(() => NetEasePlatform.AOD(album), 2);
+    const entries = await lastOptions().load();
+    expect(neteaseMusic.getAlbumDetail).toHaveBeenCalledWith(9);
+    expect(entries.map((entry) => entry.id)).toEqual(["4", "5", "6"]);
+
+    lastOptions().onConfirm([entries[2], entries[0]]);
+    expect(announce.runBatchAnnounce).toHaveBeenCalledWith(
+      "华丽的冒险",
+      2,
+      expect.any(Function),
+      "",
+    );
+    expect(await playedIds()).toEqual([6, 4]);
+  });
+
+  it("详情拿不到：`load` 抛错（面板显示「加载失败」+「重试」）", async () => {
+    neteaseMusic.getAlbumDetail.mockResolvedValue(null);
+    await choose(() => NetEasePlatform.AOD(album), 2);
+    await expect(lastOptions().load()).rejects.toThrow("获取专辑失败");
+  });
+
+  it("一级菜单仍是单选（不让宿站承担任何选集职责）", async () => {
+    const build = await choose(() => NetEasePlatform.MLOD(songList), 2);
+    // 第 7 个参数（multiSelect）恒为 false
+    expect(build.mock.lastCall?.[6]).toBe(false);
+    expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
   });
 });
