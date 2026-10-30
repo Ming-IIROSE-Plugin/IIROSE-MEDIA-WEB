@@ -270,6 +270,55 @@ export type DeskIconName =
   | "github"
   | "external";
 
+/**
+ * 全部图标名（运行期校验用）：`SettingData.icon` 是字符串，数据层拼错时
+ * `isDeskIconName` 让渲染回退到 info，测试则直接断言数据里的名字都在此集合内。
+ */
+export const DESK_ICON_NAMES: readonly DeskIconName[] = [
+  "note",
+  "film",
+  "radio",
+  "star",
+  "starf",
+  "gear",
+  "info",
+  "search",
+  "chev",
+  "left",
+  "right",
+  "play",
+  "send",
+  "close",
+  "mark",
+  "list",
+  "grid",
+  "sort",
+  "shuffle",
+  "repeat",
+  "user",
+  "users",
+  "clock",
+  "signal",
+  "wrench",
+  "code",
+  "layout",
+  "at",
+  "cloud",
+  "key",
+  "refresh",
+  "trash",
+  "coffee",
+  "github",
+  "external",
+];
+
+const DESK_ICON_SET = new Set<string>(DESK_ICON_NAMES);
+
+/** 字符串是否是合法图标名（`SettingData.icon` 不强转，拼错则回退）。 */
+export function isDeskIconName(name: string): name is DeskIconName {
+  return DESK_ICON_SET.has(name);
+}
+
 const ICON_INNER: Record<DeskIconName, string> = {
   note: '<path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="16.5" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/>',
   film: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/>',

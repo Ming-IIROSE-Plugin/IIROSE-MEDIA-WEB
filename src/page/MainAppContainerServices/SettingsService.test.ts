@@ -202,3 +202,62 @@ describe("关于卡", () => {
     }
   });
 });
+
+describe("忘记本机密钥的值位", () => {
+  it("本机没有密钥缓存时显示「无本机密钥」", async () => {
+    const { groups } = await showPlugin();
+    expect(rowOf(groups, "syncForgetKey").actionTitle).toBe("无本机密钥");
+  });
+
+  it("hasLocalKey 失败时设置数据照常建出来，值位退回「无本机密钥」", async () => {
+    const { SyncManager } = await import("../../sync/SyncManager");
+    vi.spyOn(SyncManager, "hasLocalKey").mockRejectedValue(
+      new Error("indexeddb unavailable"),
+    );
+
+    const { groups } = await showPlugin();
+    // 云端同步组卡仍然完整（不因读缓存失败而整块消失）
+    expect(groupTitles(groups)).toEqual(["聊天框", "云端同步"]);
+    expect(rowOf(groups, "syncForgetKey").kind).toBe("action");
+    expect(rowOf(groups, "syncForgetKey").actionTitle).toBe("无本机密钥");
+  });
+});
+
+describe("行图标", () => {
+  it("四个范围与关于卡产出的每个 icon 都是已知的 DeskIcon 名字", async () => {
+    const { isDeskIconName } =
+      await import("../components/floating-panel/tokens");
+
+    const collected: { who: string; key: string; icon: string }[] = [];
+    const collect = (who: string, groups: SettingGroupData[]) => {
+      for (const group of groups)
+        for (const item of group.items)
+          collected.push({ who, key: item.key, icon: item.icon });
+    };
+
+    const bili = ctxOf();
+    SettingsService.showBilibili(bili.ctx);
+    collect("showBilibili", groupsOf(bili.setState));
+
+    const netease = ctxOf();
+    SettingsService.showNetEaseMusic(netease.ctx);
+    collect("showNetEaseMusic", groupsOf(netease.setState));
+
+    const radio = ctxOf();
+    SettingsService.showRadio(radio.ctx);
+    collect("showRadio", groupsOf(radio.setState));
+
+    const plugin = await showPlugin();
+    collect("showPluginSettings", plugin.groups);
+
+    const about = ctxOf();
+    AboutService.showAbout(about.ctx, async () => {});
+    collect("AboutService.showAbout", groupsOf(about.setState));
+
+    expect(collected.length).toBeGreaterThan(20);
+    for (const { who, key, icon } of collected)
+      expect(`${who}.${key}: ${icon} 已知 ${isDeskIconName(icon)}`).toBe(
+        `${who}.${key}: ${icon} 已知 true`,
+      );
+  });
+});

@@ -1027,33 +1027,41 @@ describe("结果区状态机", () => {
     ).not.toBeNull();
   });
 
-  it("关于模式渲染一张关于卡（无组名，外链行按数据声明）", async () => {
-    await mount(
-      results({
-        ...resultsBase,
-        mode: MODE.about,
-        mediaData: null,
-        settingsData: [
+  it("组名为空 ⇒ 关于卡：关于模式与手机在设置内点「关于」得到同一张卡", async () => {
+    const aboutGroups: SettingGroupData[] = [
+      {
+        title: "",
+        items: [
           {
-            title: "关于",
-            items: [
-              {
-                key: "aboutSource",
-                title: "项目源代码地址",
-                actionTitle: "GitHub",
-                external: true,
-                icon: "github",
-                action: () => {},
-              },
-            ],
+            key: "aboutSource",
+            title: "项目源代码地址",
+            actionTitle: "GitHub",
+            external: true,
+            icon: "github",
+            action: () => {},
           },
         ],
-      }),
-    );
-    const card = host.querySelector("[data-imw-about-card]")!;
-    expect(card).not.toBeNull();
-    expect(card.querySelector("h2")).toBeNull();
-    expect(host.querySelector("[data-imw-settings-group]")).toBeNull();
+      },
+    ];
+
+    for (const mode of [MODE.about, MODE.settings]) {
+      await mount(
+        results({
+          ...resultsBase,
+          mode,
+          mediaData: null,
+          settingsData: aboutGroups,
+        }),
+      );
+      const card = host.querySelector("[data-imw-about-card]")!;
+      expect(card).not.toBeNull();
+      // 没有组名标题，也不是带组名的组卡
+      expect(card.querySelector("h2")).toBeNull();
+      expect(host.querySelector("[data-imw-settings-group]")).toBeNull();
+      await act(async () => {
+        render(null, host);
+      });
+    }
   });
 });
 

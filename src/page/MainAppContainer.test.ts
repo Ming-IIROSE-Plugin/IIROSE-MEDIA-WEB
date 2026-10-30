@@ -72,9 +72,25 @@ vi.mock("./MainAppContainerServices/RecentService", () => ({
 vi.mock("./MainAppContainerServices/SettingsService", () => ({
   SettingsService: settings,
 }));
-vi.mock("./MainAppContainerServices/AboutService", () => ({
-  AboutService: about,
-}));
+vi.mock("./MainAppContainerServices/AboutService", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("./MainAppContainerServices/AboutService")
+    >();
+  const Real = actual.AboutService;
+  return {
+    AboutService: {
+      // 记录调用 + 跑真实实现：关于数据是本 story 的产物，容器用例要看到真实的空组名卡
+      showAbout: (
+        ctx: MainAppContainerActionContext,
+        ShowOrHideIMC: () => Promise<void>,
+      ) => {
+        about.showAbout(ctx, ShowOrHideIMC);
+        Real.showAbout(ctx, ShowOrHideIMC);
+      },
+    },
+  };
+});
 const resultsAreaProps = vi.hoisted(() => ({
   last: null as Record<string, unknown> | null,
 }));
@@ -93,13 +109,17 @@ const stubRow = vi.hoisted(() => ({
 vi.mock("./components/media-card-container/ResultsArea", async () => {
   const { h } = await import("preact");
   const { useContext } = await import("preact/hooks");
+  const { SettingsCards } = await import("./components/settings/SettingsGroup");
   const { MediaContainerContext } =
     await import("./components/media-container-context/MediaContainerContext");
   return {
     // 桩记录实参（onRetry / onClearSearch / pageOffset 直接调这些实参验证），
     // 并渲染一行：行体点击经真实上下文到达容器，`onRowActivate` 的接线由此可验。
+    // 设置 / 关于的数据交给真实的 `SettingsCards` 渲染，容器用例因此能看到卡片 DOM。
     ResultsArea: (props: Record<string, unknown>) => {
       resultsAreaProps.last = props;
+      const groups = props.settingsData as SettingGroupData[] | null;
+      if (groups) return h(SettingsCards, { groups });
       const ctx = useContext(MediaContainerContext);
       return h(
         "button",
@@ -506,7 +526,7 @@ describe("六种模式的现场", () => {
     ]);
   });
 
-  it("设置范围：手机末项为「关于」，点它显示关于卡", async () => {
+  it("设置范围：手机末项为「关于」，点它显示无组名的关于卡", async () => {
     const matchMedia = vi.fn().mockReturnValue({ matches: true });
     vi.stubGlobal("matchMedia", matchMedia);
     try {
@@ -521,12 +541,63 @@ describe("六种模式的现场", () => {
         "插件设置",
         "关于",
       ]);
+      // 点之前还没有关于卡（设置范围的数据由 Service 提供，本用例只验接线）
+      expect(root.querySelector("[data-imw-about-card]")).toBeNull();
 
       about.showAbout.mockClear();
+      settings.release.mockClear();
       await act(async () => {
         tabs[4].click();
       });
       expect(about.showAbout).toHaveBeenCalledOnce();
+      // 先释放「插件设置」装的同步订阅，再出关于卡（否则后续同步状态变化会把它顶掉）
+      expect(settings.release).toHaveBeenCalledOnce();
+      expect(settings.release.mock.invocationCallOrder[0]).toBeLessThan(
+        about.showAbout.mock.invocationCallOrder[0],
+      );
+
+      // 手机在设置内点「关于」= 一张无组名的关于卡（与桌面独立关于模式同一张卡）
+      expect(root.querySelector("[data-imw-about-card]")).not.toBeNull();
+      expect(root.querySelector("[data-imw-settings-group]")).toBeNull();
+      expect(root.querySelector("[data-imw-about-card] h2")).toBeNull();
+      expect(root.textContent).toContain("项目源代码地址");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("设置范围标签：手机上停在「关于」时视口变宽，传下去的下标夹回有效范围", async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true });
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      const { ref } = await mount(MODE.settings);
+      const tabs = Array.from(
+        root.querySelectorAll('[role="tab"]'),
+      ) as HTMLElement[];
+      await act(async () => {
+        tabs[4].click();
+      });
+      expect((ref.current as unknown as Harness).state.SubNavBarIndex).toBe(4);
+
+      // 视口越过 768px：桌面只有四个标签，下标 4 越界
+      vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+      await act(async () => {
+        render(h(Container, { ...props(MODE.settings), ref } as object), root);
+      });
+      const desktopTabs = Array.from(
+        root.querySelectorAll('[role="tab"]'),
+      ) as HTMLElement[];
+      expect(desktopTabs.map((el) => (el.textContent ?? "").trim())).toEqual([
+        "哔哩哔哩视频",
+        "网易云音乐",
+        "无线电广播",
+        "插件设置",
+      ]);
+      // tablist 仍可键盘进入：恰好一个 tabIndex=0
+      expect(
+        desktopTabs.filter((el) => el.getAttribute("tabindex") === "0"),
+      ).toHaveLength(1);
+      expect(desktopTabs[3].getAttribute("aria-selected")).toBe("true");
     } finally {
       vi.unstubAllGlobals();
     }

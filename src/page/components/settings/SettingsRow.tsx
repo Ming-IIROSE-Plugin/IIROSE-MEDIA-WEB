@@ -10,7 +10,6 @@
 import { useEffect, useState } from "preact/hooks";
 import {
   DeskIcon,
-  type DeskIconName,
   deskFocusRing,
   deskInk,
   deskInk2,
@@ -18,12 +17,19 @@ import {
   deskPressTone,
   deskRose,
   deskRule,
+  isDeskIconName,
+  roundedLg,
   typeLabel,
 } from "../floating-panel/tokens";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 export interface SettingsRowProps {
   item: SettingData;
+  /**
+   * 组卡首行 / 末行补上卡片的 12px 圆角：卡片不裁切（焦点环画在行框外），
+   * 悬停底与焦点环才不会被直角越出卡边。
+   */
+  first?: boolean;
   /** 组卡末行不加底线（DESIGN.md `settings-row.divider`）。 */
   last?: boolean;
 }
@@ -32,7 +38,21 @@ export interface SettingsRowProps {
 const rowBase =
   "flex min-h-[56px] w-full items-center gap-3 border-0 border-solid bg-transparent px-4 text-left max-[768px]:min-h-11";
 
-export function SettingsRow({ item, last = false }: SettingsRowProps) {
+/** 首行圆上两角、末行圆下两角；组卡只有一行时整行圆。 */
+const cornersOf = (first: boolean, last: boolean) =>
+  first && last
+    ? roundedLg
+    : first
+      ? "rounded-t-[12px]"
+      : last
+        ? "rounded-b-[12px]"
+        : "";
+
+export function SettingsRow({
+  item,
+  first = false,
+  last = false,
+}: SettingsRowProps) {
   const kind = item.kind ?? "value";
   const [value, setValue] = useState(item.actionTitle ?? "");
   const [checked, setChecked] = useState(item.checked === true);
@@ -46,8 +66,14 @@ export function SettingsRow({ item, last = false }: SettingsRowProps) {
   };
 
   const divider = last ? "" : `border-b ${deskRule}`;
+  const corners = cornersOf(first, last);
+  // 图标名拼错时不静默渲染空 svg：回退到 info（SETTING 行的图标在数据层由测试守住）
   const icon = (
-    <DeskIcon name={item.icon as DeskIconName} size={20} className={deskInk3} />
+    <DeskIcon
+      name={isDeskIconName(item.icon) ? item.icon : "info"}
+      size={20}
+      className={deskInk3}
+    />
   );
   const label = (
     <span className={`min-w-0 flex-1 truncate ${typeLabel} ${deskInk}`}>
@@ -68,7 +94,9 @@ export function SettingsRow({ item, last = false }: SettingsRowProps) {
     return (
       <div
         data-imw-settings-row="readonly"
-        className={`${rowBase} cursor-default ${divider}`}
+        // 只读值随订阅实时刷新（同步中… → 正常），读屏要能听到变化
+        aria-live="polite"
+        className={`${rowBase} cursor-default ${divider} ${corners}`}
       >
         {icon}
         {label}
@@ -84,7 +112,7 @@ export function SettingsRow({ item, last = false }: SettingsRowProps) {
         role="switch"
         aria-checked={checked}
         data-imw-settings-row="switch"
-        className={`${rowBase} cursor-pointer ${divider} ${deskPressTone} ${deskFocusRing}`}
+        className={`${rowBase} cursor-pointer ${divider} ${corners} ${deskPressTone} ${deskFocusRing}`}
         onClick={() => item.action?.(report)}
       >
         {icon}
@@ -109,7 +137,7 @@ export function SettingsRow({ item, last = false }: SettingsRowProps) {
     <button
       type="button"
       data-imw-settings-row={kind}
-      className={`${rowBase} cursor-pointer ${divider} ${deskPressTone} ${deskFocusRing}`}
+      className={`${rowBase} cursor-pointer ${divider} ${corners} ${deskPressTone} ${deskFocusRing}`}
       onClick={() => item.action?.(report)}
     >
       {icon}

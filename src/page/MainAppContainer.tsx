@@ -3,7 +3,10 @@ import { Component, createRef } from "preact";
 import { ResultsArea } from "./components/media-card-container/ResultsArea";
 import { CollectionHeader } from "./components/media-card-container/CollectionHeader";
 import type { PlayOrder } from "./components/media-card-container/OrderMenu";
-import { isCollectionItem } from "./components/media-card-container/mediaFormat";
+import {
+  isCollectionItem,
+  isPhoneLayout,
+} from "./components/media-card-container/mediaFormat";
 import {
   notifyRoomUnsupported,
   roomSupportsRequest,
@@ -94,11 +97,6 @@ function emptyModeState(): ModeSnapshot {
   };
 }
 
-/** 手机（≤768px，宿站 iframe 缩放后仍按 `max-[768px]` 判定）：不自动聚焦搜索栏。 */
-function isPhone(): boolean {
-  return window.matchMedia?.("(max-width: 768px)").matches ?? false;
-}
-
 export class MainAppContainer extends Component<
   MainAppContainerProps,
   MainAppContainerState
@@ -143,7 +141,8 @@ export class MainAppContainer extends Component<
       void FavoritesService.reloadLastQuery(this.getActionContext());
     });
     void SyncManager.init();
-    if (this.props.active && !isPhone()) this.searchBarRef.current?.focus();
+    if (this.props.active && !isPhoneLayout())
+      this.searchBarRef.current?.focus();
     // 内页（专辑/歌单）登记为层级栈的一层：`Esc` 与宿站返回键先返回外层结果（story 4）
     this.syncInnerLayer();
     // 首个模式的首个范围：与旧四行顶栏挂载时自执行首项一致
@@ -156,7 +155,7 @@ export class MainAppContainer extends Component<
 
   componentDidUpdate(prevProps: Readonly<MainAppContainerProps>): void {
     // 面板打开：桌面把焦点放进搜索栏（手机不聚焦）
-    if (!prevProps.active && this.props.active && !isPhone())
+    if (!prevProps.active && this.props.active && !isPhoneLayout())
       this.searchBarRef.current?.focus();
 
     // 面板关闭：面板内的操作条一并收起（焦点不留在屏幕外）
@@ -314,11 +313,14 @@ export class MainAppContainer extends Component<
 
     const categories = this.getActiveCategories();
     const platform = this.currentPlatform();
-    // 手机专属范围标签（设置的「关于」）：桌面不渲染；它恒为末项，过滤后下标不位移
-    const phone = isPhone();
+    // 手机专属范围标签（设置的「关于」）：桌面不渲染。它恒为末项，过滤后前面的下标不位移；
+    // 若停在它上面（下标 4）时视口越过 768px，桌面只剩 4 个标签、activeIndex 越界会让
+    // 整个 tablist 没有一个 tabIndex=0，所以传给范围行的下标要夹回有效范围。
+    const phone = isPhoneLayout();
     const scopes: ScopeItem[] = (platform?.subNavBarItems ?? [])
       .filter((item) => phone || !item.phoneOnly)
       .map((item) => ({ title: item.title }));
+    const scopeIndex = Math.min(SubNavBarIndex, Math.max(scopes.length - 1, 0));
     const sources: SearchSource[] = categories.platform.map((item) => ({
       label: item.title,
       short: item.shortTitle ?? item.title,
@@ -397,7 +399,7 @@ export class MainAppContainer extends Component<
               scopes.length > 0 && (
                 <ScopeRow
                   items={scopes}
-                  activeIndex={SubNavBarIndex}
+                  activeIndex={scopeIndex}
                   onChange={this.controller.selectScope}
                   viewMode={this.viewToggleMode()}
                   onToggleView={this.controller.toggleSearchViewMode}
@@ -1116,6 +1118,9 @@ export class MainAppContainer extends Component<
               title: "关于",
               phoneOnly: true,
               searchAction: () => {
+                // 离开「插件设置」的同步订阅：否则之后任何同步状态变化都会
+                // refresh 出插件组卡，把关于卡顶掉（标签还停在「关于」）
+                SettingsService.release();
                 AboutService.showAbout(
                   this.getActionContext(),
                   this.props.ShowOrHideIMC,

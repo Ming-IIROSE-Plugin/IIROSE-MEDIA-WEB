@@ -48,8 +48,10 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
 });
-afterEach(() => {
-  render(null, host);
+afterEach(async () => {
+  await act(async () => {
+    render(null, host);
+  });
   host.remove();
 });
 
@@ -74,9 +76,33 @@ describe("设置组卡", () => {
         ...tokens.deskRule.split(" "),
         ...tokens.roundedLg.split(" "),
         "border",
-        "overflow-hidden",
       ]),
     );
+    // 卡片不裁切：行的焦点环画在行框外，overflow-hidden 会把它切掉
+    expect(classesOf(card)).not.toContain("overflow-hidden");
+  });
+
+  it("首行 / 末行带卡片圆角（卡片不裁切时悬停底不越出卡边）", async () => {
+    await draw(
+      h(SettingsGroup, {
+        group: group([
+          item({ key: "a" }),
+          item({ key: "b" }),
+          item({ key: "c" }),
+        ]),
+      }),
+    );
+    const rows = Array.from(
+      host.querySelectorAll("[data-imw-settings-row]"),
+    ) as HTMLElement[];
+    expect(classesOf(rows[0])).toContain("rounded-t-[12px]");
+    expect(classesOf(rows[1])).not.toContain("rounded-t-[12px]");
+    expect(classesOf(rows[1])).not.toContain("rounded-b-[12px]");
+    expect(classesOf(rows[2])).toContain("rounded-b-[12px]");
+
+    // 只有一行时整行圆
+    await draw(h(SettingsGroup, { group: group([item()]) }));
+    expect(classesOf(row("value"))).toContain(tokens.roundedLg);
   });
 
   it("卡内每行一张设置行，行间 1px 细线、末行无", async () => {
@@ -147,7 +173,8 @@ describe("动作行与只读行", () => {
     expect(action).toHaveBeenCalledOnce();
   });
 
-  it("只读行：静态行、无 chev、不可聚焦、点击无动作", async () => {
+  it("只读行：静态行、无 chev、不可聚焦、点击不触发任何回调", async () => {
+    const action = vi.fn();
     await draw(
       h(SettingsGroup, {
         group: group([
@@ -157,6 +184,7 @@ describe("动作行与只读行", () => {
             kind: "readonly",
             actionTitle: "从未同步",
             icon: "clock",
+            action,
           }),
         ]),
       }),
@@ -169,7 +197,40 @@ describe("动作行与只读行", () => {
     expect(el.hasAttribute("role")).toBe(false);
     expect(el.textContent).toContain("从未同步");
     await act(async () => el.click());
-    expect(host.querySelector("[data-imw-settings-row]")).toBe(el);
+    // 只读行不接动作：即便数据里带了回调也不会被触发
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it("只读行的值变化读得出来：整行 aria-live=polite（同步中… → 正常）", async () => {
+    const readonlyItem = (actionTitle: string): SettingData =>
+      item({
+        key: "status",
+        title: "同步状态",
+        kind: "readonly",
+        actionTitle,
+        icon: "refresh",
+      });
+    await draw(h(SettingsGroup, { group: group([readonlyItem("同步中…")]) }));
+    const el = row("readonly");
+    expect(el.getAttribute("aria-live")).toBe("polite");
+
+    await draw(h(SettingsGroup, { group: group([readonlyItem("正常")]) }));
+    expect(row("readonly").getAttribute("aria-live")).toBe("polite");
+    expect(row("readonly").textContent).toContain("正常");
+  });
+
+  it("只读行没有动作时也不报错（数据里不给 action）", async () => {
+    const noAction: SettingData = {
+      key: "status",
+      title: "同步状态",
+      kind: "readonly",
+      actionTitle: "正常",
+      icon: "refresh",
+    };
+    expect(noAction.action).toBeUndefined();
+    await draw(h(SettingsGroup, { group: group([noAction]) }));
+    await act(async () => row("readonly").click());
+    expect(row("readonly").textContent).toContain("正常");
   });
 });
 
@@ -275,7 +336,9 @@ describe("开关行", () => {
       tokens.deskInk3Fill.split(" ")[0],
     );
 
-    render(null, host);
+    await act(async () => {
+      render(null, host);
+    });
     await draw(h(SettingsSwitch, { checked: true }));
     const on = host.querySelector('[data-imw-settings-switch="on"]')!;
     expect(classesOf(on)).toEqual(
@@ -389,32 +452,31 @@ describe("令牌纪律", () => {
     }
   });
 
-  it("设置行图标都在 DeskIcon 的 symbol 表里（零 mdi 字形、零 emoji）", () => {
-    for (const name of [
-      "user",
-      "users",
-      "film",
-      "signal",
-      "clock",
-      "wrench",
-      "code",
-      "note",
-      "radio",
-      "layout",
-      "list",
-      "send",
-      "at",
-      "cloud",
-      "key",
-      "refresh",
-      "trash",
-      "coffee",
-      "github",
-      "external",
-    ] as const) {
-      render(null, host);
-      render(h(tokens.DeskIcon, { name }), host);
-      expect(host.querySelector("svg")).not.toBeNull();
+  it("图标名集合可运行期校验：集合内名字都画得出来，拼错的回退 info 而不是空 svg", async () => {
+    expect(tokens.DESK_ICON_NAMES.length).toBeGreaterThan(0);
+    expect(tokens.isDeskIconName("cloud")).toBe(true);
+    expect(tokens.isDeskIconName("mdi-cloud")).toBe(false);
+    expect(tokens.isDeskIconName("")).toBe(false);
+
+    for (const name of tokens.DESK_ICON_NAMES) {
+      await act(async () => {
+        render(h(tokens.DeskIcon, { name }), host);
+      });
+      const svg = host.querySelector("svg")!;
+      expect(svg.innerHTML.length).toBeGreaterThan(0);
+      await act(async () => {
+        render(null, host);
+      });
     }
+
+    // 数据层写错名字：行照常渲染 info 图标，不留空 svg
+    await draw(
+      h(SettingsGroup, {
+        group: group([item({ key: "bad", icon: "mdi-not-a-real-name" })]),
+      }),
+    );
+    const svg = row("value").querySelector("svg")!;
+    expect(svg.innerHTML.length).toBeGreaterThan(0);
+    expect(svg.innerHTML).toContain("<circle");
   });
 });

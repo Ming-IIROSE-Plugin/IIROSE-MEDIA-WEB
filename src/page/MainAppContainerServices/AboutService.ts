@@ -16,7 +16,9 @@ export class AboutService {
   ) {
     const aboutData: SettingGroupData[] = [
       {
-        title: "关于",
+        // 关于卡没有组名（DESIGN.md `about-card`）：空串让结果区渲染无标题的关于卡，
+        // 手机（设置内点「关于」）与桌面（独立关于模式）因此得到同一张卡。
+        title: "",
         items: [
           {
             key: "aboutAuthor",

@@ -5,7 +5,7 @@ interface SettingData {
   /** 稳定标识（如 "searchViewMode"）：面板内按它匹配行，不得用 title 中文文案匹配 */
   key: string;
   title: string;
-  /** 值位的当前文字：取值 / 动作 / 只读行用；开关行没有值位（DESIGN.md `settings-row`）。 */
+  /** 值位文字：值 / 动作 / 只读行显示；开关行用它当开关左侧的状态说明（如「未启用」），可为空。 */
   actionTitle?: string;
   /** 设置行图标：`tokens.ts` 的 `DeskIconName`（自包含内联 SVG，不借宿站 mdi-* 类）。 */
   icon: string;

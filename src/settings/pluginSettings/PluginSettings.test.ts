@@ -158,3 +158,67 @@ describe("点播播报模式设置", () => {
     );
   });
 });
+
+describe("isProxyAtInputSetting", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("翻转后回报布尔并重装输入行为（各一次）", async () => {
+    const { Input_Behavior_Module } =
+      await import("../../input-behavior-module/Input-Behavior-Module");
+    const apply = vi
+      .spyOn(Input_Behavior_Module, "applyBehavior")
+      .mockImplementation(() => {});
+    localStorage.setItem(
+      "imwPluginSetting",
+      JSON.stringify({
+        chatBox: { isProxyAtInput: true },
+        defaultPage: 0,
+        searchViewMode: "card",
+        announceMode: "card",
+      }),
+    );
+
+    const onChange = vi.fn();
+    const changeSearchKeyword = () => {};
+    const ShowOrHideIMC = async () => {};
+    PluginSettings.isProxyAtInputSetting(
+      onChange,
+      changeSearchKeyword,
+      ShowOrHideIMC,
+    );
+
+    expect(onChange).toHaveBeenCalledOnce();
+    expect(onChange).toHaveBeenCalledWith(false);
+    expect(apply).toHaveBeenCalledOnce();
+    expect(apply).toHaveBeenCalledWith(changeSearchKeyword, ShowOrHideIMC);
+    expect(
+      JSON.parse(localStorage.getItem("imwPluginSetting")!).chatBox
+        .isProxyAtInput,
+    ).toBe(false);
+  });
+
+  it("只传 onChange 时不重装输入行为", async () => {
+    const { Input_Behavior_Module } =
+      await import("../../input-behavior-module/Input-Behavior-Module");
+    localStorage.setItem(
+      "imwPluginSetting",
+      JSON.stringify({
+        chatBox: { isProxyAtInput: true },
+        defaultPage: 0,
+        searchViewMode: "card",
+        announceMode: "card",
+      }),
+    );
+    const apply = vi
+      .spyOn(Input_Behavior_Module, "applyBehavior")
+      .mockImplementation(() => {});
+
+    const onChange = vi.fn();
+    PluginSettings.isProxyAtInputSetting(onChange);
+
+    expect(onChange).toHaveBeenCalledWith(false);
+    expect(apply).not.toHaveBeenCalled();
+  });
+});

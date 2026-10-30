@@ -1,7 +1,7 @@
 // 结果区容器：Promise 状态机（loading / error / 空 / 未搜索）+ 按模式与范围选形态。
 // 取代旧的 `MediaCard`：曲目表 / 音乐网格 / 视频网格 / 专辑·歌单行 / 状态部件都在这里选。
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
-import { AboutCard, SettingsGroup } from "../settings/SettingsGroup";
+import { SettingsCards } from "../settings/SettingsGroup";
 import { MediaContainerContext } from "../media-container-context/MediaContainerContext";
 import { MODE } from "../desk/deskModes";
 import { deskGutter, deskInk, typeLabelStrong } from "../floating-panel/tokens";
@@ -60,9 +60,9 @@ const musicGridClass =
   "grid grid-cols-5 gap-x-[22px] gap-y-[22px] [grid-auto-rows:max-content] max-[768px]:grid-cols-3 max-[768px]:gap-x-3 max-[768px]:gap-y-4";
 const videoGridClass =
   "grid grid-cols-4 gap-x-[22px] gap-y-[26px] [grid-auto-rows:max-content] max-[768px]:grid-cols-2 max-[768px]:gap-x-3 max-[768px]:gap-y-[18px]";
-/** 设置 / 关于：纸色底上的组卡列（卡宽随内容区收敛，卡间 24px）。 */
+/** 设置 / 关于：纸色底上的卡列（卡宽随内容区收敛，卡间 24px，DESIGN.md `settings-group.note`）。 */
 const settingsPageClass =
-  "flex max-w-[760px] flex-col gap-6 pb-4 pt-6 max-[768px]:gap-5 max-[768px]:pb-6";
+  "flex max-w-[760px] flex-col gap-6 pb-4 pt-6 max-[768px]:pb-6";
 
 /** 形态由「模式 + 范围 + 视图 + 内页」派生，不新增 prop 爆炸。 */
 export function shapeOf(options: {
@@ -305,18 +305,9 @@ export function ResultsArea({
   const body = () => {
     if (shape === "settings") {
       if (!settingsData) return null;
-      // 关于页只有一张卡（无组名）；设置页一组一张组卡。
-      if (mode === MODE.about)
-        return (
-          <div className={`${deskGutter} ${settingsPageClass}`}>
-            <AboutCard items={settingsData.flatMap((group) => group.items)} />
-          </div>
-        );
       return (
         <div className={`${deskGutter} ${settingsPageClass}`}>
-          {settingsData.map((group, index) => (
-            <SettingsGroup key={`${index}:${group.title}`} group={group} />
-          ))}
+          <SettingsCards groups={settingsData} />
         </div>
       );
     }
