@@ -153,11 +153,7 @@ export class MainAppControlLayer extends Component<
   ) {
     // 1. 初始化检查（与打开合批时也要先按当前主题着色）
     if (!this.state.init && nextState.init) {
-      if (nextState.mainAppDisplay) {
-        this.applyTheme();
-        // 打开与初始化合批时也要接管宿站返回键：否则首次打开的返回键会直接把人扔出房间
-        this.applyBackHandler(true);
-      }
+      if (nextState.mainAppDisplay) this.applyTheme();
       return true;
     }
 

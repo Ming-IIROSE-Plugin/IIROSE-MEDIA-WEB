@@ -21,6 +21,8 @@ const layers: OverlayLayer[] = [];
 /** 面板自己的返回处理器：非空 = 面板开着。 */
 let panelBackHandler: (() => void) | null = null;
 let escapeListenerInstalled = false;
+/** `Utils.backward` 的包装每个页面只装一次（随机面板会再包一层，别跟着它叠）。 */
+let backHookInstalled = false;
 
 /**
  * 独立根：随机面板与播放进度浮窗在**自己的元素上**处理 `Esc`。栈监听是 `document`
@@ -45,6 +47,8 @@ function handleEscape(event: KeyboardEvent): void {
   if (isForeignEvent(event.target)) return;
   event.preventDefault();
   event.stopPropagation();
+  // 按住不放产生的重复事件照样吞掉，但不再往下走：一次按键只关一层。
+  if (event.repeat) return;
   dismissTopOverlay();
 }
 
@@ -142,13 +146,16 @@ function ensureBackHook(page: BackWindow): boolean {
   const utils = page.Utils;
   const original = utils?.backward;
   if (!utils || typeof original !== "function") return false;
-  if (original[BACK_HOOK_MARK]) return true;
+  // 每页只装一次：随机面板会再包一层（`__imwShufflePickerBackHook`），只看自身标记会
+  // 在它之后每次重开面板时又包一层，链一整个会话越叠越长。装过就复用，委托给当时的前一个函数。
+  if (backHookInstalled || original[BACK_HOOK_MARK]) return true;
   const wrapped: HostBackward = function (this: unknown, ...args: unknown[]) {
     const dispatch = page[BACK_DISPATCH_KEY];
     if (!dispatch) return original.apply(this, args);
     return dispatch(() => original.apply(this, args));
   };
   wrapped[BACK_HOOK_MARK] = true;
+  backHookInstalled = true;
   utils.backward = wrapped;
   return true;
 }

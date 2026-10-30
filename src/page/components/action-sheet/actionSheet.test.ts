@@ -131,6 +131,26 @@ describe("选项与显隐", () => {
     expect(labels()).toEqual(["点播到房间", "取消收藏"]);
   });
 
+  it("存储就绪后重读收藏：慢速 IndexedDB 下已收藏条目显示「取消收藏」", async () => {
+    let resolveInit: (value: null) => void = () => {};
+    vi.spyOn(FavoritesStorageService, "init").mockImplementation(
+      () => new Promise<null>((resolve) => (resolveInit = resolve)) as never,
+    );
+    const isFavorited = vi
+      .spyOn(FavoritesStorageService, "isFavorited")
+      .mockReturnValue(false);
+    await mount(song);
+    expect(labels()).toEqual(["点播到房间", "收藏"]);
+
+    // 库打开后读到真实状态：仍开着的操作条跟着改文案
+    isFavorited.mockReturnValue(true);
+    await act(async () => {
+      resolveInit(null);
+      await Promise.resolve();
+    });
+    expect(labels()).toEqual(["点播到房间", "取消收藏"]);
+  });
+
   it("不可收藏的条目没有收藏项", async () => {
     await mount(plain);
     expect(labels()).toEqual(["点播到房间"]);

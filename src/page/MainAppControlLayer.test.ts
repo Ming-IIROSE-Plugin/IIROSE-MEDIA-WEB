@@ -140,7 +140,11 @@ describe("Esc 与宿站返回键", () => {
       (hostWindow.Utils as { backward: () => unknown }).backward();
     hostWindow.Utils = { backward: hostBackward };
     render(h(Layer, {}), host);
+    // 打开 → 关闭 → 再打开：初始化渲染总是先落地，返回键接管发生在显示状态变化分支
     await toggle();
+    await toggle();
+    await toggle();
+    expect(isOpen()).toBe(true);
 
     const dismiss = vi.fn();
     const release = pushOverlayLayer("order", dismiss);

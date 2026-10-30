@@ -10,14 +10,8 @@ import {
 // 层级栈（CAP-14）：LIFO、每次只关一层、面板内三层互斥、`Esc` 装 / 卸、
 // 外来浮层根放行、宿站返回键包装只装一次 / 无层交还。
 
-type HostWindow = Window & {
-  Utils?: { backward?: (...args: unknown[]) => unknown };
-};
 /** 宿站的 `Utils` 在全局有完整类型声明：测试按无类型对象读写。 */
 const hostWindow = () => window as unknown as Record<string, unknown>;
-const setBackward = (fn: (...args: unknown[]) => unknown) => {
-  hostWindow().Utils = { backward: fn };
-};
 const callBack = () =>
   (
     (hostWindow().Utils as { backward: () => unknown })
@@ -49,7 +43,6 @@ beforeEach(() => {
 afterEach(() => {
   while (releases.length) releases.pop()!();
   setPanelBackHandler(null);
-  delete hostWindow().Utils;
   delete (window as unknown as Record<string, unknown>)
     .__imwOverlayBackDispatch;
   delete (window as unknown as Record<string, unknown>).__imwShufflePickerBack;
@@ -134,6 +127,23 @@ describe("Esc 监听", () => {
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
+  it("按住 Esc 的重复事件被吞掉但不继续关层：一次按键只关一层", () => {
+    const sheet = layer("sheet");
+    const deck = layer("deck");
+    const inner = layer("inner");
+
+    // 第一次是真实按键（关最上层），其后是按住不放的重复
+    escape(document);
+    const repeated = escape(document, { repeat: true });
+    escape(document, { repeat: true });
+
+    expect(inner).toHaveBeenCalledOnce();
+    expect(deck).not.toHaveBeenCalled();
+    expect(sheet).not.toHaveBeenCalled();
+    // 重复按键不再交给宿站（否则长按会一路把关到面板）
+    expect(repeated.defaultPrevented).toBe(true);
+  });
+
   it("外来浮层根放行：随机面板与播放进度浮窗里的 Esc 不被面板内的层吃掉", () => {
     for (const id of ["imw-shuffle-picker-root", "imw-media-progress-root"]) {
       const root = document.createElement("div");
@@ -160,11 +170,16 @@ describe("Esc 监听", () => {
 });
 
 describe("宿站返回键", () => {
-  let hostBackward: ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
+  // 包装每页只装一次（模块级标记），包装闭包里握着第一个宿站函数：
+  // 本文件只在第一次建 `Utils` 时装它，之后各用例清空这个 spy 复用同一条链。
+  const hostBackward = vi.fn<(...args: unknown[]) => unknown>();
 
   beforeEach(() => {
-    hostBackward = vi.fn<(...args: unknown[]) => unknown>();
-    setBackward(hostBackward);
+    hostBackward.mockClear();
+    const current = (hostWindow().Utils as { backward?: unknown } | undefined)
+      ?.backward;
+    if (typeof current !== "function")
+      hostWindow().Utils = { backward: hostBackward };
   });
 
   it("面板开着且层非空：只关层，宿站不执行返回", () => {
@@ -198,6 +213,28 @@ describe("宿站返回键", () => {
     expect((hostWindow().Utils as { backward: unknown }).backward).toBe(
       wrapped,
     );
+  });
+
+  it("随机面板在中间包了一层后，重开面板不再叠一层包装", () => {
+    setPanelBackHandler(vi.fn());
+    const utils = hostWindow().Utils as {
+      backward: (...args: unknown[]) => unknown;
+    };
+    const ours = utils.backward;
+    // 随机面板按自己的方式再包一层（包住我们的）
+    const pickerWrapped = (...args: unknown[]) => ours(...args);
+    utils.backward = pickerWrapped;
+
+    setPanelBackHandler(vi.fn());
+    expect(utils.backward).toBe(pickerWrapped);
+
+    // 返回键仍旧经「随机面板 → 我们的包装 → 分发」只关一层
+    const dismiss = layer("order");
+    utils.backward();
+    expect(dismiss).toHaveBeenCalledOnce();
+    expect(hostBackward).not.toHaveBeenCalled();
+
+    utils.backward = ours;
   });
 
   it("随机面板开着时交给它自己的包装（返回先关它）", () => {

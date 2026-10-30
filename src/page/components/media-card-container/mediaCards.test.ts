@@ -1053,6 +1053,31 @@ describe("收藏星", () => {
     expect(host.innerHTML).toContain('fill="none"');
   });
 
+  it("其它入口（手机操作条）切换收藏后，挂载中的星标即时跟随", async () => {
+    const isFavorited = vi
+      .spyOn(FavoritesStorageService, "isFavorited")
+      .mockReturnValue(false);
+    let notify: () => void = () => {};
+    vi.spyOn(FavoritesStorageService, "onChange").mockImplementation(
+      (listener) => {
+        notify = listener;
+        return () => {};
+      },
+    );
+    await mount(withCtx(h(FavoriteStar, { platformData: song })));
+    expect(star().getAttribute("aria-pressed")).toBe("false");
+    expect(star().getAttribute("aria-label")).toBe("收藏");
+
+    // 操作条写入收藏后存储广播变更：仍挂载的星标重读并翻转
+    isFavorited.mockReturnValue(true);
+    await act(async () => {
+      notify();
+    });
+    expect(star().getAttribute("aria-pressed")).toBe("true");
+    expect(star().getAttribute("aria-label")).toBe("取消收藏");
+    expect(star().getAttribute("class")).toContain(tokens.deskStarOn);
+  });
+
   it("toggle 跟随返回值；失败回滚到点击前的状态", async () => {
     vi.spyOn(FavoritesStorageService, "isFavorited").mockReturnValue(false);
     const toggle = vi

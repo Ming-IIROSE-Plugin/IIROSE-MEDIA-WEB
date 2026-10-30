@@ -62,15 +62,46 @@ vi.mock("./MainAppContainerServices/AboutService", () => ({
 const resultsAreaProps = vi.hoisted(() => ({
   last: null as Record<string, unknown> | null,
 }));
-
-vi.mock("./components/media-card-container/ResultsArea", () => ({
-  // 桩只负责记录实参：容器的接线（onRetry / onClearSearch / pageOffset）直接调这些实参验证
-  ResultsArea: (props: Record<string, unknown>) => {
-    resultsAreaProps.last = props;
-    return null;
+/** 桩渲染的那一行用的条目（与下面用例里的 `song` 一致）。 */
+const stubRow = vi.hoisted(() => ({
+  item: {
+    title: "鱼",
+    author: "陈绮贞",
+    coverImg: "",
+    websiteUrl: "",
+    duration: 240,
+    neteaseMusic: { id: 11, fee: 0 },
   },
-  shapeOf: () => "tracklist",
 }));
+
+vi.mock("./components/media-card-container/ResultsArea", async () => {
+  const { h } = await import("preact");
+  const { useContext } = await import("preact/hooks");
+  const { MediaContainerContext } =
+    await import("./components/media-container-context/MediaContainerContext");
+  return {
+    // 桩记录实参（onRetry / onClearSearch / pageOffset 直接调这些实参验证），
+    // 并渲染一行：行体点击经真实上下文到达容器，`onRowActivate` 的接线由此可验。
+    ResultsArea: (props: Record<string, unknown>) => {
+      resultsAreaProps.last = props;
+      const ctx = useContext(MediaContainerContext);
+      return h(
+        "button",
+        {
+          type: "button",
+          "data-imw-stub-row": "true",
+          onClick: (event: MouseEvent) =>
+            ctx.onRowActivate(
+              stubRow.item as PlatformData,
+              event.currentTarget as HTMLElement,
+            ),
+        },
+        "行",
+      );
+    },
+    shapeOf: () => "tracklist",
+  };
+});
 vi.mock("../platforms/NetEasePlatform", () => ({
   NetEasePlatform: neteasePlatform,
 }));
@@ -679,6 +710,18 @@ describe("手机操作条", () => {
 
   afterEach(() => {
     delete (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom;
+  });
+
+  it("结果区的行体点击经上下文到达容器：打开操作条", async () => {
+    await mount(MODE.music);
+    const row = root.querySelector<HTMLElement>("[data-imw-stub-row]")!;
+    expect(row).not.toBeNull();
+
+    await act(async () => {
+      row.click();
+    });
+    expect(sheet()).not.toBeNull();
+    expect(sheet()!.textContent).toContain("鱼");
   });
 
   it("点行体打开操作条：条目摘要 + 点播到房间 / 收藏，焦点在首项", async () => {
