@@ -75,6 +75,37 @@ export class NetEasePlatform extends Platform {
    * 详情在面板的 `load` 里取（失败留在面板里可重试），一级菜单（正序 / 乱序 / 选集）保留：
    * 「整张点播」在收藏里只靠它。
    */
+  /**
+   * 歌单的完整曲目（选集面板用）：`trackIds` 才是完整列表与顺序。部分网络 / 未登录时
+   * 详情接口的 `tracks` 只给前 10 首（用户反馈：千首歌单选集只出 10 首），
+   * 缺的曲目按 id 分批补取详情；补取失败的仍按「曲目 N」列出，照样可选。
+   */
+  public static fullPlaylistTracks = async (playlist: {
+    tracks?: CollectionTrack[] | null;
+    trackIds?: { id: number }[] | null;
+  }): Promise<CollectionTrack[]> => {
+    const tracks: CollectionTrack[] = playlist.tracks ?? [];
+    const ids = (playlist.trackIds ?? []).map((item) => item.id);
+    if (ids.length <= tracks.length) return tracks.length ? tracks : [];
+
+    const known = new Map<number, CollectionTrack>(
+      tracks.map((track) => [track.id, track]),
+    );
+    const missing = ids.filter((id) => !known.has(id));
+    if (missing.length > 0) {
+      const details = await NeteaseMusicAPI.getNeteaseSongDetail(missing);
+      for (const song of details ?? []) {
+        known.set(song.id, {
+          id: song.id,
+          name: song.name,
+          ar: song.artists?.map((artist) => ({ name: artist.name })),
+          duration: song.duration,
+        });
+      }
+    }
+    return ids.map((id) => known.get(id) ?? { id });
+  };
+
   public static selectEpisodes = (platformData: PlatformData) => {
     if (!platformData.neteaseMusic) {
       ShowMessage.show("没有网易云音乐数据");
@@ -117,13 +148,7 @@ export class NetEasePlatform extends Platform {
             title: playlist.name,
             description: playlist.description ?? "",
           };
-          const tracks: CollectionTrack[] = playlist.tracks ?? [];
-          // 详情没带曲目时按 trackIds 退化成「曲目 N」：数量与顺序仍与歌单一致
-          return entriesOf(
-            tracks.length > 0
-              ? tracks
-              : playlist.trackIds.map((item) => ({ id: item.id })),
-          );
+          return entriesOf(await NetEasePlatform.fullPlaylistTracks(playlist));
         }
 
         const detail = await NeteaseMusicAPI.getAlbumDetail(id);

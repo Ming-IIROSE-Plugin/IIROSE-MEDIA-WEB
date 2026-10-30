@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // select 0/1 共用它，所以「正序保序 / 乱序是同一集合的置换 / 不碰 buildSelect2」
 // 必须有断言——否则两个入口一起错也不会红。
 const neteaseMusic = vi.hoisted(() => ({
+  getNeteaseSongDetail: vi.fn(),
   getSongListDetail: vi.fn(),
   getAlbumDetail: vi.fn(),
 }));
@@ -289,5 +290,34 @@ describe("选集委托", () => {
     // 第 7 个参数（multiSelect）恒为 false
     expect(build.mock.lastCall?.[6]).toBe(false);
     expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
+  });
+});
+
+describe("选集面板的歌单曲目", () => {
+  it("tracks 只给前几首时按 trackIds 补齐，顺序与数量跟歌单一致", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue([
+      { id: 3, name: "三", artists: [{ name: "甲" }], duration: 180_000 },
+    ]);
+    const tracks = await NetEasePlatform.fullPlaylistTracks({
+      tracks: [{ id: 1, name: "一" }],
+      trackIds: [{ id: 1 }, { id: 2 }, { id: 3 }],
+    });
+    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledWith([2, 3]);
+    expect(tracks).toEqual([
+      { id: 1, name: "一" },
+      // 补取不到的仍按 id 列出（面板显示「曲目 N」，照样可选）
+      { id: 2 },
+      { id: 3, name: "三", ar: [{ name: "甲" }], duration: 180_000 },
+    ]);
+  });
+
+  it("tracks 已完整时不再请求", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockClear();
+    const tracks = await NetEasePlatform.fullPlaylistTracks({
+      tracks: [{ id: 1 }, { id: 2 }],
+      trackIds: [{ id: 1 }, { id: 2 }],
+    });
+    expect(tracks).toHaveLength(2);
+    expect(neteaseMusic.getNeteaseSongDetail).not.toHaveBeenCalled();
   });
 });
