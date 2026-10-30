@@ -1195,3 +1195,104 @@ describe("多 P / 多集的「选集」入口", () => {
     ).toBeUndefined();
   });
 });
+
+describe("行 / 卡主体点击 → 手机操作条挂点", () => {
+  /** 只把宽度判成手机：`hover: none` 不成立，点按选中（无悬停宽屏）不参与。 */
+  const phoneLayout = () =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("max-width: 768px"),
+    }));
+
+  it("手机点视频缩略图与音乐网格卡主体：条目与触发元素一起交给容器", async () => {
+    phoneLayout();
+
+    const videos = ready([video]);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.video,
+        viewMode: "card",
+        mediaData: videos,
+      }),
+      videos,
+    );
+    const videoBody = host.querySelector<HTMLElement>(
+      "button[data-imw-tile-body]",
+    )!;
+    await act(async () => {
+      videoBody.click();
+    });
+    expect(ctx.onRowActivate).toHaveBeenCalledWith(video, videoBody);
+    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+
+    render(null, host);
+    ctx.onRowActivate.mockClear();
+    const songs = ready([song]);
+    await mount(
+      results({ ...resultsBase, viewMode: "card", mediaData: songs }),
+      songs,
+    );
+    const musicBody = host.querySelector<HTMLElement>(
+      "button[data-imw-tile-body]",
+    )!;
+    await act(async () => {
+      musicBody.click();
+    });
+    expect(ctx.onRowActivate).toHaveBeenCalledWith(song, musicBody);
+    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+  });
+
+  it("手机点曲目行主体出操作条；行内点播按钮不触发行激活", async () => {
+    phoneLayout();
+    const songs = ready([song]);
+    await mount(results({ ...resultsBase, mediaData: songs }), songs);
+    const row = host.querySelector<HTMLElement>("[data-imw-tracklist-row]")!;
+
+    await act(async () => {
+      row.click();
+    });
+    expect(ctx.onRowActivate).toHaveBeenCalledWith(song, row);
+    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+
+    // 行内点播按钮自己 stopPropagation：一键点播照旧，不弹操作条
+    ctx.onRowActivate.mockClear();
+    const play = Array.from(row.querySelectorAll("button")).find(
+      (el) => el.getAttribute("aria-label") === "点播 晴天",
+    ) as HTMLElement;
+    await act(async () => {
+      play.click();
+    });
+    expect(ctx.onRowActivate).not.toHaveBeenCalled();
+    expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(song);
+  });
+
+  it("桌面：行体不动作，卡片主体仍直接点播", async () => {
+    const songs = ready([song]);
+    await mount(results({ ...resultsBase, mediaData: songs }), songs);
+    const row = host.querySelector<HTMLElement>("[data-imw-tracklist-row]")!;
+    await act(async () => {
+      row.click();
+    });
+    expect(ctx.onRowActivate).not.toHaveBeenCalled();
+    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+
+    render(null, host);
+    const videos = ready([video]);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.video,
+        viewMode: "card",
+        mediaData: videos,
+      }),
+      videos,
+    );
+    const body = host.querySelector<HTMLElement>("button[data-imw-tile-body]")!;
+    expect(body.getAttribute("aria-label")).toBe("点播 某视频");
+    await act(async () => {
+      body.click();
+    });
+    expect(ctx.onRowActivate).not.toHaveBeenCalled();
+    expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(video);
+  });
+});
