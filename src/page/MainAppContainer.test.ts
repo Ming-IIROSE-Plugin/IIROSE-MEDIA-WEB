@@ -23,12 +23,10 @@ const favorites = vi.hoisted(() => ({
 }));
 const recent = vi.hoisted(() => ({ load: vi.fn() }));
 const settings = vi.hoisted(() => ({
-  showBilibiliAccount: vi.fn(),
-  showBilibiliVideo: vi.fn(),
+  showBilibili: vi.fn(),
   showNetEaseMusic: vi.fn(),
   showRadio: vi.fn(),
   showPluginSettings: vi.fn(),
-  showSyncSettings: vi.fn(),
   release: vi.fn(),
 }));
 const about = vi.hoisted(() => ({ showAbout: vi.fn() }));
@@ -481,18 +479,57 @@ describe("六种模式的现场", () => {
 
   it("离开设置模式释放同步订阅，回到设置模式重跑当前范围", async () => {
     const { ref } = await mount(MODE.settings);
-    expect(settings.showBilibiliAccount).toHaveBeenCalled();
+    expect(settings.showBilibili).toHaveBeenCalled();
 
     await act(async () => {
       render(h(Container, { ...props(MODE.music), ref } as object), root);
     });
     expect(settings.release).toHaveBeenCalled();
 
-    settings.showBilibiliAccount.mockClear();
+    settings.showBilibili.mockClear();
     await act(async () => {
       render(h(Container, { ...props(MODE.settings), ref } as object), root);
     });
-    expect(settings.showBilibiliAccount).toHaveBeenCalled();
+    expect(settings.showBilibili).toHaveBeenCalled();
+  });
+
+  it("设置范围：桌面四项（哔哩哔哩视频 / 网易云音乐 / 无线电广播 / 插件设置），无「关于」", async () => {
+    await mount(MODE.settings);
+    const tabs = Array.from(
+      root.querySelectorAll('[role="tab"]'),
+    ) as HTMLElement[];
+    expect(tabs.map((el) => (el.textContent ?? "").trim())).toEqual([
+      "哔哩哔哩视频",
+      "网易云音乐",
+      "无线电广播",
+      "插件设置",
+    ]);
+  });
+
+  it("设置范围：手机末项为「关于」，点它显示关于卡", async () => {
+    const matchMedia = vi.fn().mockReturnValue({ matches: true });
+    vi.stubGlobal("matchMedia", matchMedia);
+    try {
+      await mount(MODE.settings);
+      const tabs = Array.from(
+        root.querySelectorAll('[role="tab"]'),
+      ) as HTMLElement[];
+      expect(tabs.map((el) => (el.textContent ?? "").trim())).toEqual([
+        "哔哩哔哩视频",
+        "网易云音乐",
+        "无线电广播",
+        "插件设置",
+        "关于",
+      ]);
+
+      about.showAbout.mockClear();
+      await act(async () => {
+        tabs[4].click();
+      });
+      expect(about.showAbout).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("关于模式读取关于数据，且没有搜索栏", async () => {

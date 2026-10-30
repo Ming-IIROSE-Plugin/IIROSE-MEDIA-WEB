@@ -70,7 +70,7 @@ interface ModeSnapshot {
   isCurrentInMultiPage: boolean;
   oldItems: OldItems | null;
   innerCollection: PlatformData | null;
-  settingsData: SettingData[] | null;
+  settingsData: SettingGroupData[] | null;
   currentSubNavBarAction: () => void;
   currentOnDemandPlay: (platformData: PlatformData) => void;
 }
@@ -314,9 +314,11 @@ export class MainAppContainer extends Component<
 
     const categories = this.getActiveCategories();
     const platform = this.currentPlatform();
-    const scopes: ScopeItem[] = (platform?.subNavBarItems ?? []).map(
-      (item) => ({ title: item.title }),
-    );
+    // 手机专属范围标签（设置的「关于」）：桌面不渲染；它恒为末项，过滤后下标不位移
+    const phone = isPhone();
+    const scopes: ScopeItem[] = (platform?.subNavBarItems ?? [])
+      .filter((item) => phone || !item.phoneOnly)
+      .map((item) => ({ title: item.title }));
     const sources: SearchSource[] = categories.platform.map((item) => ({
       label: item.title,
       short: item.shortTitle ?? item.title,
@@ -1074,8 +1076,8 @@ export class MainAppContainer extends Component<
         this.favoriteSource("bilibili", "哔哩哔哩", "B站", "bilibili"),
       ],
     },
-    // 4 设置：搜索栏隐藏，所以把现有四组设置的全部子分组摊平成范围标签
-    // （story 7 会改成「平台分组作范围标签 + 每组一张设置卡」）
+    // 4 设置：平台分组作范围标签（哔哩哔哩视频 / 网易云音乐 / 无线电广播 / 插件设置），
+    // 每个范围出一到两张组卡；「关于」只在手机上作为最后一个范围（桌面走独立关于模式）。
     {
       platform: [
         {
@@ -1083,31 +1085,25 @@ export class MainAppContainer extends Component<
           shortTitle: "设置",
           subNavBarItems: [
             {
-              title: "账号",
+              title: "哔哩哔哩视频",
               searchAction: () => {
-                SettingsService.showBilibiliAccount(this.getActionContext());
+                SettingsService.showBilibili(this.getActionContext());
               },
             },
             {
-              title: "视频设置",
-              searchAction: () => {
-                SettingsService.showBilibiliVideo(this.getActionContext());
-              },
-            },
-            {
-              title: "音乐设置",
+              title: "网易云音乐",
               searchAction: () => {
                 SettingsService.showNetEaseMusic(this.getActionContext());
               },
             },
             {
-              title: "无线电设置",
+              title: "无线电广播",
               searchAction: () => {
                 SettingsService.showRadio(this.getActionContext());
               },
             },
             {
-              title: "聊天框",
+              title: "插件设置",
               searchAction: () => {
                 SettingsService.showPluginSettings(
                   this.getActionContext(),
@@ -1117,16 +1113,20 @@ export class MainAppContainer extends Component<
               },
             },
             {
-              title: "云端同步",
+              title: "关于",
+              phoneOnly: true,
               searchAction: () => {
-                SettingsService.showSyncSettings(this.getActionContext());
+                AboutService.showAbout(
+                  this.getActionContext(),
+                  this.props.ShowOrHideIMC,
+                );
               },
             },
           ],
         },
       ],
     },
-    // 5 关于（手机并入设置的最后一个范围，由 story 7 落地）
+    // 5 关于（桌面独立模式；手机并入设置的最后一个范围）
     {
       platform: [
         {

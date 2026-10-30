@@ -341,13 +341,8 @@
 }
 
 /* --- 2. mdi 图标内容表 --- */
-.listViewIcon::before,
-.cardViewIcon::before,
-.syncCloudIcon::before,
-.syncKeyIcon::before,
-.syncClockIcon::before,
-.syncRefreshIcon::before,
-.syncDeleteIcon::before,
+/* 只有宿站弹窗（取值选择框、插件启动默认页面的模式图标）还需要字形：
+   设置页 / 关于页已全部改用 `tokens.ts` 的自包含内联 SVG。 */
 .announceCardIcon::before,
 .announceSilentIcon::before,
 .announceSummaryIcon::before,
@@ -358,36 +353,6 @@
 .imwModeSettings::before,
 .imwModeAbout::before {
   font-family: "md";
-}
-
-/* 搜索结果视图切换（卡片/列表），码点对 @mdi/font 7.3.67 核实 */
-.listViewIcon::before {
-  content: "\F0572"; /* view-list */
-}
-
-.cardViewIcon::before {
-  content: "\F0570"; /* view-grid */
-}
-
-/* 云端同步设置卡片图标（码点对 @mdi/font 7.3.67 核实） */
-.syncCloudIcon::before {
-  content: "\F063F"; /* cloud-sync */
-}
-
-.syncKeyIcon::before {
-  content: "\F030B"; /* key-variant */
-}
-
-.syncClockIcon::before {
-  content: "\F0150"; /* clock-outline */
-}
-
-.syncRefreshIcon::before {
-  content: "\F0450"; /* refresh */
-}
-
-.syncDeleteIcon::before {
-  content: "\F09E7"; /* delete-outline */
 }
 
 /* 点播播报三档设置图标（码点对 @mdi/font 7.3.67 核实） */

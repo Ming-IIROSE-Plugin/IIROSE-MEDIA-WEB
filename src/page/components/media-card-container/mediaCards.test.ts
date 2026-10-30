@@ -997,7 +997,7 @@ describe("结果区状态机", () => {
     expect(scroller.scrollTop).toBe(0);
   });
 
-  it("设置数据走设置卡网格", async () => {
+  it("设置数据按组卡渲染（一组一张卡，行语义由数据声明）", async () => {
     await mount(
       results({
         ...resultsBase,
@@ -1005,16 +1005,55 @@ describe("结果区状态机", () => {
         mediaData: null,
         settingsData: [
           {
-            key: "a",
-            title: "画质",
-            actionTitle: "1080P",
-            icon: "",
-            action: () => {},
+            title: "视频设置",
+            items: [
+              {
+                key: "a",
+                title: "画质",
+                actionTitle: "1080P",
+                icon: "film",
+                action: () => {},
+              },
+            ],
           },
         ],
       }),
     );
-    expect(host.querySelector(".IMW-SettingCard")).not.toBeNull();
+    const card = host.querySelector("[data-imw-settings-group]")!;
+    expect(card).not.toBeNull();
+    expect(card.querySelector("h2")!.textContent).toBe("视频设置");
+    expect(
+      host.querySelector('[data-imw-settings-row="value"]'),
+    ).not.toBeNull();
+  });
+
+  it("关于模式渲染一张关于卡（无组名，外链行按数据声明）", async () => {
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.about,
+        mediaData: null,
+        settingsData: [
+          {
+            title: "关于",
+            items: [
+              {
+                key: "aboutSource",
+                title: "项目源代码地址",
+                actionTitle: "GitHub",
+                external: true,
+                icon: "github",
+                action: () => {},
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const card = host.querySelector("[data-imw-about-card]")!;
+    expect(card).not.toBeNull();
+    expect(card.querySelector("h2")).toBeNull();
+    expect(host.querySelector("[data-imw-settings-group]")).toBeNull();
   });
 });
 

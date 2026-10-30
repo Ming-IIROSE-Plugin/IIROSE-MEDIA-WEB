@@ -1,4 +1,7 @@
 // AboutService.ts
+//
+// 关于页数据：一张 `about-card`（DESIGN.md），行样式同设置行；条目与动作沿用现有四项，
+// 只有图标换成自包含内联 SVG、外链值由「GitHub 🔗」改成「GitHub」+ 外链图标。
 import { About } from "../../platforms/About";
 
 export class AboutService {
@@ -11,43 +14,53 @@ export class AboutService {
     ctx: MainAppContainerActionContext,
     ShowOrHideIMC: () => Promise<void>,
   ) {
-    const aboutData: SettingData[] = [
+    const aboutData: SettingGroupData[] = [
       {
-        key: "aboutAuthor",
-        title: "作者",
-        actionTitle: "铭", // 这里对应你的名字 Ming
-        icon: "mdi-account-tie",
-        action: async () => {
-          await ShowOrHideIMC();
-          new About().aboutCreator();
-        },
-      },
-      {
-        key: "aboutSource",
-        title: "项目源代码地址",
-        actionTitle: "GitHub 🔗",
-        icon: "mdi-github",
-        action: () => {
-          window.open("https://github.com/jingming295/IIROSE-MEDIA-WEB");
-        },
-      },
-      {
-        key: "aboutDonate",
-        title: "投喂我",
-        actionTitle: "投喂",
-        icon: "mdi-coffee-outline",
-        action: () => {
-          new About().aboutDonate();
-        },
-      },
-      {
-        key: "aboutSponsorList",
-        title: "赞助列表",
-        actionTitle: "感谢名单",
-        icon: "mdi-account-group",
-        action: () => {
-          new About().aboutSponsorList(ShowOrHideIMC);
-        },
+        title: "关于",
+        items: [
+          {
+            key: "aboutAuthor",
+            title: "作者",
+            kind: "value",
+            actionTitle: "铭", // 这里对应你的名字 Ming
+            icon: "user",
+            action: async () => {
+              await ShowOrHideIMC();
+              new About().aboutCreator();
+            },
+          },
+          {
+            key: "aboutSource",
+            title: "项目源代码地址",
+            kind: "value",
+            actionTitle: "GitHub",
+            external: true,
+            icon: "github",
+            action: () => {
+              window.open("https://github.com/jingming295/IIROSE-MEDIA-WEB");
+            },
+          },
+          {
+            key: "aboutDonate",
+            title: "投喂我",
+            kind: "value",
+            actionTitle: "投喂",
+            icon: "coffee",
+            action: () => {
+              new About().aboutDonate();
+            },
+          },
+          {
+            key: "aboutSponsorList",
+            title: "赞助列表",
+            kind: "value",
+            actionTitle: "感谢名单",
+            icon: "users",
+            action: () => {
+              new About().aboutSponsorList(ShowOrHideIMC);
+            },
+          },
+        ],
       },
     ];
 

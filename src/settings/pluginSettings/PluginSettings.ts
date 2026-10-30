@@ -42,25 +42,28 @@ export interface PluginSettingsInterface {
 }
 
 export class PluginSettings {
+  /**
+   * 翻转「代理蔷薇@输入」并重装输入行为。
+   * @param onChange 回报翻转后的布尔（开关行的单一真相：值取自设置逻辑的结果）
+   */
   public static isProxyAtInputSetting(
-    changeActionTitleAction: (actionTitle?: string) => void,
-    changeSearchKeyword: (keyword: string | null) => void,
-    ShowOrHideIMC: () => Promise<void>,
+    onChange?: (checked: boolean) => void,
+    changeSearchKeyword?: (keyword: string | null) => void,
+    ShowOrHideIMC?: () => Promise<void>,
   ) {
     const pluginSettings = PluginSettings.getPluginSetting();
 
     pluginSettings.chatBox.isProxyAtInput =
       !pluginSettings.chatBox.isProxyAtInput;
-    localStorage.setItem("imwPluginSetting", JSON.stringify(pluginSettings));
-
-    if (changeActionTitleAction) {
-      changeActionTitleAction(
-        pluginSettings.chatBox.isProxyAtInput
-          ? "mdi-toggle-switch"
-          : "mdi-toggle-switch-off-outline",
-      );
+    try {
+      localStorage.setItem("imwPluginSetting", JSON.stringify(pluginSettings));
+    } catch {
+      // 存储不可用（隐私模式 / 配额满）：内存里的设置照常生效，不打断交互
     }
-    Input_Behavior_Module.applyBehavior(changeSearchKeyword, ShowOrHideIMC);
+
+    onChange?.(pluginSettings.chatBox.isProxyAtInput);
+    if (changeSearchKeyword && ShowOrHideIMC)
+      Input_Behavior_Module.applyBehavior(changeSearchKeyword, ShowOrHideIMC);
   }
 
   public static setDefaultPage(

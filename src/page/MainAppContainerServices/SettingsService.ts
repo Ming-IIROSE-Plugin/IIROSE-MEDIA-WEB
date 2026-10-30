@@ -1,4 +1,9 @@
 // SettingsService.ts
+//
+// 设置页的数据层：每个范围返回「组 → 行」两级结构（`SettingGroupData[]`），
+// 一组一张组卡（DESIGN.md `settings-group`）。行语义（值 / 开关 / 动作 / 只读）
+// 在这里随数据声明，渲染层不按 key 或中文文案猜。
+// 既有设置项与动作原样保留：取值类仍走宿站选择 / 输入弹窗，动作类仍带既有确认步骤。
 
 import { GetBiliBiliAccount } from "../../Account/BiliBili/GetBiliBili";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
@@ -13,72 +18,74 @@ import type { MergeStats } from "../../sync/SyncMerge";
 
 export class SettingsService {
   /**
-   * B站账号设置
+   * B站：账号 + 视频设置两张组卡（原「账号」「视频设置」两个范围合并）
    */
-  static showBilibiliAccount(ctx: MainAppContainerActionContext) {
+  static showBilibili(ctx: MainAppContainerActionContext) {
     const getBilibiliAcc = new GetBiliBiliAccount();
     const accData = getBilibiliAcc.getBiliBiliAccount();
     const settings = new BiliBiliSettings();
-
-    const data: SettingData[] = [
-      {
-        key: "bilibiliAccount",
-        title: "账号",
-        actionTitle: accData?.uname || "未登录",
-        icon: "mdi-account-child-circle",
-        action: settings.setAccount.bind(settings),
-      },
-    ];
-
-    this.setState(ctx, data);
-  }
-
-  /**
-   * B站视频/直播画质设置
-   */
-  static showBilibiliVideo(ctx: MainAppContainerActionContext) {
-    const settings = new BiliBiliSettings();
     const s = settings.getBilibiliVideoSettings();
 
-    const data: SettingData[] = [
+    this.setState(ctx, [
       {
-        key: "bilibiliVideoQn",
-        title: "点播的视频画质",
-        actionTitle: settings.parseBilibiliVideoQn(s.qn),
-        icon: "mdi-video",
-        action: settings.setBilibiliVideoQuality.bind(settings),
+        title: "账号",
+        items: [
+          {
+            key: "bilibiliAccount",
+            title: "账号",
+            kind: "value",
+            actionTitle: accData?.uname || "未登录",
+            icon: "user",
+            action: settings.setAccount.bind(settings),
+          },
+        ],
       },
       {
-        key: "bilibiliLiveQn",
-        title: "点播的直播画质",
-        actionTitle: settings.parseBilibiliLiveQn(s.streamqn),
-        icon: "mdi-video-wireless",
-        action: settings.setBilibiliLiveQuality.bind(settings),
+        title: "视频设置",
+        items: [
+          {
+            key: "bilibiliVideoQn",
+            title: "点播的视频画质",
+            kind: "value",
+            actionTitle: settings.parseBilibiliVideoQn(s.qn),
+            icon: "film",
+            action: settings.setBilibiliVideoQuality.bind(settings),
+          },
+          {
+            key: "bilibiliLiveQn",
+            title: "点播的直播画质",
+            kind: "value",
+            actionTitle: settings.parseBilibiliLiveQn(s.streamqn),
+            icon: "signal",
+            action: settings.setBilibiliLiveQuality.bind(settings),
+          },
+          {
+            key: "bilibiliStreamSeconds",
+            title: "点播的直播播放时长",
+            kind: "value",
+            actionTitle: `${s.streamSeconds / 60} 分钟`,
+            icon: "clock",
+            action: settings.setBilibiliStreamSeconds.bind(settings),
+          },
+          {
+            key: "bilibiliVideoStreamFormat",
+            title: "点播视频的获取格式",
+            kind: "value",
+            actionTitle: settings.parseGetVideoFormat(s.videoStreamFormat),
+            icon: "wrench",
+            action: settings.setGetVideoFormat.bind(settings),
+          },
+          {
+            key: "bilibiliDefaultApi",
+            title: "默认API",
+            kind: "value",
+            actionTitle: settings.parseBilibiliApi(s.api),
+            icon: "code",
+            action: settings.setBilibiliDefaultApi.bind(settings),
+          },
+        ],
       },
-      {
-        key: "bilibiliStreamSeconds",
-        title: "点播的直播播放时长",
-        actionTitle: `${s.streamSeconds / 60} 分钟`,
-        icon: "mdi-clock-outline",
-        action: settings.setBilibiliStreamSeconds.bind(settings),
-      },
-      {
-        key: "bilibiliVideoStreamFormat",
-        title: "点播视频的获取格式",
-        actionTitle: settings.parseGetVideoFormat(s.videoStreamFormat),
-        icon: "mdi-hammer-wrench",
-        action: settings.setGetVideoFormat.bind(settings),
-      },
-      {
-        key: "bilibiliDefaultApi",
-        title: "默认API",
-        actionTitle: settings.parseBilibiliApi(s.api),
-        icon: "mdi-code-braces",
-        action: settings.setBilibiliDefaultApi.bind(settings),
-      },
-    ];
-
-    this.setState(ctx, data);
+    ]);
   }
 
   /**
@@ -87,172 +94,172 @@ export class SettingsService {
   static showNetEaseMusic(ctx: MainAppContainerActionContext) {
     const s = NetEaseSettings.getNeteaseMusicSetting();
 
-    const data: SettingData[] = [
+    this.setState(ctx, [
       {
-        key: "neteaseLyric",
-        title: "歌词",
-        actionTitle: NetEaseSettings.parseNetEaseMusicLyricOption(
-          s.lyricOption,
-        ),
-        icon: "mdi-card-bulleted",
-        action: NetEaseSettings.setNeteaseMusicLyric.bind(NetEaseSettings),
+        title: "音乐设置",
+        items: [
+          {
+            key: "neteaseLyric",
+            title: "歌词",
+            kind: "value",
+            actionTitle: NetEaseSettings.parseNetEaseMusicLyricOption(
+              s.lyricOption,
+            ),
+            icon: "note",
+            action: NetEaseSettings.setNeteaseMusicLyric.bind(NetEaseSettings),
+          },
+          {
+            key: "neteaseDefaultApi",
+            title: "默认API",
+            kind: "value",
+            actionTitle: NetEaseSettings.parseNetEaseMusicApi(s.api),
+            icon: "code",
+            action: NetEaseSettings.setNeteaseDefaultApi.bind(NetEaseSettings),
+          },
+          {
+            key: "neteaseQuality",
+            title: "音乐的音质 - 已废弃",
+            kind: "value",
+            actionTitle: NetEaseSettings.parseNetEaseMusicQuality(s.quality),
+            icon: "signal",
+            action:
+              NetEaseSettings.setNeteaseMusicQuality.bind(NetEaseSettings),
+          },
+        ],
       },
-      {
-        key: "neteaseDefaultApi",
-        title: "默认API",
-        actionTitle: NetEaseSettings.parseNetEaseMusicApi(s.api),
-        icon: "mdi-code-braces",
-        action: NetEaseSettings.setNeteaseDefaultApi.bind(NetEaseSettings),
-      },
-      {
-        key: "neteaseQuality",
-        title: "音乐的音质 - 已废弃",
-        actionTitle: NetEaseSettings.parseNetEaseMusicQuality(s.quality),
-        icon: "mdi-music",
-        action: NetEaseSettings.setNeteaseMusicQuality.bind(NetEaseSettings),
-      },
-    ];
-
-    this.setState(ctx, data);
+    ]);
   }
 
   static showRadio(ctx: MainAppContainerActionContext) {
     const s = RadioSettings.getRadioSettings();
 
-    const data: SettingData[] = [
+    this.setState(ctx, [
       {
-        key: "radioDuration",
-        title: "默认播放时长",
-        actionTitle: `${s.duration / 60} 分钟`,
-        icon: "mdi-clock-outline",
-        action: RadioSettings.setRadioStreamSeconds.bind(RadioSettings),
+        title: "无线电设置",
+        items: [
+          {
+            key: "radioDuration",
+            title: "默认播放时长",
+            kind: "value",
+            actionTitle: `${s.duration / 60} 分钟`,
+            icon: "radio",
+            action: RadioSettings.setRadioStreamSeconds.bind(RadioSettings),
+          },
+        ],
       },
-    ];
-
-    this.setState(ctx, data);
+    ]);
   }
 
   /**
-   * 插件全局设置
+   * 插件全局设置：聊天框 + 云端同步两张组卡。
+   *
+   * 云同步状态是本机实时状态（同步中 / 上次同步时间），因此这里接管
+   * `SyncManager.onStateChange` 订阅并在任何变化时重跑自身重建数据；
+   * 离开设置模式时由 `release` 释放，避免别处导航后仍被状态变化重绘。
    */
-  static showPluginSettings(
+  static async showPluginSettings(
     ctx: MainAppContainerActionContext,
     changeSearchKeyword: (keyword: string | null) => void,
     ShowOrHideIMC: () => Promise<void>,
   ) {
+    const refresh = () =>
+      void this.showPluginSettings(ctx, changeSearchKeyword, ShowOrHideIMC);
+
+    const groups = await this.buildPluginGroups(
+      ctx,
+      changeSearchKeyword,
+      ShowOrHideIMC,
+      refresh,
+    );
+
+    // 先渲染，再（重）订阅：反过来会先被 `ctx.setState` 前的清理摘掉
+    ctx.setState({ settingsData: groups });
+    this.syncStatusUnsub?.();
+    this.syncStatusUnsub = SyncManager.onStateChange(refresh);
+  }
+
+  private static async buildPluginGroups(
+    ctx: MainAppContainerActionContext,
+    changeSearchKeyword: (keyword: string | null) => void,
+    ShowOrHideIMC: () => Promise<void>,
+    refresh: () => void,
+  ): Promise<SettingGroupData[]> {
     const ps = PluginSettings.getPluginSetting();
-    const isProxyAtInputInText = ps.chatBox.isProxyAtInput
-      ? "mdi-toggle-switch"
-      : "mdi-toggle-switch-off-outline";
 
-    const data: SettingData[] = [
+    return [
       {
-        key: "defaultPage",
-        title: "插件启动默认页面",
-        actionTitle: PluginSettings.parseDefaultPage(ps.defaultPage),
-        icon: "mdi-page-layout-header-footer",
-        action: (doSomethings) => PluginSettings.setDefaultPage(doSomethings),
-      },
-      {
-        key: "searchViewMode",
-        title: "搜索结果视图",
-        actionTitle: PluginSettings.parseSearchViewMode(ps.searchViewMode),
-        icon: ps.searchViewMode === "list" ? "listViewIcon" : "cardViewIcon",
-        action: (doSomethings) => {
-          const newMode = PluginSettings.toggleSearchViewMode();
-          doSomethings?.(PluginSettings.parseSearchViewMode(newMode));
-          // ctx.setState 触发父级重渲染时，SettingCard 会用 props.actionTitle
-          // 覆盖内部标题，因此需同步更新 settingsData 里的 actionTitle 与 icon
-          ctx.setState({
-            searchViewMode: newMode,
-            settingsData: data.map((item) =>
-              item.key === "searchViewMode"
-                ? {
-                    ...item,
-                    actionTitle: PluginSettings.parseSearchViewMode(newMode),
-                    icon: newMode === "list" ? "listViewIcon" : "cardViewIcon",
-                  }
-                : item,
-            ),
-          });
-        },
-      },
-      {
-        key: "announceMode",
-        title: "点播播报",
-        actionTitle: PluginSettings.parseAnnounceMode(ps.announceMode),
-        icon:
-          ps.announceMode === "silent"
-            ? "announceSilentIcon"
-            : ps.announceMode === "summary"
-              ? "announceSummaryIcon"
-              : "announceCardIcon",
-        action: (doSomethings) => {
-          PluginSettings.setAnnounceMode((actionTitle) => {
-            doSomethings?.(actionTitle);
-            // 同「搜索结果视图」：ctx.setState 触发父级重渲染时，SettingCard 会用
-            // props.actionTitle/icon 覆盖内部状态，因此需同步更新 settingsData
-            const mode = PluginSettings.getPluginSetting().announceMode;
-            ctx.setState({
-              settingsData: data.map((item) =>
-                item.key === "announceMode"
-                  ? {
-                      ...item,
-                      actionTitle: actionTitle ?? item.actionTitle,
-                      icon:
-                        mode === "silent"
-                          ? "announceSilentIcon"
-                          : mode === "summary"
-                            ? "announceSummaryIcon"
-                            : "announceCardIcon",
-                    }
-                  : item,
+        title: "聊天框",
+        items: [
+          {
+            key: "defaultPage",
+            title: "插件启动默认页面",
+            kind: "value",
+            actionTitle: PluginSettings.parseDefaultPage(ps.defaultPage),
+            icon: "layout",
+            action: (report) =>
+              PluginSettings.setDefaultPage((actionTitle) =>
+                report?.(actionTitle),
               ),
-            });
-          });
-        },
+          },
+          {
+            key: "searchViewMode",
+            title: "搜索结果视图",
+            kind: "value",
+            actionTitle: PluginSettings.parseSearchViewMode(ps.searchViewMode),
+            icon: "list",
+            action: (report) => {
+              const newMode = PluginSettings.toggleSearchViewMode();
+              report?.(PluginSettings.parseSearchViewMode(newMode));
+              // 父级也持有视图偏好（结果区渲染用），一并同步
+              ctx.setState({ searchViewMode: newMode });
+            },
+          },
+          {
+            key: "announceMode",
+            title: "点播播报",
+            kind: "value",
+            actionTitle: PluginSettings.parseAnnounceMode(ps.announceMode),
+            icon: "send",
+            action: (report) =>
+              PluginSettings.setAnnounceMode((actionTitle) =>
+                report?.(actionTitle),
+              ),
+          },
+          {
+            key: "proxyAtInput",
+            title: "代理蔷薇@输入",
+            kind: "switch",
+            checked: ps.chatBox.isProxyAtInput,
+            icon: "at",
+            action: (report) => {
+              // 开关只认设置逻辑回报的新值：落盘与重装行为都在这里完成
+              PluginSettings.isProxyAtInputSetting(
+                (checked) => report?.(undefined, checked),
+                changeSearchKeyword,
+                ShowOrHideIMC,
+              );
+            },
+          },
+        ],
       },
-      {
-        key: "proxyAtInput",
-        title: "代理蔷薇@输入",
-        actionTitle: isProxyAtInputInText,
-        icon: "mdi-at",
-        action: (doSomethings) => {
-          PluginSettings.isProxyAtInputSetting(
-            doSomethings!,
-            changeSearchKeyword,
-            ShowOrHideIMC,
-          );
-        },
-      },
+      await this.buildSyncGroup(refresh),
     ];
-
-    this.setState(ctx, data);
   }
 
   /**
-   * 收藏云同步设置面板（唯一入口，全部改动都发生在这里）
+   * 云端同步组卡（唯一入口，全部改动都发生在这里）。
+   * 开关的 `checked` 只取自 `SyncManager.getState().enabled`：启用要过「口令 → 云端预览 →
+   * 合并确认」两段弹窗，中途取消或预览失败都不该点亮；流程结束后 `refresh` 重建数据才变开。
    */
-  static async showSyncSettings(ctx: MainAppContainerActionContext) {
-    // 直接 setState 会先清订阅；这里反过来：先渲染，再（重）订阅
-    ctx.setState({ settingsData: await this.buildSyncSettings(ctx) });
-    this.syncStatusUnsub?.();
-    this.syncStatusUnsub = SyncManager.onStateChange(() => {
-      void this.showSyncSettings(ctx);
-    });
-  }
-
-  private static async buildSyncSettings(
-    ctx: MainAppContainerActionContext,
-  ): Promise<SettingData[]> {
-    const refresh = () => void this.showSyncSettings(ctx);
-
+  private static async buildSyncGroup(
+    refresh: () => void,
+  ): Promise<SettingGroupData> {
     const uid = SyncManager.getUid();
     const state = SyncManager.getState();
     const enabled = state.enabled;
     const unlocked = state.unlocked;
     // 「忘记本机密钥」按缓存是否存在判定：关闭同步后缓存仍在，也必须能清除
-    const hasLocalKey = await SyncManager.hasLocalKey();
+    const hasLocalKey = await SyncManager.hasLocalKey().catch(() => false);
 
     const promptPassphrase = (
       title: string,
@@ -265,12 +272,13 @@ export class SettingsService {
       });
     };
 
-    return [
+    const items: SettingData[] = [
       {
         key: "syncEnabled",
         title: "云端同步",
-        actionTitle: !uid ? "未登录账号" : enabled ? "已启用" : "未启用",
-        icon: "syncCloudIcon",
+        kind: "switch",
+        checked: enabled,
+        icon: "cloud",
         action: () => {
           if (!SyncManager.getUid()) {
             ShowMessage.show("未登录蔷薇账号，无法启用云端同步");
@@ -284,7 +292,7 @@ export class SettingsService {
           promptPassphrase(
             "设置同步口令（忘记口令将无法找回云端收藏，建议至少 8 位）",
             (passphrase) => {
-              void this.previewThenEnable(ctx, passphrase);
+              void this.previewThenEnable(passphrase, refresh);
             },
           );
         },
@@ -294,29 +302,23 @@ export class SettingsService {
             {
               key: "syncStatus",
               title: "同步状态",
+              kind: "readonly",
               actionTitle:
                 state.status.phase === "syncing"
                   ? "同步中…"
                   : state.status.phase === "error"
                     ? "待重试"
                     : "正常",
-              icon: "syncRefreshIcon",
-              action: () => {
-                const current = SyncManager.getStatus();
-                if (current.message) {
-                  ShowMessage.show(current.message);
-                  return;
-                }
-                refresh();
-              },
+              icon: "refresh",
             } satisfies SettingData,
           ]
         : []),
       {
         key: "syncPassphrase",
         title: "同步口令（忘记不可找回）",
+        kind: "value",
         actionTitle: !enabled ? "未启用" : unlocked ? "已解锁" : "未解锁",
-        icon: "syncKeyIcon",
+        icon: "key",
         action: () => {
           if (!SyncManager.getState().enabled) {
             ShowMessage.show("请先启用云端同步");
@@ -336,15 +338,16 @@ export class SettingsService {
       {
         key: "syncLastSyncAt",
         title: "上次同步时间",
+        kind: "readonly",
         actionTitle: SyncManager.formatLastSyncAt(state.lastSyncAt),
-        icon: "syncClockIcon",
-        action: () => refresh(),
+        icon: "clock",
       },
       {
         key: "syncNow",
         title: "立即同步",
+        kind: "action",
         actionTitle: !enabled ? "未启用" : unlocked ? "立即同步" : "需先解锁",
-        icon: "syncRefreshIcon",
+        icon: "refresh",
         action: () => {
           const current = SyncManager.getState();
           if (!current.enabled) {
@@ -364,8 +367,9 @@ export class SettingsService {
       {
         key: "syncClearCloud",
         title: "清空云端",
+        kind: "action",
         actionTitle: "清空云端",
-        icon: "syncDeleteIcon",
+        icon: "trash",
         action: () => {
           const content =
             "确认清空云端收藏？\n\n" +
@@ -382,8 +386,9 @@ export class SettingsService {
       {
         key: "syncForgetKey",
         title: "忘记本机密钥",
+        kind: "action",
         actionTitle: hasLocalKey ? "清除本机密钥" : "无本机密钥",
-        icon: "syncKeyIcon",
+        icon: "key",
         action: () => {
           if (!hasLocalKey) {
             ShowMessage.show("本机没有可清除的密钥缓存");
@@ -402,6 +407,8 @@ export class SettingsService {
         },
       },
     ];
+
+    return { title: "云端同步", items };
   }
 
   /**
@@ -409,21 +416,21 @@ export class SettingsService {
    * 确认前不会写云端（`previewEnable` 不翻转 enabled、不写密钥缓存）。
    */
   private static async previewThenEnable(
-    ctx: MainAppContainerActionContext,
     passphrase: string,
+    refresh: () => void,
   ): Promise<void> {
     const preview = await SyncManager.previewEnable(passphrase);
     const step = chooseEnableStep(preview);
     if (step === "abort") {
       ShowMessage.show(preview.message);
-      await this.showSyncSettings(ctx);
+      refresh();
       return;
     }
     if (step === "commit") {
       // 云端为空：没有可确认的合并，直接上传
       const result = await SyncManager.commitEnable();
       ShowMessage.show(result.message);
-      await this.showSyncSettings(ctx);
+      refresh();
       return;
     }
     // 仅为类型收窄：chooseEnableStep 已经排除失败，走到这里必定是成功预览
@@ -436,12 +443,12 @@ export class SettingsService {
         () => {
           void SyncManager.commitEnable().then((result) => {
             ShowMessage.show(result.message);
-            void this.showSyncSettings(ctx);
+            refresh();
           });
         },
         () => {
           ShowMessage.show(SyncManager.cancelEnable().message);
-          void this.showSyncSettings(ctx);
+          refresh();
         },
       );
     }, 300);
@@ -494,7 +501,7 @@ export class SettingsService {
     );
   }
 
-  /** 同步状态订阅：离开同步面板时必须释放，避免别处导航后仍被状态变化重绘 */
+  /** 同步状态订阅：离开设置模式时必须释放，避免别处导航后仍被状态变化重绘 */
   private static syncStatusUnsub: (() => void) | null = null;
 
   /**
@@ -508,7 +515,7 @@ export class SettingsService {
 
   static setState = (
     ctx: MainAppContainerActionContext,
-    settingsData: SettingData[],
+    settingsData: SettingGroupData[],
   ) => {
     this.syncStatusUnsub?.();
     this.syncStatusUnsub = null;

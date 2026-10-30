@@ -30,6 +30,10 @@ export const deskInk = "text-[#1C1916] imw-dark:text-[#EDE7DD]";
 export const deskInk2 = "text-[#5F5850] imw-dark:text-[#A79E92]";
 /** 三级文字（ink3）。 */
 export const deskInk3 = "text-[#6B655D] imw-dark:text-[#8F887E]";
+/** 三级图形的实底（开关关态的圆钮，ink3）。 */
+export const deskInk3Fill = "bg-[#6B655D] imw-dark:bg-[#8F887E]";
+/** 三级图形的描边（开关关态的轨道，ink3）。 */
+export const deskInk3Border = "border-[#6B655D] imw-dark:border-[#8F887E]";
 
 /** 蔷薇红文字 / 细线 / 指示条（rose）。 */
 export const deskRose = "text-[#B42F3E] imw-dark:text-[#E3606C]";
@@ -241,13 +245,30 @@ export type DeskIconName =
   | "left"
   | "right"
   | "play"
+  | "send"
   | "close"
   | "mark"
   | "list"
   | "grid"
   | "sort"
   | "shuffle"
-  | "repeat";
+  | "repeat"
+  // 设置行 / 关于卡（DESIGN 的 symbol 表未覆盖，同风格补：描边 1.6–1.9、currentColor）
+  | "user"
+  | "users"
+  | "clock"
+  | "signal"
+  | "wrench"
+  | "code"
+  | "layout"
+  | "at"
+  | "cloud"
+  | "key"
+  | "refresh"
+  | "trash"
+  | "coffee"
+  | "github"
+  | "external";
 
 const ICON_INNER: Record<DeskIconName, string> = {
   note: '<path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="16.5" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/>',
@@ -266,6 +287,7 @@ const ICON_INNER: Record<DeskIconName, string> = {
   right:
     '<path d="M9.5 6.5L15 12l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   play: '<path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/>',
+  send: '<path d="M20.4 4.2L3.9 11.1l6.3 2.6 2.6 6.3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M20.4 4.2l-10.2 9.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   close:
     '<path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   mark: '<path d="M12 4.5c2.2 1.6 3.4 3.6 3.4 5.6 0 1.9-1.5 3.4-3.4 3.4s-3.4-1.5-3.4-3.4c0-2 1.2-4 3.4-5.6zM12 13.5v6M12 17c-1.8-1.6-3.6-2-5-1.6M12 17c1.8-1.6 3.6-2 5-1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -276,6 +298,33 @@ const ICON_INNER: Record<DeskIconName, string> = {
     '<path d="M4 17h3.2c1.2 0 2.1-.6 2.8-1.6l4-5.8c.7-1 1.6-1.6 2.8-1.6H20M4 7h3.2c1.2 0 2.1.6 2.8 1.6l.6.9M13.6 15l.6.9c.7 1 1.6 1.6 2.8 1.6H20M18 4l2 2-2 2M18 14l2 2-2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
   repeat:
     '<path d="M5 11V9.5A2.5 2.5 0 0 1 7.5 7H18l-2.5-2.5M19 13v1.5a2.5 2.5 0 0 1-2.5 2.5H6l2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 10v4.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  // ---- 设置行 / 关于卡 ----
+  user: '<circle cx="12" cy="8.6" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.2 19.4c1.3-3.1 3.8-4.7 6.8-4.7s5.5 1.6 6.8 4.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  users:
+    '<circle cx="9.4" cy="9" r="3.3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.6 19.4c1.1-2.9 3.3-4.4 5.8-4.4s4.7 1.5 5.8 4.4M15.9 6.1a3.3 3.3 0 0 1 0 6.3M17.3 15.2c1.6.6 2.7 2 3.2 4.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  clock:
+    '<circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.4V12l3.2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  signal:
+    '<path d="M5.5 18.2v-3.4M10.5 18.2V11M15.5 18.2V8.2M20.5 18.2V5.6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
+  wrench:
+    '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
+  code: '<path d="M16.5 18L21 12l-4.5-6M7.5 6L3 12l4.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  layout:
+    '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 9.5h17" stroke="currentColor" stroke-width="1.7"/>',
+  at: '<circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5v5.2a2.3 2.3 0 0 0 4.6 0V12a8.1 8.1 0 1 0-3.3 6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  cloud:
+    '<path d="M17.4 19H7.9a4.4 4.4 0 0 1-.4-8.8 6 6 0 0 1 11.3 1.5 3.7 3.7 0 0 1-1.4 7.3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>',
+  key: '<circle cx="8.4" cy="15.6" r="3.1" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10.6 13.4L19 5M16.6 7.4l2 2M14.3 9.7l2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  refresh:
+    '<path d="M19.5 12a7.5 7.5 0 1 1-2.3-5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M19.6 4.6v5.2h-5.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  trash:
+    '<path d="M4.6 7h14.8M9.6 7V4.8h4.8V7M6.6 7l.9 12.1a1.7 1.7 0 0 0 1.7 1.6h5.6a1.7 1.7 0 0 0 1.7-1.6L17.4 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
+  coffee:
+    '<path d="M5 8.2h10.6v6.3a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M15.6 9.6h1.7a2.4 2.4 0 0 1 0 4.8h-1.7M4.4 21.2h12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  github:
+    '<path d="M9 19.2c-4.6 1.4-4.6-2.4-6.4-2.9m12.8 5.7v-3.5a3.1 3.1 0 0 0-.9-2.4c2.9-.3 5.9-1.4 5.9-6.4a5 5 0 0 0-1.4-3.5 4.6 4.6 0 0 0-.1-3.4s-1.1-.3-3.6 1.3a12.3 12.3 0 0 0-6.4 0C6.4 2.1 5.3 2.4 5.3 2.4a4.6 4.6 0 0 0-.1 3.4A5 5 0 0 0 3.8 9.3c0 5 3 6.1 5.9 6.4a3.1 3.1 0 0 0-.9 2.4v3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+  external:
+    '<path d="M13.8 4.6H19.4v5.6M19.4 4.6l-7 7M16.8 13.8v4.5a1.9 1.9 0 0 1-1.9 1.9H5.9A1.9 1.9 0 0 1 4 18.3V8.3a1.9 1.9 0 0 1 1.9-1.9h4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>',
 };
 
 /** 外壳图标：`currentColor` 着色，随宿主字号/字色走。 */

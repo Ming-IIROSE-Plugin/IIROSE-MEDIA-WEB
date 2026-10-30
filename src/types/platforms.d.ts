@@ -58,6 +58,8 @@ interface Platform {
   subNavBarItems: {
     title: string;
     class?: string;
+    /** 手机专属范围标签（设置模式的「关于」）：桌面不渲染。 */
+    phoneOnly?: boolean;
     searchAction: () => void;
   }[];
 }
