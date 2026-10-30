@@ -278,6 +278,8 @@ export class SettingsService {
         title: "云端同步",
         kind: "switch",
         checked: enabled,
+        // 值位留现有状态文字：游客态「未登录账号」是开关点亮不了的原因
+        actionTitle: !uid ? "未登录账号" : enabled ? "已启用" : "未启用",
         icon: "cloud",
         action: () => {
           if (!SyncManager.getUid()) {

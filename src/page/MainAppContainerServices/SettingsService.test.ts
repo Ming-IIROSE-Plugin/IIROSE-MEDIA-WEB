@@ -142,21 +142,36 @@ describe("代理蔷薇@输入开关", () => {
 });
 
 describe("云同步开关", () => {
-  it("未启用：checked=false，且没有「同步状态」行", async () => {
+  it("未登录账号：checked=false，值位「未登录账号」，且没有「同步状态」行", async () => {
+    // vitest.setup.ts 默认给了登录态 uid，游客分支要显式清掉
+    const uid = (globalThis as any).window.uid;
+    delete (globalThis as any).window.uid;
+    try {
+      const { groups } = await showPlugin();
+      expect(rowOf(groups, "syncEnabled").checked).toBe(false);
+      expect(rowOf(groups, "syncEnabled").actionTitle).toBe("未登录账号");
+      expect(
+        groups
+          .flatMap((group) => group.items)
+          .some((i) => i.key === "syncStatus"),
+      ).toBe(false);
+    } finally {
+      (globalThis as any).window.uid = uid;
+    }
+  });
+
+  it("已登录但未启用：值位「未启用」，开关仍为关", async () => {
     const { groups } = await showPlugin();
     expect(rowOf(groups, "syncEnabled").checked).toBe(false);
+    expect(rowOf(groups, "syncEnabled").actionTitle).toBe("未启用");
     expect(rowOf(groups, "syncPassphrase").actionTitle).toBe("未启用");
-    expect(
-      groups
-        .flatMap((group) => group.items)
-        .some((i) => i.key === "syncStatus"),
-    ).toBe(false);
   });
 
   it("已启用：checked 随 SyncManager.getState().enabled，并出现同步状态只读行", async () => {
     seedSyncSettings(true, 1_700_000_000_000);
     const { groups } = await showPlugin();
     expect(rowOf(groups, "syncEnabled").checked).toBe(true);
+    expect(rowOf(groups, "syncEnabled").actionTitle).toBe("已启用");
     expect(rowOf(groups, "syncStatus").kind).toBe("readonly");
     expect(rowOf(groups, "syncLastSyncAt").actionTitle).not.toBe("从未同步");
     // 只读行没有动作：不可点

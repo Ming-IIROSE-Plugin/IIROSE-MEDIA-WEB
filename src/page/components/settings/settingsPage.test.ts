@@ -230,6 +230,33 @@ describe("开关行", () => {
     expect(el.getAttribute("aria-checked")).toBe("false");
   });
 
+  it("开关行保留现有状态文字：游客态「未登录账号」留在开关左侧", async () => {
+    await draw(
+      h(SettingsGroup, {
+        group: group([
+          item({
+            key: "syncEnabled",
+            title: "云端同步",
+            kind: "switch",
+            checked: false,
+            actionTitle: "未登录账号",
+            icon: "cloud",
+            action: () => {},
+          }),
+        ]),
+      }),
+    );
+    const el = row("switch");
+    expect(el.textContent).toContain("未登录账号");
+    // 值位文字不是外链，走 ink2（外链才用蔷薇红）
+    const value = Array.from(el.querySelectorAll("span")).find(
+      (span) => span.textContent === "未登录账号",
+    )!;
+    expect(classesOf(value)).toEqual(
+      expect.arrayContaining(tokens.deskInk2.split(" ")),
+    );
+  });
+
   it("开关视觉：36×20 圆角full 轨道 + 14px 圆钮，开态蔷薇红实底", async () => {
     await draw(h(SettingsSwitch, { checked: false }));
     const off = host.querySelector('[data-imw-settings-switch="off"]')!;

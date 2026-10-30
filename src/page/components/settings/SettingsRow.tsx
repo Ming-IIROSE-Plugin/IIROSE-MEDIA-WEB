@@ -89,6 +89,8 @@ export function SettingsRow({ item, last = false }: SettingsRowProps) {
       >
         {icon}
         {label}
+        {/* 不可用原因 / 现有状态文字（如「未登录账号」）照旧留在开关左侧 */}
+        {value ? valueText : null}
         <SettingsSwitch checked={checked} />
       </button>
     );
