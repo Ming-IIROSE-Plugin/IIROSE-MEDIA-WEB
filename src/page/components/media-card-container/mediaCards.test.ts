@@ -13,6 +13,7 @@ import { CollectionRow } from "./CollectionRow";
 import { FavoriteStar } from "./FavoriteStar";
 import { MusicTile } from "./MusicTile";
 import { ResultsArea, shapeOf } from "./ResultsArea";
+import { SelectBox } from "./SelectBox";
 import { SelectionBar } from "./SelectionBar";
 import { SkeletonRows, SkeletonTiles } from "./Skeletons";
 import {
@@ -1712,6 +1713,31 @@ describe("内页勾选", () => {
     await act(async () => box.click());
     expect(onToggle).toHaveBeenCalledOnce();
     expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it("勾选框上的触摸 / 按下不冒泡：横滑不会从勾选框上翻页，点击照常切换", async () => {
+    const onToggle = vi.fn();
+    await mount(withCtx(h(SelectBox, { title: "晴天", onToggle })));
+    const box = host.querySelector<HTMLElement>("[data-imw-select-box]")!;
+    expect(box).not.toBeNull();
+
+    // 主面板容器（宿站手势的祖先）上挂同款监听：冒泡到此就等于会翻页
+    const ancestor = vi.fn();
+    const types = ["touchstart", "touchmove", "touchend", "mousedown"];
+    for (const type of types) host.addEventListener(type, ancestor);
+    try {
+      await act(async () => {
+        for (const type of types)
+          box.dispatchEvent(
+            new Event(type, { bubbles: true, cancelable: true }),
+          );
+      });
+      expect(ancestor).not.toHaveBeenCalled();
+      await act(async () => box.click());
+      expect(onToggle).toHaveBeenCalledOnce();
+    } finally {
+      for (const type of types) host.removeEventListener(type, ancestor);
+    }
   });
 
   it("搜索结果（非内页）不出现勾选框，列模板与现状一致", async () => {

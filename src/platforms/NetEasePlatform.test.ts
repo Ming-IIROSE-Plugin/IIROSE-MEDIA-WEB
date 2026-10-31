@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // select 0/1 共用它，所以「正序保序 / 乱序是同一集合的置换 / 不碰 buildSelect2」
 // 必须有断言——否则两个入口一起错也不会红。
 const neteaseMusic = vi.hoisted(() => ({
+  // 详情端点批大小的唯一来源；平台静态字段在模块初始化时就读它
+  CHUNK_SIZE: 100,
   getNeteaseSongDetail: vi.fn(),
   getSongListDetail: vi.fn(),
   getAlbumDetail: vi.fn(),
@@ -471,7 +473,10 @@ describe("批量发送：即停与边取边发", () => {
   const run = (ids: number[], batch?: Batch) =>
     (
       NetEasePlatform as unknown as {
-        finalODSONG: (ids: number[], b?: Batch) => Promise<void>;
+        finalODSONG: (
+          ids: number[],
+          b?: Batch,
+        ) => Promise<import("../iirose_func/Socket/Announce").BatchSendOutcome>;
       }
     ).finalODSONG(ids, batch);
   const api = neteaseMusic as unknown as {
@@ -495,7 +500,7 @@ describe("批量发送：即停与边取边发", () => {
     vi.useRealTimers();
   });
 
-  it("返回实际发出数：不含无版权跳过与单项失败", async () => {
+  it("跑完但有跳过：报 completed（实际数少于 N 也不该让房间看到「已停止」）", async () => {
     neteaseMusic.getNeteaseSongDetail.mockResolvedValue([
       song(1),
       { ...song(2), noCopyrightRcmd: {} },
@@ -506,8 +511,44 @@ describe("批量发送：即停与边取边发", () => {
       if (id === 3) throw new Error("歌词挂了");
       return null;
     });
-    const sent = await (run([1, 2, 3, 4]) as unknown as Promise<number>);
-    expect(sent).toBe(2);
+    const outcome = await run([1, 2, 3, 4]);
+    // 2 首跳过（无版权 / 单项失败）都没让循环中断：没人停过
+    expect(outcome).toEqual({ sent: 2, reason: "completed" });
+  });
+
+  it("用户停止：报 stopped", async () => {
+    const { startBatch, stopBatch } = await import("../playback/BatchProgress");
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => ids.map(song),
+    );
+    const batch = startBatch("两百首", 200);
+    api.getLyric = vi.fn(async (id: number) => {
+      if (id === 3) stopBatch(batch.id);
+      return null;
+    });
+    const outcome = await run(range(200), batch);
+    expect(outcome).toEqual({ sent: 2, reason: "stopped" });
+  });
+
+  it("段请求失败（非中止）：报 failed", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue(null);
+    const outcome = await run([1, 2, 3]);
+    expect(outcome).toEqual({ sent: 0, reason: "failed" });
+  });
+
+  it("残缺详情缺 duration：报文里的时长是 0，不是 NaN", async () => {
+    const { Media } = await import("../iirose_func/Socket/Media");
+    const event = vi
+      .spyOn(Media.prototype, "mediaEvent")
+      .mockReturnValue("EVENT");
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue([
+      { id: 1, name: "没有时长" },
+    ]);
+    await run([1]);
+    const mediaData = event.mock.lastCall?.[0] as MediaData;
+    expect(mediaData.duration).toBe(0);
+    expect(Number.isNaN(mediaData.duration)).toBe(false);
+    event.mockRestore();
   });
 
   it("准备中停止：详情请求被 abort，卡片收起后详情才返回也不复活", async () => {
@@ -698,7 +739,23 @@ describe("整张点播：并发与失败", () => {
       await import("../playback/BatchProgress");
     resetBatches();
     const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
-    startBatch("千首歌单", 130); // 第一轮：准备中
+    // 第一轮：准备中（身份键与 playCollectionAll 一致：77:list）
+    startBatch("千首歌单", 130, "77:list");
+    neteaseMusic.getSongListDetail.mockClear();
+    await NetEasePlatform.playCollectionAll(playlist, "asc");
+    expect(neteaseMusic.getSongListDetail).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledWith("《千首歌单》正在点播中");
+    expect(getBatches()).toHaveLength(1);
+    show.mockRestore();
+  });
+
+  it("守卫按 id 而非标题：第一轮标题不同（被改名 / 截断）也照样拦住", async () => {
+    const { resetBatches, getBatches, startBatch } =
+      await import("../playback/BatchProgress");
+    resetBatches();
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    // 同一张歌单，第一轮拿到的标题是「千首歌单…」，这一轮是「千首歌单」
+    startBatch("千首歌单…（已截断）", 130, "77:list");
     neteaseMusic.getSongListDetail.mockClear();
     await NetEasePlatform.playCollectionAll(playlist, "asc");
     expect(neteaseMusic.getSongListDetail).not.toHaveBeenCalled();
@@ -806,6 +863,16 @@ describe("歌单 / 专辑内页入口（分段加载）", () => {
     expect(page[0].author).toBe("某人");
   });
 
+  it("残缺详情完全没有 duration：时长为 0，不是 NaN", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => ids.map((id) => ({ id, name: `曲${id}` })),
+    );
+    const segments = await NetEasePlatform.getAlbumMultiPageData(album);
+    const page = await segments!.loadPage(1, 10);
+    expect(page[0].duration).toBe(0);
+    expect(Number.isNaN(page[0].duration)).toBe(false);
+  });
+
   it("详情失败返回 null，不取歌曲详情", async () => {
     neteaseMusic.getSongListDetail.mockResolvedValue(null);
     expect(await NetEasePlatform.getSongListMultiPageData(songList)).toBeNull();
@@ -884,7 +951,38 @@ describe("playSongIds（按给定顺序点播一组曲目）", () => {
     };
     const entries = await options.load();
     options.onConfirm([entries[2], entries[0]]);
-    expect(spy).toHaveBeenCalledWith([3, 1], "冬日歌单", "冬天听");
+    expect(spy).toHaveBeenCalledWith([3, 1], "冬日歌单", "冬天听", "7:list");
     spy.mockRestore();
+  });
+
+  it("同一集合的一批还在点播：第二次被拒（只提示、不建第二张卡）", async () => {
+    const { getBatches } = await import("../playback/BatchProgress");
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    // 第一轮永远跑不完：模拟「正在点播中」
+    announce.runBatchAnnounce.mockImplementation(
+      () => new Promise<void>(() => {}),
+    );
+
+    const first = NetEasePlatform.playSongIds(
+      [1, 2],
+      "冬日歌单",
+      undefined,
+      "7:list",
+    );
+    await Promise.resolve();
+    expect(getBatches()).toHaveLength(1);
+
+    // 标题换成另一个（改名 / 截断）：身份键相同，仍然要拦
+    await NetEasePlatform.playSongIds([3, 4], "冬日…", undefined, "7:list");
+    expect(show).toHaveBeenCalledWith("这张歌单 / 专辑正在点播中");
+    expect(announce.runBatchAnnounce).toHaveBeenCalledOnce();
+    expect(getBatches()).toHaveLength(1);
+
+    // 单曲路径不受守卫影响
+    await NetEasePlatform.playSongIds([9], "冬日歌单", undefined, "7:list");
+    expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
+
+    show.mockRestore();
+    void first;
   });
 });

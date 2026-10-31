@@ -922,6 +922,22 @@ describe("专辑 / 歌单内页", () => {
     expect(signal.aborted).toBe(true);
   });
 
+  it("卸载也中止其他模式快照里的内页段请求", async () => {
+    const { ref } = await mount(MODE.music);
+    const { signal } = await enterWithPendingSegment(ref);
+    // 切到视频：音乐的内页连同分段加载器一起留在快照里，已不是当前模式的活动加载器
+    await act(async () => {
+      render(h(Container, { ...props(MODE.video), ref } as object), root);
+    });
+    expect(stateOf(ref).collectionSegments).toBeNull();
+    expect(signal.aborted).toBe(false);
+
+    await act(async () => {
+      render(null, root);
+    });
+    expect(signal.aborted).toBe(true);
+  });
+
   /** 歌单详情挂起时进内页并切到视频，返回放行详情的函数。 */
   const enterThenLeaveMode = async (ref: {
     current: MainAppContainer | null;
@@ -1245,6 +1261,104 @@ describe("专辑 / 歌单内页", () => {
     });
     expect(signal.aborted).toBe(true);
     expect(stateOf(ref).collectionSegments).toBeNull();
+  });
+
+  it("内页可见但外层现场还没落地时返回：段请求仍中止、勾选清空", async () => {
+    const { ref } = await mount(MODE.music);
+    const { controller, signal } = await enterWithPendingSegment(ref);
+    await act(async () => {
+      (
+        resultsAreaProps.last!.selection as {
+          onToggle: (position: number, data: PlatformData) => void;
+        }
+      ).onToggle(1, { ...trackData, neteaseMusic: { id: 1, fee: 0 } });
+    });
+    expect(stateOf(ref).innerSelection).toHaveLength(1);
+    // 「内页已可见、旧条目还没提交」这一帧只在两次提交之间存在：用例把现场固定在那一帧
+    (
+      ref.current as unknown as { state: MainAppContainerState }
+    ).state.oldItems = null;
+
+    await act(async () => {
+      controller.switchToOutFromMultiPage();
+    });
+    // 退不回外层也要收尾：段请求中止、勾选与加载器清空
+    expect(signal.aborted).toBe(true);
+    expect(stateOf(ref).innerSelection).toEqual([]);
+    expect(stateOf(ref).collectionSegments).toBeNull();
+  });
+
+  it("收藏内页停在后面的页时即时过滤：先回外层，页码归 1、勾选清空、外层按词过滤", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(300),
+    );
+    const { ref } = await mount(MODE.favorites);
+    const controller = (ref.current as unknown as Harness).controller;
+    // 外层收藏列表（返回后要按新关键词过滤的那一份）
+    const outerRows = [
+      { ...trackData, title: "旅行的意义" },
+      { ...trackData, title: "鱼" },
+    ] as unknown as PlatformData[];
+    await act(async () => {
+      ref.current!.setState({
+        mediaData: Promise.resolve({ platformData: outerRows, totalPage: 1 }),
+        allMediaData: outerRows,
+        totalPage: 1,
+      });
+    });
+    await act(async () => {
+      controller.updateCurrentInMultiPageStatus(true);
+    });
+    await act(async () => {
+      await controller.switchToMultiPage(songListData);
+    });
+    await settle(ref);
+    await act(async () => {
+      await controller.changecurrentPage(2);
+    });
+    await settle(ref);
+    expect(stateOf(ref).currentPage).toBe(2);
+    await act(async () => {
+      (
+        resultsAreaProps.last!.selection as {
+          onToggle: (position: number, data: PlatformData) => void;
+        }
+      ).onToggle(11, { ...trackData, neteaseMusic: { id: 11, fee: 0 } });
+    });
+    expect(stateOf(ref).innerSelection).toHaveLength(1);
+
+    // 与真实服务一致：内页开着时外层收藏查询直接返回（缺陷正是这里挡住了过滤）
+    favorites.loadFavorites.mockImplementationOnce(
+      async (ctx: MainAppContainerActionContext) => {
+        if (ctx.getState().isCurrentInMultiPage) return;
+        const keyword = ctx.getState().searchKeyword.trim();
+        const filtered = outerRows.filter((row) => row.title.includes(keyword));
+        ctx.setState({
+          mediaData: Promise.resolve({ platformData: filtered, totalPage: 1 }),
+          allMediaData: filtered,
+          totalPage: 1,
+        });
+      },
+    );
+
+    await act(async () => {
+      controller.filterLive("旅行");
+    });
+    const state = stateOf(ref);
+    expect(state.isCurrentInMultiPage).toBe(false);
+    expect(state.collectionSegments).toBeNull();
+    expect(state.innerSelection).toEqual([]);
+    expect(state.currentPage).toBe(1);
+    // 过滤落在外层收藏列表上（收藏每页 10 条），不是留在内页的第 2 页
+    expect(
+      favorites.loadFavorites.mock.lastCall?.[0].getState().searchKeyword,
+    ).toBe("旅行");
+    expect(resultsAreaProps.last!.isInnerPage).toBe(false);
+    expect(root.querySelector("[data-imw-collection-header]")).toBeNull();
+    const filtered = await state.mediaData!;
+    expect(filtered.platformData.map((item) => item.title)).toEqual([
+      "旅行的意义",
+    ]);
   });
 
   it("新的范围 / 搜索也中止内页的段请求", async () => {

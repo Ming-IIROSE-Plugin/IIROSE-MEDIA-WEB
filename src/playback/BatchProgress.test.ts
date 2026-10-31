@@ -99,4 +99,19 @@ describe("批量点播进度", () => {
     stopBatch(startBatch("停掉的", 5).id);
     expect(isBatchActive("停掉的")).toBe(false);
   });
+
+  it("身份键：按 key 判并发，标题改了也拦得住；卡片仍显示原标题", () => {
+    const batch = startBatch("千首歌单", 3, "77:list");
+    // 显示不变：标题照旧是给人看的那一个
+    expect(getBatches()[0]).toMatchObject({
+      title: "千首歌单",
+      key: "77:list",
+    });
+    expect(isBatchActive("77:list")).toBe(true);
+    // 另一个集合 / 另一个标题都不受影响
+    expect(isBatchActive("77:album")).toBe(false);
+    expect(isBatchActive("千首歌单（改名后）")).toBe(false);
+    batch.finish();
+    expect(isBatchActive("77:list")).toBe(false);
+  });
 });

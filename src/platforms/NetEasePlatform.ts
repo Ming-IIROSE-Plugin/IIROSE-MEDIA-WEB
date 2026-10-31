@@ -14,7 +14,10 @@ import {
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { ShowMessage } from "../iirose_func/ShowMessage";
 import { Socket } from "../iirose_func/Socket";
-import { Announce } from "../iirose_func/Socket/Announce";
+import {
+  Announce,
+  type BatchSendOutcome,
+} from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { NetEaseSettings } from "../settings/neteaseSettings/NetEaseSettings";
 import { Platform } from "./Platform";
@@ -102,9 +105,16 @@ export class NetEasePlatform extends Platform {
     return { tracks: ids.map((id) => known.get(id) ?? { id }), missing };
   };
 
-  /** 每批 100 个 id、同时进行的请求数：上万首要 100 批，串行要几分钟，并发 4 路约四分之一。 */
-  public static readonly DETAIL_CHUNK = 100;
+  /**
+   * 每批 100 个 id、同时进行的请求数：上万首要 100 批，串行要几分钟，并发 4 路约四分之一。
+   * 批大小只有一处来源：API 层端点的上限 `NeteaseMusicAPI.CHUNK_SIZE`。
+   */
+  public static readonly DETAIL_CHUNK = NeteaseMusicAPI.CHUNK_SIZE;
   public static readonly DETAIL_CONCURRENCY = 4;
+
+  /** 批量身份键：`id:list` / `id:album`。标题会改名 / 截断，不能拿它当身份。 */
+  private static collectionKey = (id: number, isSongList: boolean): string =>
+    `${id}:${isSongList ? "list" : "album"}`;
 
   /**
    * 并发取歌曲详情：每批到达就回调 `onChunk`，随时可由 `signal` 中止（关面板即停）。
@@ -167,9 +177,10 @@ export class NetEasePlatform extends Platform {
         title: track.name || `曲目 ${index + 1}`,
         meta: track.ar?.map((artist) => artist.name).join("/") || "",
         duration:
-          typeof track.dt === "number"
+          typeof track.dt === "number" && Number.isFinite(track.dt)
             ? Math.round(track.dt / 1000)
-            : typeof track.duration === "number"
+            : typeof track.duration === "number" &&
+                Number.isFinite(track.duration)
               ? Math.round(track.duration / 1000)
               : undefined,
       }));
@@ -203,7 +214,9 @@ export class NetEasePlatform extends Platform {
                   title: song.name,
                   meta:
                     song.artists?.map((artist) => artist.name).join("/") ?? "",
-                  duration: Math.round(song.duration / 1000),
+                  duration: Math.round(
+                    NetEasePlatform.millisOrZero(song.duration) / 1000,
+                  ),
                 });
               }
             }
@@ -238,6 +251,7 @@ export class NetEasePlatform extends Platform {
           chosen.map(songIdOf),
           collection.title,
           collection.description,
+          NetEasePlatform.collectionKey(id, isSongList),
         );
       },
     });
@@ -246,11 +260,14 @@ export class NetEasePlatform extends Platform {
   /**
    * 按给定顺序点播一组曲目（选集面板与内页多选共用）：单首走单曲播报，
    * 多首走批量进度浮窗 + 批量播报。返回发送过程：点播守卫据此显示「点播中」。
+   * `key` 是集合身份（`id:list` / `id:album`）：同一集合的一批还在跑时不另开
+   * 第二轮，两轮交错会把卡片和进度刷成一团。
    */
   public static playSongIds = (
     ids: number[],
     title: string,
     description?: string,
+    key?: string,
   ): Promise<void> => {
     if (ids.length === 0) return Promise.resolve();
     if (ids.length === 1) {
@@ -259,8 +276,13 @@ export class NetEasePlatform extends Platform {
         Announce.runSingleAnnounce(() => NetEasePlatform.finalODSONG(ids)),
       ).catch((error) => Announce.showBatchItemError(error));
     }
+    // 无 key 的调用点退回按标题判（旧行为），有 key 时标题改名也绕不过守卫
+    if (isBatchActive(key ?? title)) {
+      ShowMessage.show("这张歌单 / 专辑正在点播中");
+      return Promise.resolve();
+    }
     // `finalODSONG` 按入参顺序重排详情结果，这里传的就是点选顺序
-    const batch = startBatch(title, ids.length);
+    const batch = startBatch(title, ids.length, key);
     return Promise.resolve(
       Announce.runBatchAnnounce(
         title,
@@ -738,6 +760,14 @@ export class NetEasePlatform extends Platform {
     );
 
   /**
+   * 毫秒时长 → 安全毫秒数：残缺详情缺 `duration` 时是 `undefined`，`a / 1000`
+   * 会得到 NaN，进 `mediaEvent` 的 JSON 后变成 `null`，房间进度条直接坏掉。
+   * 非数值 / 非有限 / 负数一律按 0。
+   */
+  private static millisOrZero = (ms: number | undefined): number =>
+    typeof ms === "number" && Number.isFinite(ms) && ms > 0 ? ms : 0;
+
+  /**
    * 歌曲详情 → 结果区条目。字段一律可选读：一首残缺的歌抛错会让整段 100 首都加载失败；
    * 封面为空时 `Cover` 自动回退图标。
    */
@@ -747,10 +777,10 @@ export class NetEasePlatform extends Platform {
     coverImg: item.album?.picUrl || item.album?.blurPicUrl || "",
     author: item.artists?.[0]?.name ?? "",
     websiteUrl: `https://music.163.com/#/song?id=${item.id}`,
-    duration: Math.ceil(item.duration / 1000),
+    duration: Math.ceil(NetEasePlatform.millisOrZero(item.duration) / 1000),
     neteaseMusic: {
       id: item.id,
-      fee: item.fee,
+      fee: Number.isFinite(item.fee) ? item.fee : 0,
     },
   });
 
@@ -849,9 +879,14 @@ export class NetEasePlatform extends Platform {
     try {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
+      // 身份键按 id 而非标题：歌单 / 专辑被改名或标题被截断也绕不过并发守卫
+      const key = NetEasePlatform.collectionKey(
+        id,
+        !!platformData.neteaseMusic.isSongList,
+      );
 
       // 同一张歌单 / 专辑的整张点播还在准备或发送：再点不另开第二轮（两轮会交错刷屏）
-      if (isBatchActive(platformData.title)) {
+      if (isBatchActive(key)) {
         ShowMessage.show(`《${platformData.title}》正在点播中`);
         return;
       }
@@ -864,7 +899,7 @@ export class NetEasePlatform extends Platform {
         const ids =
           order === "shuffle" ? NetEasePlatform.shuffleIds(trackID) : trackID;
         // 进度浮窗：关掉点播面板也还在，可随时停止
-        const batch = startBatch(songListDetail.playlist.name, ids.length);
+        const batch = startBatch(songListDetail.playlist.name, ids.length, key);
         void Promise.resolve(
           Announce.runBatchAnnounce(
             songListDetail.playlist.name,
@@ -882,7 +917,7 @@ export class NetEasePlatform extends Platform {
         const songsID = albumDetails.songs.map((item) => item.id);
         const ids =
           order === "shuffle" ? NetEasePlatform.shuffleIds(songsID) : songsID;
-        const batch = startBatch(albumDetails.album.name, ids.length);
+        const batch = startBatch(albumDetails.album.name, ids.length, key);
         void Promise.resolve(
           Announce.runBatchAnnounce(
             albumDetails.album.name,
@@ -1036,12 +1071,13 @@ export class NetEasePlatform extends Platform {
   /**
    * @param batch 批量点播进度句柄（整张播放 / 选集多选）：逐首上报，
    *   每首发送前检查「停止」；单曲点播不传。
-   * @returns 实际发出播放报文的曲目数（批量总结据此校正）
+   * @returns 实际发出的条数与结束原因（stopped / failed / completed）：
+   *   批量总结据此决定要不要补校正——跑完但有跳过时不能报「已停止」。
    */
   private static finalODSONG = async (
     songsID: number[],
     batch?: BatchHandle,
-  ): Promise<number> => {
+  ): Promise<BatchSendOutcome> => {
     try {
       return await NetEasePlatform.sendSongs(songsID, batch);
     } finally {
@@ -1049,11 +1085,15 @@ export class NetEasePlatform extends Platform {
     }
   };
 
-  /** 返回实际发出播放报文的曲目数（不含无版权跳过与单项失败）。 */
+  /**
+   * 边取边发并返回 `{ sent, reason }`：`sent` 不含无版权跳过与单项失败，
+   * `reason` 区分「跑完了」「用户停止」「请求失败」——只有后两者该向房间校正。
+   * 停止优先于失败：先点了停止、随后的请求因 abort 返回 null，算 stopped。
+   */
   private static sendSongs = async (
     songsID: number[],
     batch?: BatchHandle,
-  ): Promise<number> => {
+  ): Promise<BatchSendOutcome> => {
     const media = new Media();
     const socket = new Socket();
     const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
@@ -1068,6 +1108,8 @@ export class NetEasePlatform extends Platform {
     let total = songsID.length;
     let processed = 0;
     let sent = 0;
+    // 非中止的段失败（详情返回 null）：结束原因报 failed，没跑完不能说「跑完了」
+    let failed = false;
 
     // 边取边发：每 100 首取一段详情就发这一段，大歌单不必等全部详情
     for (let at = 0; at < songsID.length; at += size) {
@@ -1078,6 +1120,7 @@ export class NetEasePlatform extends Platform {
       if (!details) {
         // 非中止的失败：提示已由 neteaseRequest 发出，已发的保留，后续段不再取
         batch?.setTotal(processed);
+        failed = true;
         break;
       }
 
@@ -1100,7 +1143,7 @@ export class NetEasePlatform extends Platform {
         try {
           let playUrl = "";
           // playUrl = `https://v.iarc.top/?type=url&id=${item.id}#.mp3`;
-          playUrl = `https://1309510434-1fsutl4dzp.ap-hongkong.tencentscf.com/musicstreamlink/?platform=netease&id=${item.id}&quality=320&vip=${item.fee}#.mp3`;
+          playUrl = `https://1309510434-1fsutl4dzp.ap-hongkong.tencentscf.com/musicstreamlink/?platform=netease&id=${item.id}&quality=320&vip=${Number.isFinite(item.fee) ? item.fee : 0}#.mp3`;
           //playUrl = `https://1309510434-k3dderqeb9.ap-guangzhou.tencentscf.com/musicstreamlink/?platform=netease&id=${item.id}&quality=320&vip=${item.fee}#.mp3`;
           const lyrdata = await NeteaseMusicAPI.getLyric(item.id, signal);
 
@@ -1119,7 +1162,8 @@ export class NetEasePlatform extends Platform {
             cover: item.album?.picUrl ?? "",
             link: `https://music.163.com/#/song?id=${item.id}`,
             url: playUrl,
-            duration: item.duration / 1000,
+            // 残缺详情缺 duration：不能落成 NaN（报文里会变 null，房间进度条坏掉）
+            duration: NetEasePlatform.millisOrZero(item.duration) / 1000,
             bitRate: 320,
             color: this.baseHex,
             lyrics: lyric,
@@ -1146,7 +1190,13 @@ export class NetEasePlatform extends Platform {
     if (noCopyrightSkipped > 0 && !batch?.cancelled) {
       ShowMessage.show(`已跳过 ${noCopyrightSkipped} 首无版权曲目`);
     }
-    return sent;
+    // 停止优先于失败：先点停止、随后的详情请求因 abort 返回 null，算 stopped
+    const reason: BatchSendOutcome["reason"] = batch?.cancelled
+      ? "stopped"
+      : failed
+        ? "failed"
+        : "completed";
+    return { sent, reason };
   };
 
   private static convertQualityToReadable = (

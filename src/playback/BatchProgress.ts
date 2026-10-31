@@ -14,6 +14,11 @@ export type BatchStatus =
 export interface BatchRun {
   id: number;
   title: string;
+  /**
+   * 身份键（`id:list` / `id:album`）：并发守卫按它判定「同一集合」。
+   * 标题会重命名 / 被截断，不能拿来当身份；无键的批次（旧调用点）退回按标题比。
+   */
+  key?: string;
   total: number;
   /** 已处理（发出或跳过）的条数。 */
   done: number;
@@ -78,11 +83,15 @@ function remove(id: number) {
   emit();
 }
 
-/** 同名批量是否还在进行（准备 / 发送中）：整张播放据此拒绝连点出第二轮。 */
-export function isBatchActive(title: string): boolean {
+/**
+ * 该身份是否还在进行（准备 / 发送中）：整张播放 / 选集多选据此拒绝连点出第二轮。
+ * 参数可传身份键（`id:list`）或旧式标题——两者都匹配，键优先生效，
+ * 因而标题被重命名 / 截断也不会绕过守卫。
+ */
+export function isBatchActive(key: string): boolean {
   return runs.some(
     (run) =>
-      run.title === title &&
+      (run.key === key || run.title === key) &&
       !run.leaving &&
       (run.status === "preparing" || run.status === "running"),
   );
@@ -102,12 +111,19 @@ function liveStatus(id: number): BatchStatus {
   return controllers.get(id)?.signal.aborted ? "stopped" : "running";
 }
 
-/** 开始一次批量点播；`total` 是预计条数，详情取回后可用 `setTotal` 校正。 */
-export function startBatch(title: string, total: number): BatchHandle {
+/**
+ * 开始一次批量点播；`total` 是预计条数，详情取回后可用 `setTotal` 校正。
+ * `key` 是并发守卫用的身份键（如 `id:list`），与显示用 `title` 解耦。
+ */
+export function startBatch(
+  title: string,
+  total: number,
+  key?: string,
+): BatchHandle {
   const id = ++seq;
   runs = [
     ...runs,
-    { id, title, total, done: 0, status: "preparing", leaving: false },
+    { id, title, key, total, done: 0, status: "preparing", leaving: false },
   ];
   const controller = new AbortController();
   controllers.set(id, controller);

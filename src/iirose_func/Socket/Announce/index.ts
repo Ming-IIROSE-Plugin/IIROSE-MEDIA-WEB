@@ -22,6 +22,17 @@ import { Socket } from "../index";
 const batchModeSnapshots: AnnounceMode[] = [];
 
 /**
+ * 批量循环的结束原因。只报「实际发出数」无法区分「跑完了但有跳过（无版权 /
+ * 单项失败）」与「被用户停止」——前者实际数本来就小于 N，却有没人停过，
+ * 补发「已停止」就是假消息。故循环必须连原因一起报回。
+ */
+export type BatchSendOutcome = {
+  /** 实际发出播放报文的条数（不含跳过与失败的）。 */
+  sent: number;
+  reason: "completed" | "stopped" | "failed";
+};
+
+/**
  * 单曲强制放行窗口深度：>0 表示有手动点播的单曲正在发送。
  * 手动点播入口（MOD/MVOD/@直链等）用 runSingleAnnounce 包住发送动作，
  * 声明「我是手动点播」——批量抑制窗口挂起时其卡片仍照常发送（CAP-1）。
@@ -58,10 +69,15 @@ export class Announce {
    * 接受的竞态代价。
    */
   public static async runSingleAnnounce(
-    loop: () => Promise<void | number> | void | number,
+    loop: () =>
+      | Promise<void | number | BatchSendOutcome>
+      | void
+      | number
+      | BatchSendOutcome,
   ): Promise<void> {
     forceDepth++;
     try {
+      // 单曲入口只借窗口：返回值（旧的实际数 / 新的结束原因）在此丢弃
       await loop();
     } finally {
       forceDepth--;
@@ -75,12 +91,13 @@ export class Announce {
    * 第二行「🎵 已提交点播 **《标题》**，共 **N** 项」，平台有简介时再附一行 blockquote。
    * 总结先于循环发送；循环中单项失败由平台层逐项 catch 提示并跳过，
    * 逐项 catch 之外的异常走本函数的兜底 catch：终止本批、提示一次、不上抛。
-   * loop 可返回实际发出的项数：已发总结且实际数 < N 时补发一条校正消息。
+   * loop 可选返回结束原因（`BatchSendOutcome`）：只有「被停止 / 出错中断」才补发
+   * 校正消息；`completed` 即使实际数 < N（无版权跳过、单项失败）也不补——没人停过。
    */
   public static async runBatchAnnounce(
     title: string,
     count: number,
-    loop: () => Promise<void | number> | void | number,
+    loop: () => Promise<void | BatchSendOutcome> | void | BatchSendOutcome,
     description?: string | null,
   ): Promise<void> {
     try {
@@ -103,22 +120,19 @@ export class Announce {
       new Socket().sendMessage(lines.join("\n"));
 
       batchModeSnapshots.push(mode);
-      let sent: void | number;
+      let outcome: void | BatchSendOutcome;
       try {
-        sent = await loop();
+        outcome = await loop();
       } finally {
         batchModeSnapshots.pop();
       }
 
-      // 中途停止 / 失败：总结已告诉房间 N 项，实际少了就补发一条校正
-      // （只有 loop 报回实际数的平台才校正；返回 void 的照旧）
-      if (typeof sent === "number" && sent < count) {
-        const correction =
-          sent === 0
-            ? `🎵 《${safeTitle}》已取消，未提交曲目`
-            : `🎵 《${safeTitle}》已停止，实际提交 **${sent}** / ${count} 项`;
+      // 只有「被停止 / 出错中断」才补校正：总结已告诉房间 N 项，实际少了要说清楚。
+      // 正常跑完（completed）而实际数 < N 是跳过（无版权 / 单项失败）造成的，
+      // 没人停过，补「已停止」就是假消息。
+      const correction = Announce.buildCorrection(safeTitle, count, outcome);
+      if (correction)
         new Socket().sendMessage(["\\\\\\*", correction].join("\n"));
-      }
     } catch (error) {
       // 兜底 catch 契约：本函数任何路径均不上抛，异常一律转为提示
       // （同因 10 秒去重），消除 void 调用点的 unhandled rejection
@@ -159,6 +173,29 @@ export class Announce {
     Announce.batchItemErrorToastMessage = cause;
     Announce.batchItemErrorToastAt = now;
     ShowMessage.show(label ? `《${label}》播放失败：${cause}` : cause);
+  }
+
+  /**
+   * 校正文案：只有 stopped / failed 才有；completed 与返回 void 的平台一律不补。
+   * stopped 且一首未发 →「已取消」；failed →「因错误中断」（可能为 0 首）。
+   */
+  private static buildCorrection(
+    safeTitle: string,
+    count: number,
+    outcome: void | BatchSendOutcome,
+  ): string | null {
+    if (!Announce.isOutcome(outcome)) return null;
+    if (outcome.reason === "failed")
+      return `🎵 《${safeTitle}》因错误中断，实际提交 **${outcome.sent}** / ${count} 项`;
+    if (outcome.reason === "stopped")
+      return outcome.sent === 0
+        ? `🎵 《${safeTitle}》已取消，未提交曲目`
+        : `🎵 《${safeTitle}》已停止，实际提交 **${outcome.sent}** / ${count} 项`;
+    return null;
+  }
+
+  private static isOutcome(value: unknown): value is BatchSendOutcome {
+    return typeof value === "object" && value !== null && "reason" in value;
   }
 
   /**

@@ -38,6 +38,14 @@ import {
   type FavoriteRange,
 } from "./MainAppContainerServices/FavoritesService";
 import { RecentService } from "./MainAppContainerServices/RecentService";
+import {
+  InnerPageService,
+  type InnerPageHost,
+} from "./MainAppContainerServices/InnerPageService";
+import {
+  SelectionService,
+  type InnerSelectionHolder,
+} from "./MainAppContainerServices/SelectionService";
 import { FavoritesStorageService } from "../storage/FavoritesStorageService";
 import { SyncManager } from "../sync/SyncManager";
 import { PageHeader } from "./components/desk/PageHeader";
@@ -98,7 +106,7 @@ function emptyModeState(): ModeSnapshot {
     oldItems: null,
     innerCollection: null,
     collectionSegments: null,
-    innerSelection: [],
+    innerSelection: SelectionService.clear(),
     settingsData: null,
     currentSubNavBarAction: () => {},
     currentOnDemandPlay: () => {},
@@ -175,6 +183,10 @@ export class MainAppContainer extends Component<
   componentWillUnmount() {
     this.releaseInnerLayer();
     this.dropSegments();
+    // 别的模式里还开着的内页：加载器随快照停在那儿，`dropSegments` 只中止当前模式那一个。
+    // 面板已经卸载，它们的段请求与缓存的行都没有意义，一并中止。
+    for (const snapshot of this.snapshots.values())
+      snapshot.collectionSegments?.abort();
   }
 
   private innerTicket(mode: number): number {
@@ -187,6 +199,30 @@ export class MainAppContainer extends Component<
     this.innerLoad.set(mode, this.innerTicket(mode) + 1);
     this.activeSegments?.abort();
     this.activeSegments = null;
+  }
+
+  /**
+   * 内页加载服务的现场读写口：票号、模式与快照都由容器给，服务只做
+   * 「迟到的详情该落到当前现场还是原模式快照」的判断，不碰 `setState`。
+   */
+  private innerPageHost(): InnerPageHost {
+    return {
+      itemsPerPage: this.itemsPerPage,
+      originMode: this.state.mode,
+      ticketOf: (mode) => this.innerTicket(mode),
+      currentMode: () => this.state.mode,
+      isInnerPageOpen: () => this.state.isCurrentInMultiPage,
+      setSegments: (segments, totalPage) => {
+        this.activeSegments = segments;
+        this.setState({ collectionSegments: segments, totalPage });
+      },
+      setSnapshotSegments: (mode, segments, totalPage) => {
+        const snapshot = this.snapshots.get(mode);
+        if (!snapshot) return;
+        snapshot.collectionSegments = segments;
+        snapshot.totalPage = totalPage;
+      },
+    };
   }
 
   componentDidUpdate(prevProps: Readonly<MainAppContainerProps>): void {
@@ -288,34 +324,25 @@ export class MainAppContainer extends Component<
   };
 
   /** 内页勾选的点选序号（1 起）：键是绝对位置，同一首歌重复出现时各自计序。 */
-  private selectionOrderOf = (position: number): number | undefined => {
-    const at = this.state.innerSelection.findIndex(
-      (item) => item.position === position,
-    );
-    return at === -1 ? undefined : at + 1;
-  };
+  private selectionOrderOf = (position: number): number | undefined =>
+    SelectionService.orderOf(this.state.innerSelection, position);
 
   /** 勾 / 取消一首：取消后后面的序号自然前移（序号即数组下标）。 */
   private toggleSelection = (position: number, platformData: PlatformData) => {
-    const id = platformData.neteaseMusic?.id;
-    if (id === undefined) return;
+    // 没有网易云曲目 id 的行不可选：连一次重渲染都不必
+    if (!SelectionService.canSelect(platformData)) return;
     this.setState((prev) => ({
-      innerSelection: prev.innerSelection.some(
-        (item) => item.position === position,
-      )
-        ? prev.innerSelection.filter((item) => item.position !== position)
-        : [...prev.innerSelection, { position, id, title: platformData.title }],
+      innerSelection: SelectionService.toggle(
+        prev.innerSelection,
+        position,
+        platformData,
+      ),
     }));
   };
 
   private clearSelection = () => {
-    this.setState({ innerSelection: [] });
+    this.setState({ innerSelection: SelectionService.clear() });
   };
-
-  /** 「点播所选」的守卫键：与整张「全部播放」各自独立。 */
-  private selectionRequestKey(collection: PlatformData): string {
-    return `${requestKey(collection)}:selected`;
-  }
 
   /**
    * 选择条「点播所选」：按点选顺序点播（1 首单曲播报，多首批量进度浮窗）。
@@ -340,26 +367,21 @@ export class MainAppContainer extends Component<
       { ...collection, title },
       () =>
         NetEasePlatform.playSongIds(
-          selection.map((item) => item.id),
+          SelectionService.ids(selection),
           collection.title,
         ),
-      this.selectionRequestKey(collection),
+      SelectionService.requestKey(collection),
     ).then((outcome) => {
       if (outcome !== "sent") return;
       // 只去掉这次发出的几首（等待期间新勾的保留）；已换到别的内页就不动
-      const sent = new Set(selection.map((item) => item.position));
-      const remaining = (
-        current: Pick<ModeSnapshot, "innerCollection" | "innerSelection">,
-      ) =>
-        current.innerCollection === collection
-          ? current.innerSelection.filter((item) => !sent.has(item.position))
-          : current.innerSelection;
+      const drop = (current: InnerSelectionHolder) =>
+        SelectionService.afterSend(selection, current, collection);
       if (this.state.mode === mode) {
-        this.setState((prev) => ({ innerSelection: remaining(prev) }));
+        this.setState((prev) => ({ innerSelection: drop(prev) }));
         return;
       }
       const snapshot = this.snapshots.get(mode);
-      if (snapshot) snapshot.innerSelection = remaining(snapshot);
+      if (snapshot) snapshot.innerSelection = drop(snapshot);
     });
   };
 
@@ -514,7 +536,7 @@ export class MainAppContainer extends Component<
             {selectionCount > 0 && innerCollection ? (
               <SelectionBar
                 count={selectionCount}
-                requestKey={this.selectionRequestKey(innerCollection)}
+                requestKey={SelectionService.requestKey(innerCollection)}
                 supported={roomSupportsRequest()}
                 onClear={this.clearSelection}
                 onPlay={this.playSelection}
@@ -793,7 +815,7 @@ export class MainAppContainer extends Component<
           oldItems: null,
           innerCollection: null,
           collectionSegments: null,
-          innerSelection: [],
+          innerSelection: SelectionService.clear(),
           updating: false,
           currentSubNavBarAction: nextAction,
         },
@@ -813,6 +835,11 @@ export class MainAppContainer extends Component<
      */
     filterLive: (text: string) => {
       if (text === this.state.searchKeyword) return;
+      // 内页（专辑 / 歌单）开着时先按「返回」回到外层：恢复外层快照、中止分段请求、清空勾选。
+      // 否则收藏查询会被 `isCurrentInMultiPage` 挡掉，内页继续显示第 N 页的行而页头写 01 / N，
+      // 勾选徽标 / 复选框按错页的绝对位置落点（点一行的框会删掉另一页的勾选）。
+      if (this.state.isCurrentInMultiPage)
+        this.controller.switchToOutFromMultiPage();
       this.setState({ searchKeyword: text, currentPage: 1 }, () =>
         this.runCurrentScope(),
       );
@@ -835,7 +862,7 @@ export class MainAppContainer extends Component<
           oldItems: null,
           innerCollection: null,
           collectionSegments: null,
-          innerSelection: [],
+          innerSelection: SelectionService.clear(),
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -857,7 +884,7 @@ export class MainAppContainer extends Component<
           oldItems: null,
           innerCollection: null,
           collectionSegments: null,
-          innerSelection: [],
+          innerSelection: SelectionService.clear(),
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -938,11 +965,10 @@ export class MainAppContainer extends Component<
       const isCollection = isCollectionItem(platformData);
       // 换掉上一个内页：它未完成的段请求中止，迟到的详情丢弃
       this.dropSegments();
-      const ticket = this.innerTicket(this.state.mode);
       this.setState({
         innerCollection: isCollection ? platformData : null,
         collectionSegments: null,
-        innerSelection: [],
+        innerSelection: SelectionService.clear(),
       });
 
       if (platformData.bilibili) {
@@ -963,38 +989,13 @@ export class MainAppContainer extends Component<
         platformData.neteaseMusic?.isSongList ||
         platformData.neteaseMusic?.isAlbum
       ) {
-        const mode = this.state.mode;
-        const entry = platformData.neteaseMusic.isSongList
-          ? NetEasePlatform.getSongListMultiPageData
-          : NetEasePlatform.getAlbumMultiPageData;
         // 只取歌单（专辑）详情得到完整 id 列表，首屏再取第 1 段
-        const data = entry(platformData).then(async (segments) => {
-          if (!segments) throw new Error("内页加载失败");
-          if (
-            ticket !== this.innerTicket(mode) ||
-            (this.state.mode === mode && !this.state.isCurrentInMultiPage)
-          ) {
-            segments.abort();
-            throw new Error("内页已离开");
-          }
-          const totalPage = segments.totalPage(this.itemsPerPage);
-          if (this.state.mode === mode) {
-            this.activeSegments = segments;
-            this.setState({ collectionSegments: segments, totalPage });
-          } else {
-            // 详情回来时已切到别的模式：落进原模式的快照，切回时原样恢复
-            const snapshot = this.snapshots.get(mode);
-            if (snapshot) {
-              snapshot.collectionSegments = segments;
-              snapshot.totalPage = totalPage;
-            }
-          }
-          const page = await segments.loadPage(1, this.itemsPerPage);
-          return { platformData: page, totalPage };
-        });
-        data.catch(() => {});
+        const { mediaData } = InnerPageService.load(
+          this.innerPageHost(),
+          platformData,
+        );
         this.setState({ currentPage: 1, totalPage: 0, allMediaData: [] });
-        this.setState({ mediaData: data });
+        this.setState({ mediaData });
         this.setState({ currentOnDemandPlay: NetEasePlatform.MOD });
       }
     },
@@ -1004,20 +1005,22 @@ export class MainAppContainer extends Component<
      */
     switchToOutFromMultiPage: () => {
       const oldItems = this.state.oldItems;
-      if (!oldItems) return;
+      // 收尾先做：外层现场还没落地这一帧（内页已可见但 `oldItems` 尚未提交）按返回 / Esc
+      // 退不回去，但分段请求与勾选必须照样停下来，不能挂在后台继续取段。
       this.innerPageSource = null;
       this.dropSegments();
+      this.setState({
+        collectionSegments: null,
+        innerSelection: SelectionService.clear(),
+      });
+      if (!oldItems) return;
       this.setState({ oldItems: null });
       this.setState({ mediaData: oldItems.mediaData });
       this.setState({ allMediaData: oldItems.allMediaData });
       this.setState({ totalPage: oldItems.totalPage });
       this.setState({ currentPage: oldItems.currentPage });
       this.setState({ isCurrentInMultiPage: false });
-      this.setState({
-        innerCollection: null,
-        collectionSegments: null,
-        innerSelection: [],
-      });
+      this.setState({ innerCollection: null });
       this.setState({ currentSubNavBarAction: oldItems.SubNavBarAction });
       this.setState({ currentOnDemandPlay: oldItems.OnDemandPlay });
     },

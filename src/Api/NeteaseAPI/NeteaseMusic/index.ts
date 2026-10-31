@@ -3,6 +3,12 @@ import { d } from "../Crypto";
 
 export class NeteaseMusicAPI extends SendFetch {
   /**
+   * 歌曲详情端点每次最多收的 id 数。平台的详情分段（发送循环、内页分段加载、
+   * 选区补名）与下面的兜底分段共用这一个常量，不要在别处再写死。
+   */
+  public static readonly CHUNK_SIZE = 100;
+
+  /**
    * 直接访问网易云音乐的接口获取歌单详情
    * @param id
    * @returns
@@ -59,8 +65,8 @@ export class NeteaseMusicAPI extends SendFetch {
     signal?: AbortSignal,
   ): Promise<SongDetailSong[] | null> {
     // 端点每次最多收 100 个 id；sendSongs / fetchSongDetailsPooled 已按
-    // NetEasePlatform.DETAIL_CHUNK = 100 分段，这里只兜底其它调用点
-    const CHUNK_SIZE = 100;
+    // NeteaseMusicAPI.CHUNK_SIZE 分段，这里只兜底其它调用点
+    const CHUNK_SIZE = NeteaseMusicAPI.CHUNK_SIZE;
     const allSongs: SongDetailSong[] = []; // 用于存储所有的 songs
 
     // 将 ids 数组拆分为多个子数组

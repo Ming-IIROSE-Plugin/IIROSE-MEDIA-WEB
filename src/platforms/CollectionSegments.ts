@@ -4,7 +4,10 @@
  * - 翻页只在越过已取范围时取覆盖该页的段；同一段进行中或已取回都不重复请求。
  * - 显示某段的末页时预取下一段（失败静默，翻到该页时再取）。
  * - 段失败从缓存移除，下次 `loadPage` 只重取这一段。
- * - 段内结果按 id 顺序排，接口缺失的 id 跳过。
+ * - 段回空列表（请求非空）也算段失败，不缓存，避免这一段永远取不回来。
+ * - 页越过列表末尾、或整页 id 一个都没取到时一律 reject（结果区据此显示「加载失败 / 重试」），
+ *   不给「空列表」，免得被当成「这张列表没有曲目」；列表本身为空（0 首）仍给空结果。
+ * - 段内结果按 id 顺序排，接口缺失的 id 跳过（页内还有别的行时只跳过残缺项）。
  * - `abort()` 中止未完成的段请求，之后的 `loadPage` 一律 reject。
  */
 export type FetchSegment = (
@@ -38,9 +41,12 @@ export class CollectionSegments {
     page: number,
     perPage: number,
   ): Promise<PlatformData[]> {
+    // 空列表本来就是空的：给空结果（结果区显示「这张列表没有曲目」），不当成失败
+    if (this.ids.length === 0) return [];
     const start = Math.max(0, (page - 1) * perPage);
     const end = Math.min(start + perPage, this.ids.length);
-    if (start >= end) return [];
+    // 页越过末尾：不给空列表，交给结果区的「加载失败 / 重试」
+    if (start >= end) throw new Error("页超出列表末尾");
     const first = Math.floor(start / this.segmentSize);
     const last = Math.floor((end - 1) / this.segmentSize);
 
@@ -62,6 +68,12 @@ export class CollectionSegments {
       const song = songs.get(this.ids[index]);
       if (song) result.push(song);
     }
+    // 整页 id 一个都没取到：按失败处理，并清掉这一页涉及的段，重试才会真的重新请求
+    if (result.length === 0) {
+      for (let segment = first; segment <= last; segment++)
+        this.segments.delete(segment);
+      throw new Error("页内曲目全部缺失");
+    }
     return result;
   }
 
@@ -81,6 +93,8 @@ export class CollectionSegments {
     const pending = this.fetchSegment(ids, this.controller.signal).then(
       (songs) => {
         if (!songs || this.aborted) throw new Error("段加载失败");
+        // 请求了非空 id 却回空列表：算失败，不缓存（否则这一段永远取不回来）
+        if (ids.length > 0 && songs.length === 0) throw new Error("段加载失败");
         const byId = new Map<number, PlatformData>();
         for (const song of songs) {
           const id = song.neteaseMusic?.id;

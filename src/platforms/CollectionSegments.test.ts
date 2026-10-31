@@ -75,6 +75,55 @@ describe("CollectionSegments", () => {
     expect(fetch.mock.calls[2][0]).toEqual(range(100, 200));
   });
 
+  it("段回空列表算失败：跨段页整页 reject，不静默只出半页；重试重取这一段", async () => {
+    // 每页 30 首：第 4 页是 id 90–119，横跨第 1、2 段
+    const fetch = fetcher();
+    const segments = new CollectionSegments(range(0, 300), fetch, 100);
+    await segments.loadPage(1, 30);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // 接口对非空请求回 []：不算成功，也不能被缓存成「这一段就是空的」
+    fetch.mockResolvedValueOnce([]);
+    await expect(segments.loadPage(4, 30)).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(2);
+
+    fetch.mockImplementationOnce(async (ids) => ids.map((id) => song(id)));
+    expect(titles(await segments.loadPage(4, 30))).toEqual(range(90, 120));
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls[2][0]).toEqual(range(100, 200));
+  });
+
+  it("页越过末尾：reject 而不是空列表，且不发段请求；空列表仍给空结果", async () => {
+    const fetch = fetcher();
+    const segments = new CollectionSegments(range(0, 30), fetch, 100);
+    expect(segments.totalPage(10)).toBe(3);
+
+    await expect(segments.loadPage(4, 10)).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+
+    // 空列表（0 首）本来就是空的：保留「这张列表没有曲目」的空态，不报失败
+    const empty = new CollectionSegments([], fetch, 100);
+    expect(await empty.loadPage(1, 10)).toEqual([]);
+    expect(fetch).not.toHaveBeenCalled();
+
+    // 正常页不受影响
+    expect(titles(await segments.loadPage(1, 10))).toEqual(range(0, 10));
+  });
+
+  it("整页 id 都缺：reject 并清掉该页的段，重试真的重新请求", async () => {
+    // 段本身取回 90 首（成功），但第 11 页那 10 个 id（100–109）一个都没命中
+    const fetch = fetcher({ drop: range(100, 110) });
+    const segments = new CollectionSegments(range(0, 300), fetch, 100);
+    await expect(segments.loadPage(11, 10)).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // 段没被当成「已成功的空页」留在缓存里：重试重新请求这一段并正常出页
+    fetch.mockImplementationOnce(async (ids) => ids.map((id) => song(id)));
+    expect(titles(await segments.loadPage(11, 10))).toEqual(range(100, 110));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1][0]).toEqual(range(100, 200));
+  });
+
   it("预取失败静默，翻到该页时再取", async () => {
     const fetch = fetcher();
     const segments = new CollectionSegments(range(0, 200), fetch, 100);

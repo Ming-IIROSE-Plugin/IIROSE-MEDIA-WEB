@@ -1,4 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// 平台发送循环（NetEasePlatform.sendSongs）真的要在这里跑：校正消息的真伪取决于
+// 它报回的结束原因，只测 Announce 一侧会把「平台说错原因」漏掉。
+const neteaseMusic = vi.hoisted(() => ({
+  CHUNK_SIZE: 100,
+  getNeteaseSongDetail: vi.fn(),
+  getLyric: vi.fn(),
+  getSongListDetail: vi.fn(),
+  getAlbumDetail: vi.fn(),
+}));
+
+vi.mock("../../../Api/NeteaseAPI/NeteaseMusic", () => ({
+  NeteaseMusicAPI: neteaseMusic,
+}));
+
 import { Announce } from "./index";
 import { Socket } from "../index";
 import { PluginSettings } from "../../../settings/pluginSettings/PluginSettings";
@@ -147,23 +162,34 @@ describe("runBatchAnnounce（批量点播播报）", () => {
     expect(raw).not.toMatch(/\n/);
   });
 
-  it("loop 报回实际数 = N：不发校正", async () => {
+  it("跑完了（completed）：实际数 < N 也不补校正——没人停过", async () => {
     setMode("summary");
-    await Announce.runBatchAnnounce("冬日歌单", 5, async () => 5);
+    await Announce.runBatchAnnounce("冬日歌单", 1000, async () => ({
+      sent: 998,
+      reason: "completed",
+    }));
+    // 只有总结：两首是跳过（无版权 / 单项失败），不是「已停止」
     expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0][0]).not.toContain("已停止");
   });
 
   it("loop 报回 0：补发「已取消，未提交曲目」", async () => {
     setMode("summary");
-    await Announce.runBatchAnnounce("冬日*歌单", 5, async () => 0);
+    await Announce.runBatchAnnounce("冬日*歌单", 5, async () => ({
+      sent: 0,
+      reason: "stopped",
+    }));
     expect(sendMock).toHaveBeenCalledTimes(2);
     const parsed = JSON.parse(sendMock.mock.calls[1][0]) as { m: string };
     expect(parsed.m).toBe("\\\\\\*\n🎵 《冬日\\*歌单》已取消，未提交曲目");
   });
 
-  it("loop 报回部分数：补发「已停止，实际提交 X / N 项」", async () => {
+  it("被停止（stopped）且已发部分：补发「已停止，实际提交 X / N 项」", async () => {
     setMode("summary");
-    await Announce.runBatchAnnounce("冬日歌单", 5, async () => 3);
+    await Announce.runBatchAnnounce("冬日歌单", 5, async () => ({
+      sent: 3,
+      reason: "stopped",
+    }));
     expect(sendMock).toHaveBeenCalledTimes(2);
     const parsed = JSON.parse(sendMock.mock.calls[1][0]) as { m: string };
     expect(parsed.m).toBe(
@@ -171,10 +197,36 @@ describe("runBatchAnnounce（批量点播播报）", () => {
     );
   });
 
-  it("card / silent 档没发总结：实际数少了也不校正", async () => {
+  it("出错中断（failed）：补发「因错误中断，实际提交 X / N 项」", async () => {
+    setMode("summary");
+    await Announce.runBatchAnnounce("冬日歌单", 5, async () => ({
+      sent: 2,
+      reason: "failed",
+    }));
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    const parsed = JSON.parse(sendMock.mock.calls[1][0]) as { m: string };
+    expect(parsed.m).toBe(
+      "\\\\\\*\n🎵 《冬日歌单》因错误中断，实际提交 **2** / 5 项",
+    );
+
+    // 一首都没发也照样说清是「因错误中断」，不说成「已取消」
+    await Announce.runBatchAnnounce("冬日歌单", 5, async () => ({
+      sent: 0,
+      reason: "failed",
+    }));
+    const failed = JSON.parse(sendMock.mock.calls[3][0]) as { m: string };
+    expect(failed.m).toBe(
+      "\\\\\\*\n🎵 《冬日歌单》因错误中断，实际提交 **0** / 5 项",
+    );
+  });
+
+  it("card / silent 档没发总结：即使被停止也不校正", async () => {
     for (const mode of ["card", "silent"]) {
       setMode(mode);
-      await Announce.runBatchAnnounce("冬日歌单", 5, async () => 0);
+      await Announce.runBatchAnnounce("冬日歌单", 5, async () => ({
+        sent: 0,
+        reason: "stopped",
+      }));
     }
     expect(sendMock).not.toHaveBeenCalled();
   });
@@ -486,6 +538,16 @@ describe("批次作用域：单曲窗口 / 批次快照 / 逐项失败（spec-an
     expect(alertMock).toHaveBeenCalledTimes(2);
   });
 
+  it("runSingleAnnounce 收下平台的结束原因也照旧：只开关窗口，不发任何消息", async () => {
+    setMode("summary");
+    await Announce.runSingleAnnounce(async () => ({
+      sent: 0,
+      reason: "failed" as const,
+    }));
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(Announce.shouldSendCard()).toBe(true);
+  });
+
   it("CAP-1 单曲窗口 try/finally：loop 抛异常也会关闭窗口", async () => {
     setMode("summary");
     await expect(
@@ -496,5 +558,105 @@ describe("批次作用域：单曲窗口 / 批次快照 / 逐项失败（spec-an
     // 窗口已关：批量抑制与档位判定恢复原状
     await Announce.runSingleAnnounce(async () => {});
     expect(Announce.shouldSendCard()).toBe(true);
+  });
+});
+
+// 端到端：平台的真实发送循环 × 真实的播报判定。四条消息必须与循环的真实结局一致，
+// 否则房间会收到「已停止」这种没人触发过的假消息（评审 defect 1）。
+describe("批量校正只报真实的中断（接入平台发送循环）", () => {
+  type Batch = import("../../../playback/BatchProgress").BatchHandle;
+  type Outcome = import("./index").BatchSendOutcome;
+
+  const detail = (id: number, extra: Record<string, unknown> = {}) => ({
+    id,
+    name: `曲${id}`,
+    fee: 0,
+    duration: 60_000,
+    artists: [{ name: "甲" }],
+    album: { picUrl: "" },
+    ...extra,
+  });
+
+  /** 真正发到宿站聊天区的消息（总结 / 校正）：排除 `&1` 媒体事件与媒体卡片。 */
+  const messages = () =>
+    sendMock.mock.calls
+      .map(([raw]) => {
+        try {
+          return JSON.parse(raw) as { m?: unknown };
+        } catch {
+          return null;
+        }
+      })
+      .filter(
+        (parsed): parsed is { m: string } => typeof parsed?.m === "string",
+      )
+      .map((parsed) => parsed.m);
+
+  const runLoop = async (ids: number[], batch?: Batch) => {
+    const { NetEasePlatform } =
+      await import("../../../platforms/NetEasePlatform");
+    const finalODSONG = (
+      NetEasePlatform as unknown as {
+        finalODSONG: (ids: number[], b?: Batch) => Promise<Outcome>;
+      }
+    ).finalODSONG;
+    return Announce.runBatchAnnounce("冬日歌单", ids.length, () =>
+      finalODSONG(ids, batch),
+    );
+  };
+
+  beforeEach(async () => {
+    (await import("../../../playback/BatchProgress")).resetBatches();
+    neteaseMusic.getNeteaseSongDetail.mockReset();
+    neteaseMusic.getLyric.mockReset();
+    neteaseMusic.getLyric.mockResolvedValue(null);
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => ids.map((id) => detail(id)),
+    );
+    setMode("summary");
+  });
+
+  it("有无版权跳过：批次照常跑完，只发总结，绝不发「已停止」", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue([
+      detail(1),
+      detail(2, { noCopyrightRcmd: {} }),
+      detail(3),
+      detail(4),
+    ]);
+    await runLoop([1, 2, 3, 4]);
+
+    expect(messages()).toHaveLength(1);
+    expect(messages()[0]).toContain("已提交点播");
+    expect(messages().some((m) => m.includes("已停止"))).toBe(false);
+    // 无版权跳过仍有自己的提示（与校正消息无关）
+    expect(alertMock).toHaveBeenCalledWith("已跳过 1 首无版权曲目");
+  });
+
+  it("被用户停止：总结之后补「已停止，实际提交 X / N 项」", async () => {
+    const { startBatch, stopBatch } =
+      await import("../../../playback/BatchProgress");
+    const batch = startBatch("冬日歌单", 4, "7:list");
+    neteaseMusic.getLyric.mockImplementation(async (id: number) => {
+      if (id === 3) stopBatch(batch.id);
+      return null;
+    });
+    await runLoop([1, 2, 3, 4], batch);
+
+    const sent = messages();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(
+      "\\\\\\*\n🎵 《冬日歌单》已停止，实际提交 **2** / 4 项",
+    );
+  });
+
+  it("详情请求失败：补「因错误中断，实际提交 0 / N 项」，不冒充「已停止」", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue(null);
+    await runLoop([1, 2, 3]);
+
+    const sent = messages();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]).toBe(
+      "\\\\\\*\n🎵 《冬日歌单》因错误中断，实际提交 **0** / 3 项",
+    );
   });
 });
