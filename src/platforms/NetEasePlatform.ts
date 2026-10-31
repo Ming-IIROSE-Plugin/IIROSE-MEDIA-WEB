@@ -737,12 +737,15 @@ export class NetEasePlatform extends Platform {
       NetEasePlatform.DETAIL_CHUNK,
     );
 
-  /** 歌曲详情 → 结果区条目。 */
+  /**
+   * 歌曲详情 → 结果区条目。字段一律可选读：一首残缺的歌抛错会让整段 100 首都加载失败；
+   * 封面为空时 `Cover` 自动回退图标。
+   */
   private static songPlatformData = (item: SongDetailSong): PlatformData => ({
     title: item.name,
-    subtitle: item?.transNames?.[0] || item.alias[0],
-    coverImg: item.album.picUrl || item.album.blurPicUrl,
-    author: item.artists[0].name,
+    subtitle: item?.transNames?.[0] || item.alias?.[0],
+    coverImg: item.album?.picUrl || item.album?.blurPicUrl || "",
+    author: item.artists?.[0]?.name ?? "",
     websiteUrl: `https://music.163.com/#/song?id=${item.id}`,
     duration: Math.ceil(item.duration / 1000),
     neteaseMusic: {
@@ -1105,8 +1108,9 @@ export class NetEasePlatform extends Platform {
           const mediaData: MediaData = {
             type: "music",
             name: item.name,
-            singer: item.artists[0].name,
-            cover: item.album.picUrl,
+            // 残缺详情（无歌手 / 专辑）照发，不让单曲抛错
+            singer: item.artists?.[0]?.name ?? "",
+            cover: item.album?.picUrl ?? "",
             link: `https://music.163.com/#/song?id=${item.id}`,
             url: playUrl,
             duration: item.duration / 1000,

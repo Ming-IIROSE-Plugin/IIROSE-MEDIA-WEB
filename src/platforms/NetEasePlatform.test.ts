@@ -770,6 +770,27 @@ describe("歌单 / 专辑内页入口（分段加载）", () => {
     expect(page.map((item) => item.neteaseMusic?.id)).toEqual([4, 5, 6]);
   });
 
+  it("段内有残缺曲目（无歌手 / 专辑 / 别名）：其余照常加载，残缺的取安全默认值", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) =>
+        ids.map((id) =>
+          id === 5
+            ? { id, name: "残缺", duration: 1000, fee: 0 }
+            : detailSong(id),
+        ),
+    );
+    const segments = await NetEasePlatform.getAlbumMultiPageData(album);
+    const page = await segments!.loadPage(1, 10);
+    expect(page.map((item) => item.neteaseMusic?.id)).toEqual([4, 5, 6]);
+    expect(page[1]).toMatchObject({
+      title: "残缺",
+      author: "",
+      subtitle: undefined,
+      coverImg: "",
+    });
+    expect(page[0].author).toBe("某人");
+  });
+
   it("详情失败返回 null，不取歌曲详情", async () => {
     neteaseMusic.getSongListDetail.mockResolvedValue(null);
     expect(await NetEasePlatform.getSongListMultiPageData(songList)).toBeNull();
