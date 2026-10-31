@@ -64,7 +64,7 @@
 - 混合内容安全与封面 HTTPS 升级：宿站运行在 HTTPS 上下文，第三方 API（如网易云）返回的封面常为 `http://` 形式，会触发浏览器 Mixed Content 拦截导致图片破损；渲染封面必须先做 `src.replace(/^http:\/\//, 'https://')` 安全升级，并挂载 `onerror` 平滑回退到自包含矢量图标。
 - 插件**不带 Tailwind preflight**：`border-solid` 加单边 `border-b` 会让其余三边落到浏览器默认 3px（曾画出灰框）。边框基线由 `app.css` base 层补（`border: 0 solid currentcolor`），新增独立根节点（浮窗、面板）要把它的 id 一并加进那条选择器与 `box-sizing` 规则。
 - **动效基线**：`app.css` 的 base 层只给默认过渡（颜色/透明度/阴影/缩放，120ms，`--imw-fast/base/slow`），**不要再写通配 `transition: all`**；Tailwind v4 的 `scale-*`/`translate-*` 是独立属性，过渡要写 `scale`/`translate` 而不是 `transform`；按下反馈用 `deskPress`，减少动态效果时要关缩放与位移。
-- 网易云歌单详情的 `tracks` 在部分网络 / 未登录时只给前 10 首，**完整列表以 `trackIds` 为准**（`NetEasePlatform.fullPlaylistTracks` 分批补取详情）；新写歌单相关逻辑别只读 `tracks`。
+- 网易云歌单详情的 `tracks` 在部分网络 / 未登录时只给前 10 首，**完整列表以 `trackIds` 为准**（选集面板用 `NetEasePlatform.playlistSkeleton` 先按 id 立刻列出，再经面板的 `enrich` 钩子由 `fetchSongDetailsPooled` 每批 100 首、4 路并发在后台补歌名，关面板即中止）；新写歌单相关逻辑别只读 `tracks`，也别在打开面板前同步等全部详情（万首歌单会卡很久）；列表超过 200 行时面板分批渲染（`RENDER_BATCH`）。
 - 宿站控制台日志陷阱：宿站会把 `&1` 媒体播放事件以 `m__4@0>...` 卡片形态打到控制台（来自宿站自身脚本，非插件日志）——**不能**凭该日志判断「点歌卡片已发送」；`Socket.sendMessage`（公聊文本/总结消息）则完全没有控制台日志。判定消息是否真的发出/渲染，必须查聊天区消息流 DOM（`div.msgholderBox`，取 children 最多的容器看末尾子块）——spec-announce-batch-scope 真机验证曾两次把「正常抑制」误判成「summary 失效」皆因读日志不读 DOM。
 - Playwright 自动化注入纪律：验证前必须 reload 后**只注入一次** bundle——重复注入产生双实例（`.IIROSE_MEDIA_CONTAINER` ×2），两份模块级窗口状态（Announce 的 forceDepth/快照栈等）互相独立，行为不可复现地错乱；注入前先断言 `document.querySelectorAll('.IIROSE_MEDIA_CONTAINER').length === 0`，需要换 bundle 版本时先 reload 再注入。
 
