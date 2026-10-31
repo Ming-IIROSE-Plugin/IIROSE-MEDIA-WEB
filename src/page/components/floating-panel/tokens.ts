@@ -110,6 +110,12 @@ export const deskSelectedRing =
 export const deskRule = "border-[#E2DCD1] imw-dark:border-[#2B2825]";
 /** 用底色画的分隔线（rule）。 */
 export const deskRuleFill = "bg-[#E2DCD1] imw-dark:bg-[#2B2825]";
+/**
+ * 结果行底线：行为了悬停高亮左右各外扩 14px，底线用伪元素画回内容宽度，
+ * 与表头的线左右对齐（手机行不外扩，底线贴满）。
+ */
+export const deskRowRule =
+  "relative after:pointer-events-none after:absolute after:bottom-0 after:inset-x-[14px] after:h-px after:content-[''] after:bg-[#E2DCD1] imw-dark:after:bg-[#2B2825] max-[768px]:after:inset-x-0";
 
 /** 选中竖栏项的细线环（rule）。 */
 export const deskRing =

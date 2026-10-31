@@ -18,6 +18,7 @@ import {
   deskRose,
   deskRoseFill,
   deskRowHover,
+  deskRowRule,
   deskRule,
   deskSendHover,
   deskSourceDots,
@@ -37,7 +38,7 @@ import {
 export const trackColumns =
   "grid grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px] items-center gap-3 max-[768px]:grid-cols-[48px_1fr_auto_40px_40px] max-[768px]:gap-2";
 
-const rowFrame = `group w-[calc(100%+28px)] border-0 border-b border-solid ${deskRule} bg-transparent text-left ${deskRowHover} mx-[-14px] px-[14px] max-[768px]:mx-0 max-[768px]:w-full max-[768px]:px-0`;
+const rowFrame = `group w-[calc(100%+28px)] border-0 ${deskRowRule} bg-transparent text-left ${deskRowHover} mx-[-14px] px-[14px] max-[768px]:mx-0 max-[768px]:w-full max-[768px]:px-0`;
 
 /** 三根 3px 蔷薇红音柱：替换序号表示「房间正在播放」（不只靠颜色）。 */
 export function NowPlayingBars({

@@ -15,6 +15,7 @@ import {
   deskPress,
   deskPressTone,
   deskRowHover,
+  deskRowRule,
   deskRule,
   roundedRequestButton,
   roundedTrackCover,
@@ -37,7 +38,7 @@ export function CollectionRow({
 }: CollectionRowProps) {
   return (
     <div
-      className={`${trackColumns} group mx-[-14px] min-h-[62px] w-[calc(100%+28px)] border-0 border-b border-solid px-[14px] text-left max-[768px]:mx-0 max-[768px]:min-h-[66px] max-[768px]:w-full max-[768px]:cursor-pointer max-[768px]:px-0 ${deskRule} ${deskRowHover}`}
+      className={`${trackColumns} group mx-[-14px] min-h-[62px] w-[calc(100%+28px)] border-0 px-[14px] text-left max-[768px]:mx-0 max-[768px]:min-h-[66px] max-[768px]:w-full max-[768px]:cursor-pointer max-[768px]:px-0 ${deskRowRule} ${deskRowHover}`}
       data-imw-collection-row="true"
       onClick={() => {
         if (isPhoneLayout()) onOpen();
