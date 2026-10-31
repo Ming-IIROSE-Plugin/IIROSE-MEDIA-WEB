@@ -467,6 +467,90 @@ describe("neteaseRequest：外部中止信号", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  /** 不等 5 秒超时：中止后 100ms 内就该落地。 */
+  const settleAfterAbort = async (
+    start: (signal: AbortSignal) => Promise<unknown>,
+  ) => {
+    const abort = new AbortController();
+    let settled = false;
+    let value: unknown;
+    void start(abort.signal).then((v) => {
+      settled = true;
+      value = v;
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    abort.abort();
+    await vi.advanceTimersByTimeAsync(100);
+    return { settled, value };
+  };
+
+  it("getLyric 把信号透传给 neteaseRequest", async () => {
+    fetchMock.mockImplementation(hanging);
+    const result = await settleAfterAbort((signal) =>
+      NeteaseMusicAPI.getLyric(1, signal),
+    );
+    expect(result).toEqual({ settled: true, value: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(showMock).not.toHaveBeenCalled();
+  });
+
+  it("getNeteaseSongDetail 把信号透传给 neteaseRequest", async () => {
+    fetchMock.mockImplementation(hanging);
+    const result = await settleAfterAbort((signal) =>
+      NeteaseMusicAPI.getNeteaseSongDetail([1, 2, 3], signal),
+    );
+    expect(result).toEqual({ settled: true, value: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(showMock).not.toHaveBeenCalled();
+  });
+
+  it("读 body 期间外部中止：返回 null，不提示", async () => {
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: () =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError")),
+          );
+        }),
+    }));
+    const result = await settleAfterAbort((signal) =>
+      (SendFetch as any).neteaseRequest(
+        URL_UNDER_TEST,
+        POST_BODY,
+        "GET",
+        undefined,
+        signal,
+      ),
+    );
+    expect(result).toEqual({ settled: true, value: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(showMock).not.toHaveBeenCalled();
+  });
+
+  it("首节点超时、次节点未响应时外部中止：返回 null，不提示", async () => {
+    fetchMock.mockImplementation(hanging);
+    const abort = new AbortController();
+    let settled = false;
+    let value: unknown;
+    void (SendFetch as any)
+      .neteaseRequest(URL_UNDER_TEST, POST_BODY, "GET", undefined, abort.signal)
+      .then((v: unknown) => {
+        settled = true;
+        value = v;
+      });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(100);
+    abort.abort();
+    await vi.advanceTimersByTimeAsync(100);
+    expect({ settled, value }).toEqual({ settled: true, value: null });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(showMock).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("getNeteaseSongDetail 中止后不再请求后续分段", async () => {
     const abort = new AbortController();
     fetchMock.mockImplementation(async () => {

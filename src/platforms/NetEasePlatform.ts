@@ -1154,7 +1154,8 @@ export class NetEasePlatform extends Platform {
       }
     }
 
-    if (noCopyrightSkipped > 0) {
+    // 用户停止后不再弹任何提示
+    if (noCopyrightSkipped > 0 && !batch?.cancelled) {
       ShowMessage.show(`已跳过 ${noCopyrightSkipped} 首无版权曲目`);
     }
   };

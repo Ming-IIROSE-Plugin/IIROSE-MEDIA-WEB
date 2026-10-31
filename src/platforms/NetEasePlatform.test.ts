@@ -507,10 +507,12 @@ describe("批量发送：即停与边取边发", () => {
     );
     const batch = startBatch("千首歌单", 3);
     const done = run([1, 2, 3], batch);
-    await Promise.resolve();
+    await vi.waitFor(() =>
+      expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalled(),
+    );
     stopBatch(batch.id);
     expect(seen?.aborted).toBe(true);
-    // 超过 1.4 秒：卡片已移除
+    // 停留 + 再等 1 秒：卡片早已移除
     await vi.advanceTimersByTimeAsync(BATCH_STOP_LINGER_MS + 1_000);
     expect(getBatches()).toHaveLength(0);
     release();
@@ -519,6 +521,53 @@ describe("批量发送：即停与边取边发", () => {
     expect(announce.sendMediaCard).not.toHaveBeenCalled();
     expect(socketSend).not.toHaveBeenCalled();
     expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("准备中停止且详情随中止返回 null：卡片仍显示原总数，不弹失败", async () => {
+    const { startBatch, stopBatch, getBatches } =
+      await import("../playback/BatchProgress");
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      (_ids: number[], signal?: AbortSignal) =>
+        new Promise((resolve) => {
+          signal?.addEventListener("abort", () => resolve(null));
+        }),
+    );
+    const batch = startBatch("千首歌单", 130);
+    const done = run(range(130), batch);
+    await vi.waitFor(() =>
+      expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalled(),
+    );
+    stopBatch(batch.id);
+    await done;
+    expect(getBatches()[0]).toMatchObject({ status: "stopped", total: 130 });
+    expect(api.getLyric).not.toHaveBeenCalled();
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("段内缺详情：总数扣掉缺的条数，只发返回的曲目", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) =>
+        ids.filter((id) => id !== 2 && id !== 150).map(song),
+    );
+    const sent: number[] = [];
+    api.getLyric = vi.fn(async (id: number) => {
+      sent.push(id);
+      return null;
+    });
+    const { startBatch, getBatches } =
+      await import("../playback/BatchProgress");
+    const batch = startBatch("两百首", 200);
+    await run(range(200), batch);
+    expect(sent).toHaveLength(198);
+    expect(sent).not.toContain(2);
+    expect(sent).not.toContain(150);
+    expect(announce.sendMediaCard).toHaveBeenCalledTimes(198);
+    expect(getBatches()[0]).toMatchObject({
+      status: "done",
+      done: 198,
+      total: 198,
+    });
   });
 
   it("发送中停止（200 首）：该歌词请求 abort，之后不再取详情 / 歌词，不再发卡", async () => {

@@ -165,6 +165,8 @@ export function dismissBatch(id: number): void {
 export function resetBatches(): void {
   timers.forEach((list) => list.forEach((timer) => clearTimeout(timer)));
   timers.clear();
+  // 先中止：上一轮遗留的发送循环不能继续调用下一轮的替身
+  controllers.forEach((controller) => controller.abort());
   controllers.clear();
   runs = [];
   listeners.clear();

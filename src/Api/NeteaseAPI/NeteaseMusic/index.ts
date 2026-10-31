@@ -58,7 +58,9 @@ export class NeteaseMusicAPI extends SendFetch {
     ids: number[],
     signal?: AbortSignal,
   ): Promise<SongDetailSong[] | null> {
-    const CHUNK_SIZE = 100; // 每次最多 150 个 ids
+    // 端点每次最多收 100 个 id；sendSongs / fetchSongDetailsPooled 已按
+    // NetEasePlatform.DETAIL_CHUNK = 100 分段，这里只兜底其它调用点
+    const CHUNK_SIZE = 100;
     const allSongs: SongDetailSong[] = []; // 用于存储所有的 songs
 
     // 将 ids 数组拆分为多个子数组
