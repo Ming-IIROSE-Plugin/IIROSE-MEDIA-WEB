@@ -358,6 +358,10 @@ describe("选集面板的歌单曲目", () => {
     });
     // 4 路各已发出第一批，之后全部停手（不会走完 20 批）
     expect(calls).toBeLessThanOrEqual(4);
+    // 进行中的请求拿到同一个 signal：关面板即中止
+    expect(neteaseMusic.getNeteaseSongDetail.mock.calls[0][1]).toBe(
+      abort.signal,
+    );
   });
 
   it("单批失败（null）跳过，其余照常补", async () => {

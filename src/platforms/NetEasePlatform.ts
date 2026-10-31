@@ -128,7 +128,11 @@ export class NetEasePlatform extends Platform {
       while (!options.signal.aborted) {
         const at = next++;
         if (at >= chunks.length) return;
-        const songs = await NeteaseMusicAPI.getNeteaseSongDetail(chunks[at]);
+        // 传入 signal：关面板时进行中的请求一并静默中止
+        const songs = await NeteaseMusicAPI.getNeteaseSongDetail(
+          chunks[at],
+          options.signal,
+        );
         if (options.signal.aborted) return;
         if (songs) options.onChunk(songs);
         done += chunks[at].length;
