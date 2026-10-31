@@ -711,3 +711,64 @@ describe("整张点播：并发与失败", () => {
     await vi.waitFor(() => expect(getBatches()[0]?.status).toBe("failed"));
   });
 });
+
+describe("歌单 / 专辑内页入口（分段加载）", () => {
+  const detailSong = (id: number) => ({
+    id,
+    name: `曲目 ${id}`,
+    alias: [],
+    artists: [{ name: "某人" }],
+    album: { picUrl: "", blurPicUrl: "" },
+    duration: 200000,
+    fee: 0,
+  });
+
+  beforeEach(() => {
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => ids.map(detailSong),
+    );
+  });
+
+  it("万首歌单：歌单详情 1 次 + 歌曲详情 1 次（前 100 个 id，带 signal），首屏 10 首、1000 页", async () => {
+    neteaseMusic.getSongListDetail.mockResolvedValue({
+      playlist: {
+        name: "万首",
+        trackIds: Array.from({ length: 10000 }, (_, i) => ({ id: i + 1 })),
+      },
+    });
+    const segments = await NetEasePlatform.getSongListMultiPageData(songList);
+    expect(segments).not.toBeNull();
+    expect(segments!.totalPage(10)).toBe(1000);
+
+    const page = await segments!.loadPage(1, 10);
+    expect(neteaseMusic.getSongListDetail).toHaveBeenCalledTimes(1);
+    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledTimes(1);
+    const [ids, signal] = neteaseMusic.getNeteaseSongDetail.mock.calls[0];
+    expect(ids).toEqual(Array.from({ length: 100 }, (_, i) => i + 1));
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(page.map((item) => item.neteaseMusic?.id)).toEqual(
+      Array.from({ length: 10 }, (_, i) => i + 1),
+    );
+    expect(page[0]).toMatchObject({
+      title: "曲目 1",
+      author: "某人",
+      duration: 200,
+      websiteUrl: "https://music.163.com/#/song?id=1",
+    });
+  });
+
+  it("专辑：专辑详情 1 次 + 歌曲详情 1 次", async () => {
+    const segments = await NetEasePlatform.getAlbumMultiPageData(album);
+    expect(segments!.totalPage(10)).toBe(1);
+    const page = await segments!.loadPage(1, 10);
+    expect(neteaseMusic.getAlbumDetail).toHaveBeenCalledWith(9);
+    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledTimes(1);
+    expect(page.map((item) => item.neteaseMusic?.id)).toEqual([4, 5, 6]);
+  });
+
+  it("详情失败返回 null，不取歌曲详情", async () => {
+    neteaseMusic.getSongListDetail.mockResolvedValue(null);
+    expect(await NetEasePlatform.getSongListMultiPageData(songList)).toBeNull();
+    expect(neteaseMusic.getNeteaseSongDetail).not.toHaveBeenCalled();
+  });
+});

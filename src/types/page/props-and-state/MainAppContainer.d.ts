@@ -26,6 +26,9 @@ interface MainAppContainerState {
   oldItems: OldItems | null;
   /** 内页来源（专辑 / 歌单）：内页头显示名称、曲目数与「全部播放」。 */
   innerCollection: PlatformData | null;
+  /** 歌单 / 专辑内页的分段加载器（曲目详情按页取）；其余内页与外层为 null。 */
+  collectionSegments:
+    import("../../../platforms/CollectionSegments").CollectionSegments | null;
   /** 设置 / 关于：一组一张卡（`SettingGroupData.title` 是组卡标题）。 */
   settingsData: SettingGroupData[] | null;
   isCurrentInMultiPage: boolean;

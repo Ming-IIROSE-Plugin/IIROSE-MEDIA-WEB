@@ -16,6 +16,7 @@ import {
 } from "./components/media-card-container/roomSupport";
 import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
 import { NetEasePlatform } from "../platforms/NetEasePlatform";
+import type { CollectionSegments } from "../platforms/CollectionSegments";
 import { AllVideosPlatform } from "../platforms/AllVideosPlatform";
 import { SendFetch } from "../Api";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
@@ -75,6 +76,7 @@ interface ModeSnapshot {
   isCurrentInMultiPage: boolean;
   oldItems: OldItems | null;
   innerCollection: PlatformData | null;
+  collectionSegments: CollectionSegments | null;
   settingsData: SettingGroupData[] | null;
   currentSubNavBarAction: () => void;
   currentOnDemandPlay: (platformData: PlatformData) => void;
@@ -93,6 +95,7 @@ function emptyModeState(): ModeSnapshot {
     isCurrentInMultiPage: false,
     oldItems: null,
     innerCollection: null,
+    collectionSegments: null,
     settingsData: null,
     currentSubNavBarAction: () => {},
     currentOnDemandPlay: () => {},
@@ -122,6 +125,12 @@ export class MainAppContainer extends Component<
   private pendingSearch: string | null = null;
   /** 内页的来源条目：重试时按它重新载入内页。 */
   private innerPageSource: PlatformData | null = null;
+  /**
+   * 当前模式内页的分段加载器（与 state 同步，但 setState 生效前也能拿到）；
+   * `innerLoad` 每次进出内页递增，迟到的内页详情据此丢弃。
+   */
+  private activeSegments: CollectionSegments | null = null;
+  private innerLoad = 0;
   /** 各模式现场快照；没有 = 该模式首次进入。 */
   private snapshots = new Map<number, ModeSnapshot>();
   private searchBarRef = createRef<SearchBar>();
@@ -161,6 +170,14 @@ export class MainAppContainer extends Component<
 
   componentWillUnmount() {
     this.releaseInnerLayer();
+    this.dropSegments();
+  }
+
+  /** 离开（或换掉）当前内页：中止未完成的段请求，迟到结果不再落地。 */
+  private dropSegments() {
+    this.innerLoad++;
+    this.activeSegments?.abort();
+    this.activeSegments = null;
   }
 
   componentDidUpdate(prevProps: Readonly<MainAppContainerProps>): void {
@@ -226,8 +243,12 @@ export class MainAppContainer extends Component<
     this.controller.switchToOutFromMultiPage();
   };
 
-  /** 重试：内页重载内页，否则重发当前范围。 */
+  /** 重试：分段内页只重取当前页所在的段；其余内页重载内页，否则重发当前范围。 */
   private handleRetry = () => {
+    if (this.state.isCurrentInMultiPage && this.state.collectionSegments) {
+      void this.controller.changecurrentPage(this.state.currentPage);
+      return;
+    }
     const source = this.innerPageSource ?? this.state.innerCollection;
     if (this.state.isCurrentInMultiPage && source) {
       void this.controller.switchToMultiPage(source);
@@ -508,6 +529,7 @@ export class MainAppContainer extends Component<
       isCurrentInMultiPage: state.isCurrentInMultiPage,
       oldItems: state.oldItems,
       innerCollection: state.innerCollection,
+      collectionSegments: state.collectionSegments,
       settingsData: state.settingsData,
       currentSubNavBarAction: state.currentSubNavBarAction,
       currentOnDemandPlay: state.currentOnDemandPlay,
@@ -533,6 +555,8 @@ export class MainAppContainer extends Component<
     this.pendingSearch = null;
     setPanelFocus({ category: next, platform: restored.PlatformIndex });
     this.innerPageSource = restored.innerCollection;
+    // 加载器随现场走：切回来已取的段不重取（离开的模式的加载器留在快照里）
+    this.activeSegments = restored.collectionSegments;
 
     this.setState(
       {
@@ -633,6 +657,7 @@ export class MainAppContainer extends Component<
     ) => {
       const keyword = text.trim();
       this.innerPageSource = null;
+      this.dropSegments();
       // 浏览型范围（视频的「推荐」）不承接关键词：有词时自动落到第一个可搜索的范围
       const platform = this.currentPlatform();
       let scope = this.state.SubNavBarIndex;
@@ -659,6 +684,7 @@ export class MainAppContainer extends Component<
           isCurrentInMultiPage: false,
           oldItems: null,
           innerCollection: null,
+          collectionSegments: null,
           updating: false,
           currentSubNavBarAction: nextAction,
         },
@@ -686,6 +712,7 @@ export class MainAppContainer extends Component<
     /** 切换来源：页码归 1、回到第一个范围。 */
     selectSource: (index: number) => {
       this.innerPageSource = null;
+      this.dropSegments();
       setPanelFocus({ category: this.state.mode, platform: index });
       this.setState(
         {
@@ -698,6 +725,7 @@ export class MainAppContainer extends Component<
           isCurrentInMultiPage: false,
           oldItems: null,
           innerCollection: null,
+          collectionSegments: null,
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -707,6 +735,7 @@ export class MainAppContainer extends Component<
     /** 切换范围：页码归 1、滚到顶部，按当前关键词重取。 */
     selectScope: (index: number) => {
       this.innerPageSource = null;
+      this.dropSegments();
       this.setState(
         {
           SubNavBarIndex: index,
@@ -717,6 +746,7 @@ export class MainAppContainer extends Component<
           isCurrentInMultiPage: false,
           oldItems: null,
           innerCollection: null,
+          collectionSegments: null,
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -735,11 +765,26 @@ export class MainAppContainer extends Component<
      * @description 更新目前的页面
      */
     changecurrentPage: async (page: number) => {
-      const { updating, isCurrentInMultiPage, allMediaData, totalPage } =
-        this.state;
+      const {
+        updating,
+        isCurrentInMultiPage,
+        allMediaData,
+        totalPage,
+        collectionSegments,
+      } = this.state;
 
       if (isCurrentInMultiPage) {
         const safePage = Math.min(Math.max(1, page), totalPage || 1);
+        // 歌单 / 专辑：只在越过已取范围时取对应段
+        if (collectionSegments) {
+          const data = collectionSegments
+            .loadPage(safePage, this.itemsPerPage)
+            .then((platformData) => ({ platformData, totalPage }));
+          // 失败交给结果区的「加载失败 / 重试」；换页后被丢弃的旧页不算未处理
+          data.catch(() => {});
+          await this.setState({ currentPage: safePage, mediaData: data });
+          return;
+        }
         const startIndex = (safePage - 1) * this.itemsPerPage;
         const endIndex = Math.min(
           startIndex + this.itemsPerPage,
@@ -780,7 +825,13 @@ export class MainAppContainer extends Component<
       this.innerPageSource = platformData;
       // 专辑 / 歌单的内页头（名称 + 曲目数 + 全部播放）；多 P / 多集仍用范围行
       const isCollection = isCollectionItem(platformData);
-      this.setState({ innerCollection: isCollection ? platformData : null });
+      // 换掉上一个内页：它未完成的段请求中止，迟到的详情丢弃
+      this.dropSegments();
+      const ticket = this.innerLoad;
+      this.setState({
+        innerCollection: isCollection ? platformData : null,
+        collectionSegments: null,
+      });
 
       if (platformData.bilibili) {
         const data = BilibiliPlatform.getMultiPageBasicsData(platformData);
@@ -796,35 +847,35 @@ export class MainAppContainer extends Component<
             this.setState({ allMediaData: res.allPlatformData });
           }
         });
-      } else if (platformData.neteaseMusic?.isSongList) {
-        const data = NetEasePlatform.getSongListMultiPageData(platformData);
+      } else if (
+        platformData.neteaseMusic?.isSongList ||
+        platformData.neteaseMusic?.isAlbum
+      ) {
+        const mode = this.state.mode;
+        const entry = platformData.neteaseMusic.isSongList
+          ? NetEasePlatform.getSongListMultiPageData
+          : NetEasePlatform.getAlbumMultiPageData;
+        // 只取歌单（专辑）详情得到完整 id 列表，首屏再取第 1 段
+        const data = entry(platformData).then(async (segments) => {
+          if (!segments) throw new Error("内页加载失败");
+          if (
+            ticket !== this.innerLoad ||
+            this.state.mode !== mode ||
+            !this.state.isCurrentInMultiPage
+          ) {
+            segments.abort();
+            throw new Error("内页已离开");
+          }
+          const totalPage = segments.totalPage(this.itemsPerPage);
+          this.activeSegments = segments;
+          this.setState({ collectionSegments: segments, totalPage });
+          const page = await segments.loadPage(1, this.itemsPerPage);
+          return { platformData: page, totalPage };
+        });
+        data.catch(() => {});
         this.setState({ currentPage: 1, totalPage: 0, allMediaData: [] });
         this.setState({ mediaData: data });
         this.setState({ currentOnDemandPlay: NetEasePlatform.MOD });
-
-        data.then((res) => {
-          if (!this.state.isCurrentInMultiPage) return;
-          if (!res) return;
-          this.setState({ totalPage: res.totalPage });
-          if (res.allPlatformData) {
-            this.setState({ allMediaData: res.allPlatformData });
-          }
-        });
-      } else if (platformData.neteaseMusic?.isAlbum) {
-        const data = NetEasePlatform.getAlbumMultiPageData(platformData);
-
-        this.setState({ currentPage: 1, totalPage: 0, allMediaData: [] });
-        this.setState({ mediaData: data });
-        this.setState({ currentOnDemandPlay: NetEasePlatform.MOD });
-
-        data.then((res) => {
-          if (!this.state.isCurrentInMultiPage) return;
-          if (!res) return;
-          this.setState({ totalPage: res.totalPage });
-          if (res.allPlatformData) {
-            this.setState({ allMediaData: res.allPlatformData });
-          }
-        });
       }
     },
 
@@ -835,13 +886,14 @@ export class MainAppContainer extends Component<
       const oldItems = this.state.oldItems;
       if (!oldItems) return;
       this.innerPageSource = null;
+      this.dropSegments();
       this.setState({ oldItems: null });
       this.setState({ mediaData: oldItems.mediaData });
       this.setState({ allMediaData: oldItems.allMediaData });
       this.setState({ totalPage: oldItems.totalPage });
       this.setState({ currentPage: oldItems.currentPage });
       this.setState({ isCurrentInMultiPage: false });
-      this.setState({ innerCollection: null });
+      this.setState({ innerCollection: null, collectionSegments: null });
       this.setState({ currentSubNavBarAction: oldItems.SubNavBarAction });
       this.setState({ currentOnDemandPlay: oldItems.OnDemandPlay });
     },

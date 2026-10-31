@@ -158,6 +158,10 @@ import {
 import { PlaybackMode } from "../playback/PlaybackMode";
 import { snapshot } from "../playback/fixtures";
 import { ShowMessage } from "../iirose_func/ShowMessage";
+import {
+  CollectionSegments,
+  type FetchSegment,
+} from "../platforms/CollectionSegments";
 
 interface Harness {
   state: MainAppContainerState;
@@ -786,23 +790,60 @@ describe("专辑 / 歌单内页", () => {
     neteaseMusic: { id: 11, fee: 0 },
   } as unknown as PlatformData;
 
-  const enterInnerPage = async (ref: { current: MainAppContainer | null }) => {
+  const songListData = {
+    title: "冬日歌单",
+    author: "某某",
+    coverImg: "",
+    websiteUrl: "https://music.163.com/#/playlist?id=7",
+    trackCount: "10000",
+    neteaseMusic: { id: 7, fee: 0, isSongList: true },
+  } as unknown as PlatformData;
+
+  const range = (from: number, to: number) =>
+    Array.from({ length: to - from }, (_, i) => from + i);
+
+  /** 段请求替身：按入参 id 回填曲目（真实分段加载器 + 假网络）。 */
+  const segmentFetch = vi.fn<FetchSegment>(async (ids) =>
+    ids.map((id) => ({ ...trackData, neteaseMusic: { id, fee: 0 } })),
+  );
+  const loaderOf = (count: number) =>
+    new CollectionSegments(range(0, count), segmentFetch, 100);
+
+  const stateOf = (ref: { current: MainAppContainer | null }) =>
+    (ref.current as unknown as Harness).state;
+
+  /** 等内页详情与当前页的段落地（失败也算落地）。 */
+  const settle = async (ref: { current: MainAppContainer | null }) => {
+    await act(async () => {
+      await stateOf(ref).mediaData?.catch(() => {});
+    });
+  };
+
+  /** 只等微任务（段请求挂起、不会 resolve 时用）。 */
+  const tick = async () => {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  };
+
+  const enterInnerPage = async (
+    ref: { current: MainAppContainer | null },
+    collection: PlatformData = albumData,
+  ) => {
     const controller = (ref.current as unknown as Harness).controller;
     await act(async () => {
       controller.updateCurrentInMultiPageStatus(true);
     });
     await act(async () => {
-      await controller.switchToMultiPage(albumData);
+      await controller.switchToMultiPage(collection);
     });
     return controller;
   };
 
   beforeEach(() => {
-    neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
-      platformData: [trackData],
-      totalPage: 1,
-      allPlatformData: [trackData],
-    });
+    neteasePlatform.getAlbumMultiPageData.mockImplementation(async () =>
+      loaderOf(1),
+    );
   });
 
   it("进入内页保存集合，范围行换成内页头", async () => {
@@ -835,6 +876,7 @@ describe("专辑 / 歌单内页", () => {
     expect(state.isCurrentInMultiPage).toBe(false);
     expect(state.innerCollection).toBeNull();
     expect(state.oldItems).toBeNull();
+    expect(state.collectionSegments).toBeNull();
     // 回到进入内页前的现场（同一份数据承诺，不重新请求）
     expect(state.mediaData).toBe(before);
     expect(state.currentPage).toBe(1);
@@ -922,29 +964,81 @@ describe("专辑 / 歌单内页", () => {
     );
   });
 
-  it("内页多于一页时头部给出本地分页，翻页只切片不发请求", async () => {
-    neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
-      platformData: [trackData],
-      totalPage: 3,
-      allPlatformData: [trackData, trackData, trackData],
-    });
+  it("万首歌单进内页：只取第 1 段，首屏 10 首，分页 01 / 1000", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(10000),
+    );
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref, songListData);
+    await settle(ref);
+
+    expect(neteasePlatform.getSongListMultiPageData).toHaveBeenCalledTimes(1);
+    expect(segmentFetch).toHaveBeenCalledTimes(1);
+    expect(segmentFetch.mock.calls[0][0]).toEqual(range(0, 100));
+    const first = await stateOf(ref).mediaData!;
+    expect(first.platformData.map((item) => item.neteaseMusic?.id)).toEqual(
+      range(0, 10),
+    );
+    expect(first.totalPage).toBe(1000);
+    expect(root.textContent).toContain("01 / 1000");
+    expect(stateOf(ref).currentOnDemandPlay).toBe(neteasePlatform.MOD);
+  });
+
+  it("专辑 30 首：分页 01 / 03，段内翻页不发请求", async () => {
+    neteasePlatform.getAlbumMultiPageData.mockImplementation(async () =>
+      loaderOf(30),
+    );
     const { ref } = await mount(MODE.music);
     await enterInnerPage(ref);
+    await settle(ref);
 
     expect(root.textContent).toContain("01 / 03");
     netease.searchAlbum.mockClear();
     await act(async () => {
       (root.querySelector('[aria-label="下一页"]') as HTMLElement).click();
     });
-    const state = (ref.current as unknown as Harness).state;
+    await settle(ref);
+    const state = stateOf(ref);
     expect(state.currentPage).toBe(2);
     expect(root.textContent).toContain("02 / 03");
+    expect(
+      (await state.mediaData!).platformData.map(
+        (item) => item.neteaseMusic?.id,
+      ),
+    ).toEqual(range(10, 20));
+    expect(segmentFetch).toHaveBeenCalledTimes(1);
     expect(netease.searchAlbum).not.toHaveBeenCalled();
   });
 
-  it("内页重试只重载内页", async () => {
+  it("翻到第 10 页预取第 2 段，翻到 11 页不再请求", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(1000),
+    );
+    const { ref } = await mount(MODE.music);
+    const controller = await enterInnerPage(ref, songListData);
+    await settle(ref);
+
+    await act(async () => {
+      await controller.changecurrentPage(10);
+    });
+    await settle(ref);
+    await tick();
+    expect(segmentFetch).toHaveBeenCalledTimes(2);
+    expect(segmentFetch.mock.calls[1][0]).toEqual(range(100, 200));
+
+    await act(async () => {
+      await controller.changecurrentPage(11);
+    });
+    await settle(ref);
+    expect(segmentFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("内页详情失败：整页失败，重试重载内页", async () => {
+    neteasePlatform.getAlbumMultiPageData.mockResolvedValueOnce(null);
     const { ref } = await mount(MODE.music);
     await enterInnerPage(ref);
+    await settle(ref);
+    await expect(stateOf(ref).mediaData).rejects.toThrow();
     neteasePlatform.getAlbumMultiPageData.mockClear();
     netease.searchAlbum.mockClear();
 
@@ -952,18 +1046,169 @@ describe("专辑 / 歌单内页", () => {
     await act(async () => {
       (resultsAreaProps.last!.onRetry as () => void)();
     });
-    expect(neteasePlatform.getAlbumMultiPageData).toHaveBeenCalled();
+    await settle(ref);
+    expect(neteasePlatform.getAlbumMultiPageData).toHaveBeenCalledTimes(1);
     expect(netease.searchAlbum).not.toHaveBeenCalled();
+    expect((await stateOf(ref).mediaData!).platformData).toHaveLength(1);
+  });
+
+  it("段失败：该页失败，重试只重取该段、不重载歌单详情", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(300),
+    );
+    const { ref } = await mount(MODE.music);
+    const controller = await enterInnerPage(ref, songListData);
+    await settle(ref);
+
+    segmentFetch.mockResolvedValueOnce(null);
+    await act(async () => {
+      await controller.changecurrentPage(11);
+    });
+    await settle(ref);
+    await expect(stateOf(ref).mediaData).rejects.toThrow();
+    expect(segmentFetch).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      (resultsAreaProps.last!.onRetry as () => void)();
+    });
+    await settle(ref);
+    expect(neteasePlatform.getSongListMultiPageData).toHaveBeenCalledTimes(1);
+    expect(segmentFetch).toHaveBeenCalledTimes(3);
+    expect(segmentFetch.mock.calls[2][0]).toEqual(range(100, 200));
+    expect(stateOf(ref).currentPage).toBe(11);
+    expect(
+      (await stateOf(ref).mediaData!).platformData.map(
+        (item) => item.neteaseMusic?.id,
+      ),
+    ).toEqual(range(100, 110));
+  });
+
+  it("离开内页中止飞行中的段请求", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(300),
+    );
+    segmentFetch.mockImplementationOnce(() => new Promise(() => {}));
+    const { ref } = await mount(MODE.music);
+    const controller = await enterInnerPage(ref, songListData);
+    await tick();
+    const signal = segmentFetch.mock.calls[0][1];
+    expect(signal.aborted).toBe(false);
+
+    await act(async () => {
+      controller.switchToOutFromMultiPage();
+    });
+    expect(signal.aborted).toBe(true);
+    expect(stateOf(ref).collectionSegments).toBeNull();
+  });
+
+  it("新的范围 / 搜索也中止内页的段请求", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(300),
+    );
+    segmentFetch.mockImplementationOnce(() => new Promise(() => {}));
+    const { ref } = await mount(MODE.music);
+    const controller = await enterInnerPage(ref, songListData);
+    await tick();
+    const signal = segmentFetch.mock.calls[0][1];
+
+    await act(async () => {
+      controller.runSearch("陈绮贞");
+    });
+    expect(signal.aborted).toBe(true);
+    expect(stateOf(ref).collectionSegments).toBeNull();
+  });
+
+  it("开 B 丢 A：A 的段请求中止，A 迟到的详情不落地", async () => {
+    let releaseA: (loader: CollectionSegments) => void = () => {};
+    const loaderA = loaderOf(300);
+    const abortA = vi.spyOn(loaderA, "abort");
+    neteasePlatform.getSongListMultiPageData.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseA = resolve)),
+    );
+    neteasePlatform.getAlbumMultiPageData.mockImplementation(async () =>
+      loaderOf(30),
+    );
+    const { ref } = await mount(MODE.music);
+    await enterInnerPage(ref, songListData);
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      await controller.switchToMultiPage(albumData);
+    });
+    await settle(ref);
+    const loaderB = stateOf(ref).collectionSegments;
+    expect(loaderB).not.toBeNull();
+    expect(stateOf(ref).totalPage).toBe(3);
+
+    // A 的歌单详情这时才回来：被丢弃（中止、不覆盖 B 的现场）
+    await act(async () => {
+      releaseA(loaderA);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(abortA).toHaveBeenCalled();
+    expect(stateOf(ref).collectionSegments).toBe(loaderB);
+    expect(stateOf(ref).totalPage).toBe(3);
+    expect(stateOf(ref).innerCollection).toBe(albumData);
+  });
+
+  it("开 B 时 A 飞行中的段请求被中止", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(300),
+    );
+    segmentFetch.mockImplementationOnce(() => new Promise(() => {}));
+    const { ref } = await mount(MODE.music);
+    const controller = await enterInnerPage(ref, songListData);
+    await tick();
+    const signalA = segmentFetch.mock.calls[0][1];
+
+    await act(async () => {
+      await controller.switchToMultiPage(albumData);
+    });
+    expect(signalA.aborted).toBe(true);
+  });
+
+  it("切模式回来：仍在原页，已取的段不重取", async () => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(300),
+    );
+    const { ref } = await mount(MODE.music);
+    const controller = await enterInnerPage(ref, songListData);
+    await settle(ref);
+    await act(async () => {
+      await controller.changecurrentPage(12);
+    });
+    await settle(ref);
+    await tick();
+    const loader = stateOf(ref).collectionSegments;
+    const calls = segmentFetch.mock.calls.length;
+
+    await act(async () => {
+      render(h(Container, { ...props(MODE.video), ref } as object), root);
+    });
+    await act(async () => {
+      render(h(Container, { ...props(MODE.music), ref } as object), root);
+    });
+    const state = stateOf(ref);
+    expect(state.currentPage).toBe(12);
+    expect(state.isCurrentInMultiPage).toBe(true);
+    expect(state.collectionSegments).toBe(loader);
+
+    await act(async () => {
+      await (ref.current as unknown as Harness).controller.changecurrentPage(
+        13,
+      );
+    });
+    await settle(ref);
+    expect(segmentFetch.mock.calls.length).toBe(calls);
+    expect(neteasePlatform.getSongListMultiPageData).toHaveBeenCalledTimes(1);
   });
 
   it("结果区拿到的 pageOffset 跟着当前页走（序号续接）", async () => {
-    neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
-      platformData: [trackData],
-      totalPage: 3,
-      allPlatformData: [trackData, trackData, trackData],
-    });
+    neteasePlatform.getAlbumMultiPageData.mockImplementation(async () =>
+      loaderOf(30),
+    );
     const { ref } = await mount(MODE.music);
     await enterInnerPage(ref);
+    await settle(ref);
     expect(resultsAreaProps.last!.pageOffset).toBe(0);
 
     await act(async () => {
@@ -983,11 +1228,9 @@ describe("专辑 / 歌单内页", () => {
       }),
     );
     try {
-      neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
-        platformData: [trackData],
-        totalPage: 3,
-        allPlatformData: [trackData, trackData, trackData],
-      });
+      neteasePlatform.getAlbumMultiPageData.mockImplementation(async () =>
+        loaderOf(30),
+      );
       const { ref } = await mount(MODE.favorites);
       const controller = (ref.current as unknown as Harness).controller;
       await act(async () => {
@@ -996,6 +1239,7 @@ describe("专辑 / 歌单内页", () => {
       await act(async () => {
         await controller.switchToMultiPage(albumData);
       });
+      await settle(ref);
       await act(async () => {
         (root.querySelector('[aria-label="下一页"]') as HTMLElement).click();
       });

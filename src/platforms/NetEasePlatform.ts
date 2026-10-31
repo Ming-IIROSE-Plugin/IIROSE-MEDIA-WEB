@@ -18,6 +18,7 @@ import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { NetEaseSettings } from "../settings/neteaseSettings/NetEaseSettings";
 import { Platform } from "./Platform";
+import { CollectionSegments } from "./CollectionSegments";
 
 /** 歌单 / 专辑详情里的曲目（两套端点返回同一形状的 song 对象，只取用到的字段）。 */
 interface CollectionTrack {
@@ -427,21 +428,8 @@ export class NetEasePlatform extends Platform {
 
       if (!songDetail) return null;
 
-      for (const item of songDetail) {
-        const data: PlatformData = {
-          title: item.name,
-          subtitle: item?.transNames?.[0] || item.alias[0],
-          coverImg: item.album.picUrl || item.album.blurPicUrl,
-          author: item.artists[0].name,
-          websiteUrl: `https://music.163.com/#/song?id=${item.id}`,
-          duration: Math.ceil(item.duration / 1000),
-          neteaseMusic: {
-            id: item.id,
-            fee: item.fee,
-          },
-        };
-        PlatformData.push(data);
-      }
+      for (const item of songDetail)
+        PlatformData.push(NetEasePlatform.songPlatformData(item));
       return PlatformData;
     } else if (type === "playlist") {
       let songListDetail: SongList | null = null;
@@ -679,100 +667,70 @@ export class NetEasePlatform extends Platform {
     }
   };
 
+  /**
+   * 歌单内页：只取歌单详情拿到完整 `trackIds`，曲目详情交给分段加载器按页取。
+   * 详情失败返回 null（统一入口已提示）。
+   */
   public static getSongListMultiPageData = async (
     platformData: PlatformData,
-  ) => {
+  ): Promise<CollectionSegments | null> => {
     try {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
-
-      let songListDetail: SongList | null = null;
-
-      const id = platformData.neteaseMusic.id;
-
-      const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
-
-      const neteaseAPI = neteaseSetting.api;
-
-      songListDetail = await NeteaseMusicAPI.getSongListDetail(id);
-
-      if (!songListDetail)
-        return { platformData: [], totalPage: 0, allPlatformData: [] };
+      const songListDetail = await NeteaseMusicAPI.getSongListDetail(
+        platformData.neteaseMusic.id,
+      );
+      if (!songListDetail) return null;
       const ids = songListDetail.playlist.trackIds.map((item) => item.id);
-
-      return this.processSongPlatformData(ids);
+      return NetEasePlatform.collectionSegments(ids);
     } catch (error) {
       ShowMessage.show((error as Error).message);
       ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
-      return { platformData: [], totalPage: 0, allPlatformData: [] };
+      return null;
     }
   };
 
-  public static getAlbumMultiPageData = async (platformData: PlatformData) => {
+  /** 专辑内页：同歌单，id 列表取自专辑详情。 */
+  public static getAlbumMultiPageData = async (
+    platformData: PlatformData,
+  ): Promise<CollectionSegments | null> => {
     try {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
-
-      let albumDetails: AlbumData | null = null;
-
-      const id = platformData.neteaseMusic.id;
-
-      albumDetails = await NeteaseMusicAPI.getAlbumDetail(id);
-
-      if (!albumDetails)
-        return { platformData: [], totalPage: 0, allPlatformData: [] };
-
+      const albumDetails = await NeteaseMusicAPI.getAlbumDetail(
+        platformData.neteaseMusic.id,
+      );
+      if (!albumDetails) return null;
       const ids = albumDetails.songs.map((item) => item.id);
-
-      return this.processSongPlatformData(ids);
+      return NetEasePlatform.collectionSegments(ids);
     } catch (error) {
       ShowMessage.show((error as Error).message);
       ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
-      return { platformData: [], totalPage: 0, allPlatformData: [] };
+      return null;
     }
   };
 
-  public static processSongPlatformData = async (trackID: number[]) => {
-    const platformData: PlatformData[] = [];
+  private static collectionSegments = (ids: number[]) =>
+    new CollectionSegments(
+      ids,
+      async (chunk, signal) => {
+        const songs = await NeteaseMusicAPI.getNeteaseSongDetail(chunk, signal);
+        return songs ? songs.map(NetEasePlatform.songPlatformData) : null;
+      },
+      NetEasePlatform.DETAIL_CHUNK,
+    );
 
-    const allPlatformData: PlatformData[] = [];
-
-    const totalResult = trackID.length;
-
-    const totalPage = Math.ceil(totalResult / this.itemPerPage);
-
-    let count = 0;
-
-    const songDetail = await NeteaseMusicAPI.getNeteaseSongDetail(trackID);
-    if (!songDetail)
-      return { platformData: [], totalPage: 0, allPlatformData: [] };
-
-    for (const item of songDetail) {
-      const data: PlatformData = {
-        title: item.name,
-        subtitle: item?.transNames?.[0] || item.alias[0],
-        coverImg: item.album.picUrl || item.album.blurPicUrl,
-        author: item.artists[0].name,
-        websiteUrl: `https://music.163.com/#/song?id=${item.id}`,
-        duration: Math.ceil(item.duration / 1000),
-        neteaseMusic: {
-          id: item.id,
-          fee: item.fee,
-        },
-      };
-      if (count >= this.itemPerPage) {
-        allPlatformData.push(data);
-      } else {
-        allPlatformData.push(data);
-        platformData.push(data);
-      }
-      count++;
-    }
-
-    return {
-      platformData: platformData,
-      totalPage,
-      allPlatformData: allPlatformData,
-    };
-  };
+  /** 歌曲详情 → 结果区条目。 */
+  private static songPlatformData = (item: SongDetailSong): PlatformData => ({
+    title: item.name,
+    subtitle: item?.transNames?.[0] || item.alias[0],
+    coverImg: item.album.picUrl || item.album.blurPicUrl,
+    author: item.artists[0].name,
+    websiteUrl: `https://music.163.com/#/song?id=${item.id}`,
+    duration: Math.ceil(item.duration / 1000),
+    neteaseMusic: {
+      id: item.id,
+      fee: item.fee,
+    },
+  });
 
   /**
    * @description 合并歌词
