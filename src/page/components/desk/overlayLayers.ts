@@ -177,7 +177,7 @@ export function setPanelBackHandler(handler: (() => void) | null): void {
 }
 
 /**
- * 保证宿站返回键已被接管（不登记面板处理器）。平台层 / 操作条直接打开独立根的
+ * 保证宿站返回键已被接管（不登记面板处理器）。平台层直接打开独立根的
  * 选集面板时主面板可能没开，此时也要让「返回」只关那一层。
  */
 export function ensureOverlayBackHook(): boolean {

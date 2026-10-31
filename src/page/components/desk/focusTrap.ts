@@ -1,5 +1,5 @@
 // 面板内浮层共用的焦点规则（CAP-14）：`Tab` 在浮层内首尾循环、关闭后把焦点
-// 归还触发元素。抽自 `RoomDeck` 展开层的实现，操作条与展开的底部条共用一套。
+// 归还触发元素。抽自 `RoomDeck` 展开层的实现，展开的底部条与其他面板浮层共用一套。
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';

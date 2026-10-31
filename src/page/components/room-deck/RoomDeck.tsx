@@ -342,7 +342,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
             {/*
               点展开区外收起：挂在迷你条挂载点内、向上铺满列表区（`top-[-100vh]` 由列的
               `overflow-hidden` 裁到面板顶），刻意不盖住标签栏——点标签栏直接切模式，
-              切换模式本身就会收起（EXPERIENCE「切换模式或打开操作条时也收起」）。
+              切换模式本身就会收起（EXPERIENCE「切换模式或打开别的面板浮层时也收起」）。
             */}
             <div
               className="absolute inset-x-0 bottom-0 top-[-100vh]"

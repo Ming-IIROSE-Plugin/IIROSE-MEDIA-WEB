@@ -148,7 +148,7 @@ function parsePayload(text: string): RequestHistoryEntry | null {
 }
 
 /**
- * 点播历史：写入点收在 `Socket.send` 的观察钩子上（覆盖面板、操作条、收藏、
+ * 点播历史：写入点收在 `Socket.send` 的观察钩子上（覆盖面板、收藏、
  * 电台、选集与 `@` 链接拦截）。存储不可用或写入抛错一律静默，绝不影响点播报文。
  */
 export class RequestHistory {

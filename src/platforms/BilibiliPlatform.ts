@@ -515,7 +515,7 @@ export class BilibiliPlatform extends Platform {
 
   /**
    * 多分 P 选集（CAP-8）：插件自有选集面板，点选顺序 = 播放顺序。
-   * `VOD` 已拿到 `pages` 时直接传入；手机操作条只有条目本身，由面板的 `load` 现取。
+   * `VOD` 已拿到 `pages` 时直接传入；只有条目本身时（如收藏点播）由面板的 `load` 现取。
    */
   public static selectEpisodes(
     platformData: PlatformData,

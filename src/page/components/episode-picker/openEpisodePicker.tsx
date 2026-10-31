@@ -1,6 +1,6 @@
 // 选集面板的命令式入口（CAP-8 / CAP-14）：独立根挂 body、同页单例，自管加载状态机、
 // 点选顺序与退场动效。调用点是平台静态代码（`BilibiliPlatform.VOD`、
-// `NetEasePlatform.MLOD/AOD`、`AllVideosPlatform.VOD`）、手机操作条与收藏点播——
+// `NetEasePlatform.MLOD/AOD`、`AllVideosPlatform.VOD`）与收藏点播——
 // 都可能在主面板之外，所以照随机面板的做法用 body 根 + `z-[90010]`。
 //
 // `Esc` / 宿站返回键交给 `overlayLayers` 的层栈（新增 `episode` 层），不另开单槽位：
@@ -215,7 +215,7 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
     />
   );
 
-  // 层栈登记：`Esc` 与宿站返回键只关这一层（面板内的操作条 / 内页在它下面）。
+  // 层栈登记：`Esc` 与宿站返回键只关这一层（面板内的浮层 / 内页在它下面）。
   releaseLayer = pushOverlayLayer("episode", cancel);
   // 平台层直接打开面板时主面板可能没开：返回键的包装要在这里补装。
   ensureOverlayBackHook();

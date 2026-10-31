@@ -80,22 +80,6 @@ export function isVideoItem(platformData: PlatformData): boolean {
   );
 }
 
-/**
- * 多 P / 多集条目：手机操作条据此显示「选集」（story 5 起由插件自有面板接手）。
- * 桌面卡片的「选集」入口只在面板服务不了的课程卡上保留，见 `VideoTile`。
- */
-export async function hasMultiPage(
-  platformData: PlatformData,
-): Promise<boolean> {
-  if (!platformData.multiPage) return false;
-  try {
-    const multipage = await platformData.multiPage;
-    return !!multipage?.platform;
-  } catch {
-    return false;
-  }
-}
-
 /** 手机布局（宿站 iframe 缩放后仍按 `max-[768px]` 判定，与 CSS 断点一致）。 */
 export function isPhoneLayout(): boolean {
   return window.matchMedia?.("(max-width: 768px)").matches ?? false;

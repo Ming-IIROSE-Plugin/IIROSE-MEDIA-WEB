@@ -48,7 +48,7 @@ export function MusicTile({
   idleLabel = "点播",
 }: MusicTileProps) {
   const duration = formatDuration(platformData.duration);
-  // 手机点主体出操作条（story 4）、无悬停宽屏只选中：两种情况都不是「点播」，读屏名随之改。
+  // 手机与无悬停宽屏点主体只选中（显示胶囊）：两种情况都不是「点播」，读屏名随之改。
   const bodyLabel = `${
     isPhoneLayout() || isTapToReveal() ? "查看" : "点播"
   } ${platformData.title}`;

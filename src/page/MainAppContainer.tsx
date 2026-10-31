@@ -165,8 +165,6 @@ export class MainAppContainer extends Component<
     if (!prevProps.active && this.props.active && !isPhoneLayout())
       this.searchBarRef.current?.focus();
 
-    // 面板关闭：面板内的操作条一并收起（焦点不留在屏幕外）
-
     // 切模式：先快照当前现场，再恢复目标模式的现场
     if (prevProps.mode !== this.props.mode) {
       this.applyMode(normalizeMode(this.props.mode));

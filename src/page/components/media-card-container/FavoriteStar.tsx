@@ -40,8 +40,8 @@ export function FavoriteStar({
     reread();
   }, [platformData]);
 
-  // 存储层就绪、外部变更（云端拉取落地）与其它入口的收藏切换（手机操作条）后重读一次：
-  // 否则慢速 IndexedDB 下已收藏的条目会显示成空心星，操作条里收藏完行内也不更新。
+  // 存储层就绪、外部变更（云端拉取落地）与其它入口的收藏切换（同一条目的另一颗星）后重读一次：
+  // 否则慢速 IndexedDB 下已收藏的条目会显示成空心星，别处收藏完这里也不更新。
   useEffect(() => {
     let alive = true;
     void FavoritesStorageService.init().then(() => {
@@ -63,7 +63,7 @@ export function FavoriteStar({
   if (!favoritable) return null;
 
   const toggle = async (event: MouseEvent) => {
-    // 行本身可点（进入内页 / 打开操作条），星标不能连带动到整行。
+    // 行本身可点（如手机上专辑/歌单行整行进入内页），星标不能连带动到整行。
     event.stopPropagation();
     event.preventDefault();
     if (pending.current) return;

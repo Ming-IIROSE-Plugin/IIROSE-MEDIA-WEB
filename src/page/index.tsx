@@ -159,7 +159,7 @@ function initMediaProgress() {
   });
   memory = new MediaPayloadMemory();
   // 只观察插件自己发出的报文：重播只对插件点播过的曲目可用。
-  // 同一条观察链上写本地点播历史（覆盖面板、操作条、收藏、电台、选集与 `@` 拦截）。
+  // 同一条观察链上写本地点播历史（覆盖面板、收藏、电台、选集与 `@` 拦截）。
   const observeSocket = (data: string) => {
     memory?.record(data);
     RequestHistory.recordPayload(data);
