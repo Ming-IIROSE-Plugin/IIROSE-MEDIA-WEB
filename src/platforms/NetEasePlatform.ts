@@ -1,5 +1,9 @@
 import { NeteaseMusicAPI } from "../Api/NeteaseAPI/NeteaseMusic";
-import { startBatch, type BatchHandle } from "../playback/BatchProgress";
+import {
+  isBatchActive,
+  startBatch,
+  type BatchHandle,
+} from "../playback/BatchProgress";
 import { guardedRequest } from "../playback/RequestGuard";
 import { NeteaseSearchAPI } from "../Api/NeteaseAPI/NeteaseSearch";
 import { SearchData } from "../Api/NeteaseAPI/NeteaseSearch/SearchInterface";
@@ -802,6 +806,12 @@ export class NetEasePlatform extends Platform {
     try {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
+
+      // 同一张歌单 / 专辑的整张点播还在准备或发送：再点不另开第二轮（两轮会交错刷屏）
+      if (isBatchActive(platformData.title)) {
+        ShowMessage.show(`《${platformData.title}》正在点播中`);
+        return;
+      }
 
       if (platformData.neteaseMusic.isSongList) {
         const songListDetail = await NeteaseMusicAPI.getSongListDetail(id);

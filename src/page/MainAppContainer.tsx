@@ -106,9 +106,12 @@ export class MainAppContainer extends Component<
   static contextType = MediaContainerContext;
   private itemsPerPage = 10;
 
-  /** 每页条数：收藏按设置（10 / 50 / 100 / 自定义），其余固定 10。 */
+  /**
+   * 每页条数：收藏列表按设置（10 / 50 / 100 / 自定义），其余固定 10。
+   * 专辑 / 歌单 / 多 P 内页是另一份本地分页（固定每页 10），即使从收藏进入也不跟设置走。
+   */
   private pageSizeFor(mode: number): number {
-    return mode === MODE.favorites
+    return mode === MODE.favorites && !this.state.isCurrentInMultiPage
       ? PluginSettings.getPluginSetting().favoritesPageSize
       : this.itemsPerPage;
   }

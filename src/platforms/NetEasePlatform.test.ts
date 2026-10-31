@@ -399,3 +399,47 @@ describe("批量发送：进度与停止", () => {
     expect(getBatches()[0]).toMatchObject({ status: "stopped", total: 3 });
   });
 });
+
+describe("整张点播：并发与失败", () => {
+  const playlist = {
+    title: "千首歌单",
+    neteaseMusic: { id: 77, isSongList: true },
+  } as PlatformData;
+
+  it("第一轮还在进行时再点：只提示，不开第二轮", async () => {
+    const { resetBatches, getBatches, startBatch } =
+      await import("../playback/BatchProgress");
+    resetBatches();
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    startBatch("千首歌单", 130); // 第一轮：准备中
+    neteaseMusic.getSongListDetail.mockClear();
+    await NetEasePlatform.playCollectionAll(playlist, "asc");
+    expect(neteaseMusic.getSongListDetail).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledWith("《千首歌单》正在点播中");
+    expect(getBatches()).toHaveLength(1);
+    show.mockRestore();
+  });
+
+  it("取不到曲目详情：进度卡显示失败，不是「已点播完」", async () => {
+    const { resetBatches, getBatches } =
+      await import("../playback/BatchProgress");
+    resetBatches();
+    finalODSONG.mockRestore();
+    neteaseMusic.getSongListDetail.mockResolvedValue({
+      code: 200,
+      playlist: {
+        name: "千首歌单",
+        description: "",
+        trackIds: [{ id: 1 }, { id: 2 }],
+      },
+    });
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue(null);
+    announce.runBatchAnnounce.mockImplementation(
+      async (_t: string, _n: number, loop: () => Promise<void>) => {
+        await loop();
+      },
+    );
+    await NetEasePlatform.playCollectionAll(playlist, "asc");
+    await vi.waitFor(() => expect(getBatches()[0]?.status).toBe("failed"));
+  });
+});

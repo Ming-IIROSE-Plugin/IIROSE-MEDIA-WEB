@@ -125,7 +125,8 @@ export async function guardedRequest(
   }
 
   if (!threw && !isThenable(result)) {
-    queue.splice(queue.indexOf(entry), 1);
+    const at = queue.indexOf(entry);
+    if (at >= 0) queue.splice(at, 1);
     return "handoff";
   }
 
@@ -136,8 +137,13 @@ export async function guardedRequest(
     const rest = (options.minPendingMs ?? 0) - (Date.now() - startedAt);
     if (rest > 0) await new Promise((resolve) => setTimeout(resolve, rest));
   };
+  /** 从队列摘掉本条：找不到时不动（`splice(-1)` 会误删最后一项）。 */
+  const dequeue = () => {
+    const at = queue.indexOf(entry);
+    if (at >= 0) queue.splice(at, 1);
+  };
   const finishSent = async (): Promise<RequestOutcome> => {
-    queue.splice(queue.indexOf(entry), 1);
+    dequeue();
     await holdMinimum();
     setStatus(key, "idle");
     emitToast(`已点播《${data.title}》`);
@@ -161,7 +167,7 @@ export async function guardedRequest(
   if (first === "threw") threw = true;
   else await waitForSend(entry);
   if (entry.sent) return finishSent();
-  queue.splice(queue.indexOf(entry), 1);
+  dequeue();
 
   if (threw || ShowMessage.shownCount > messagesBefore) {
     setStatus(key, "failed", FAILED_SHOW_MS);

@@ -972,6 +972,40 @@ describe("专辑 / 歌单内页", () => {
     expect((ref.current as unknown as Harness).state.currentPage).toBe(2);
     expect(resultsAreaProps.last!.pageOffset).toBe(10);
   });
+
+  it("收藏每页 50 条时，从收藏点进的歌单内页仍按每页 10 首续号（第 2 页从 11 起）", async () => {
+    const saved = localStorage.getItem("imwPluginSetting");
+    localStorage.setItem(
+      "imwPluginSetting",
+      JSON.stringify({
+        ...JSON.parse(saved ?? "{}"),
+        favoritesPageSize: 50,
+      }),
+    );
+    try {
+      neteasePlatform.getAlbumMultiPageData.mockResolvedValue({
+        platformData: [trackData],
+        totalPage: 3,
+        allPlatformData: [trackData, trackData, trackData],
+      });
+      const { ref } = await mount(MODE.favorites);
+      const controller = (ref.current as unknown as Harness).controller;
+      await act(async () => {
+        controller.updateCurrentInMultiPageStatus(true);
+      });
+      await act(async () => {
+        await controller.switchToMultiPage(albumData);
+      });
+      await act(async () => {
+        (root.querySelector('[aria-label="下一页"]') as HTMLElement).click();
+      });
+      expect((ref.current as unknown as Harness).state.currentPage).toBe(2);
+      expect(resultsAreaProps.last!.pageOffset).toBe(10);
+    } finally {
+      if (saved === null) localStorage.removeItem("imwPluginSetting");
+      else localStorage.setItem("imwPluginSetting", saved);
+    }
+  });
 });
 
 describe("清除搜索", () => {

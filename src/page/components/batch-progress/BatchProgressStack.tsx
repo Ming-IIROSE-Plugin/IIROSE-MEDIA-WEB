@@ -43,6 +43,8 @@ function headline(run: BatchRun): string {
       return `正在点播《${run.title}》`;
     case "stopped":
       return `已停止《${run.title}》`;
+    case "failed":
+      return `点播失败《${run.title}》`;
     default:
       return `已点播完《${run.title}》`;
   }
@@ -60,7 +62,16 @@ function BatchCard({ run }: { run: BatchRun }) {
     >
       <div className="flex items-center gap-2">
         <span className={`shrink-0 ${active ? deskInk2 : deskInk3}`}>
-          <DeskIcon name={run.status === "done" ? "check" : "send"} size={16} />
+          <DeskIcon
+            name={
+              run.status === "done"
+                ? "check"
+                : run.status === "failed"
+                  ? "close"
+                  : "send"
+            }
+            size={16}
+          />
         </span>
         <span
           className={`min-w-0 flex-1 truncate ${typeLabelStrong}`}
@@ -104,7 +115,7 @@ function BatchCard({ run }: { run: BatchRun }) {
             />
           ) : (
             <span
-              className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-300 ease-[var(--imw-ease)] ${run.status === "stopped" ? deskMutedFill : deskRoseFill}`}
+              className={`absolute inset-y-0 left-0 rounded-full transition-[width] duration-300 ease-[var(--imw-ease)] ${run.status === "stopped" || run.status === "failed" ? deskMutedFill : deskRoseFill}`}
               style={{ width: `${ratio * 100}%` }}
             />
           )}

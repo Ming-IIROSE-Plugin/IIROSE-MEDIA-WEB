@@ -4,6 +4,7 @@ import {
   BATCH_LINGER_MS,
   BATCH_STOP_LINGER_MS,
   getBatches,
+  isBatchActive,
   resetBatches,
   startBatch,
   stopBatch,
@@ -54,5 +55,26 @@ describe("批量点播进度", () => {
     startBatch("A", 1);
     startBatch("B", 2);
     expect(getBatches().map((run) => run.title)).toEqual(["A", "B"]);
+  });
+
+  it("一首都没发出（取详情失败）：结束时是「失败」，不是「完成」", () => {
+    const batch = startBatch("千首歌单", 130);
+    batch.finish();
+    expect(getBatches()[0].status).toBe("failed");
+  });
+
+  it("同名批量进行中可查询（防止整张歌单被连点出第二轮）", () => {
+    expect(isBatchActive("专辑")).toBe(false);
+    const batch = startBatch("专辑", 3);
+    expect(isBatchActive("专辑")).toBe(true);
+    expect(isBatchActive("别的")).toBe(false);
+    batch.setTotal(3);
+    batch.step();
+    batch.step();
+    batch.step();
+    batch.finish();
+    expect(isBatchActive("专辑")).toBe(false);
+    stopBatch(startBatch("停掉的", 5).id);
+    expect(isBatchActive("停掉的")).toBe(false);
   });
 });

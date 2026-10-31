@@ -2,7 +2,13 @@
 // 用户可随时「停止」——循环在下一首发送前看到停止标记就结束，已发出的不撤回。
 // 浮窗挂在面板之外，关掉点播面板后进度仍在。
 
-export type BatchStatus = "preparing" | "running" | "done" | "stopped";
+export type BatchStatus =
+  | "preparing"
+  | "running"
+  | "done"
+  | "stopped"
+  /** 结束时一首都没发出（如取曲目详情失败）：不能显示成「已点播完」。 */
+  | "failed";
 
 export interface BatchRun {
   id: number;
@@ -67,6 +73,16 @@ function remove(id: number) {
   emit();
 }
 
+/** 同名批量是否还在进行（准备 / 发送中）：整张播放据此拒绝连点出第二轮。 */
+export function isBatchActive(title: string): boolean {
+  return runs.some(
+    (run) =>
+      run.title === title &&
+      !run.leaving &&
+      (run.status === "preparing" || run.status === "running"),
+  );
+}
+
 export function getBatches(): BatchRun[] {
   return runs;
 }
@@ -113,7 +129,8 @@ export function startBatch(title: string, total: number): BatchHandle {
       if (!find(id)) return;
       // 停止时 stopBatch 已安排收起，这里不再重复
       if (cancelled.has(id)) return;
-      update(id, { status: "done" });
+      const run = find(id);
+      update(id, { status: run && run.done === 0 ? "failed" : "done" });
       later(id, BATCH_LINGER_MS, () => dismissBatch(id));
     },
   };
