@@ -87,6 +87,7 @@
 
 - **格式化不得与功能改动混提**：全仓 prettier 归一已于 2026-10-20 完成（`style: normalize formatting across src with prettier`），此后不再出现「功能 diff 混入整文件重排」污染审查面（spec-request-announce-modes 复盘 F13：406 行格式化噪声曾两度稀释审查）。需要重排/格式化时单独提交，前缀 `style:`。
 - prettier 用默认配置（无 `.prettierrc`）；提交前可疑文件先 `prettier --check`，别顺手 `--write` 未触达的文件。
+- **用户可见文案必须端到端断言**：群消息、宿站提示这类文案，只在链路两端各测一半（上游断言返回值、下游手工喂值）会让文案错误被测试钉成期望值——`spec-collection-inner-batch` 复盘的校正文案误报即由此漏网（`Announce.test.ts` 喂 `sent` 数字、`sendSongs` 只断言返回值）。凡新增/修改文案，测试里要走完从数据到文案的那一段。
 
 ## BMAD 流程约定
 
