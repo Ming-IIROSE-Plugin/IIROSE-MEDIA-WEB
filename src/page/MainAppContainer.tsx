@@ -299,11 +299,13 @@ export class MainAppContainer extends Component<
   private toggleSelection = (position: number, platformData: PlatformData) => {
     const id = platformData.neteaseMusic?.id;
     if (id === undefined) return;
-    const current = this.state.innerSelection;
-    const next = current.some((item) => item.position === position)
-      ? current.filter((item) => item.position !== position)
-      : [...current, { position, id, title: platformData.title }];
-    this.setState({ innerSelection: next });
+    this.setState((prev) => ({
+      innerSelection: prev.innerSelection.some(
+        (item) => item.position === position,
+      )
+        ? prev.innerSelection.filter((item) => item.position !== position)
+        : [...prev.innerSelection, { position, id, title: platformData.title }],
+    }));
   };
 
   private clearSelection = () => {
@@ -317,7 +319,8 @@ export class MainAppContainer extends Component<
 
   /**
    * 选择条「点播所选」：按点选顺序点播（1 首单曲播报，多首批量进度浮窗）。
-   * 发出（或交给下一步）后清空选择；失败 / 进行中保留，可以再点。
+   * 报文真的发出后清掉这次发出的几首；`handoff`（`playSongIds` 恒返回 Promise，
+   * 这时等于一首没发、也没提示）/ 失败 / 进行中保留，可以再点。
    */
   private playSelection = () => {
     const collection = this.state.innerCollection;
@@ -328,8 +331,13 @@ export class MainAppContainer extends Component<
       return;
     }
     const mode = this.state.mode;
+    // 成功提示「已点播《…》」要与「全部播放」区分开：1 首用曲名，多首写明所选数
+    const title =
+      selection.length === 1
+        ? selection[0].title
+        : `${collection.title}·所选 ${selection.length} 首`;
     void guardedRequest(
-      collection,
+      { ...collection, title },
       () =>
         NetEasePlatform.playSongIds(
           selection.map((item) => item.id),
@@ -337,15 +345,21 @@ export class MainAppContainer extends Component<
         ),
       this.selectionRequestKey(collection),
     ).then((outcome) => {
-      if (outcome !== "sent" && outcome !== "handoff") return;
-      // 只清这一次发出的选择：等待期间改过选择、离开过内页就不动
+      if (outcome !== "sent") return;
+      // 只去掉这次发出的几首（等待期间新勾的保留）；已换到别的内页就不动
+      const sent = new Set(selection.map((item) => item.position));
+      const remaining = (
+        current: Pick<ModeSnapshot, "innerCollection" | "innerSelection">,
+      ) =>
+        current.innerCollection === collection
+          ? current.innerSelection.filter((item) => !sent.has(item.position))
+          : current.innerSelection;
       if (this.state.mode === mode) {
-        if (this.state.innerSelection === selection)
-          this.setState({ innerSelection: [] });
+        this.setState((prev) => ({ innerSelection: remaining(prev) }));
         return;
       }
       const snapshot = this.snapshots.get(mode);
-      if (snapshot?.innerSelection === selection) snapshot.innerSelection = [];
+      if (snapshot) snapshot.innerSelection = remaining(snapshot);
     });
   };
 

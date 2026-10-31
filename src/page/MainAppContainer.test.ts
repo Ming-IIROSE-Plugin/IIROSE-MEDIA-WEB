@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DECK_COLLAPSE_MS } from "./components/room-deck/RoomDeck";
-import { resetRequestGuard } from "../playback/RequestGuard";
+import {
+  noteMediaSent,
+  resetRequestGuard,
+  subscribeRequestToast,
+} from "../playback/RequestGuard";
 import { createRef, h, render, type ComponentType } from "preact";
 import { act } from "preact/test-utils";
 
@@ -221,6 +225,30 @@ afterEach(() => {
   render(null, root);
   root.remove();
 });
+
+// 最小会话替身：底部条只要 `read` / `subscribe` 与一份 PlaybackMode。
+function deckSession() {
+  const media = snapshot();
+  const bridge = {
+    current: media,
+    read: () => ({ ...bridge.current }),
+    subscribe(listener: (next: typeof media) => void) {
+      listener(bridge.current);
+      return () => {};
+    },
+    send: () => true,
+    controlUnavailable: false,
+    controlUnavailableMessage: "",
+  };
+  const playback = new PlaybackMode();
+  playback.setMediaPresent(true);
+  playback.applySnapshot(media);
+  return {
+    bridge: bridge as unknown as HostMediaBridge,
+    playback,
+    pickShuffle: () => {},
+  };
+}
 
 describe("六种模式的现场", () => {
   it("音乐模式首次进入即执行单曲范围：关键词为空时走「最近点播」", async () => {
@@ -1386,6 +1414,7 @@ describe("专辑 / 歌单内页", () => {
       });
     };
     const bar = () => root.querySelector("[data-imw-selection-bar]");
+    const deck = () => root.querySelector("#imw-desk-room-deck");
     const playButton = () =>
       root.querySelector<HTMLElement>("[data-imw-play-selected]")!;
     const enter30 = async () => {
@@ -1400,10 +1429,36 @@ describe("专辑 / 歌单内页", () => {
 
     beforeEach(() => {
       resetRequestGuard();
+      provideMediaSession(deckSession());
       neteasePlatform.playSongIds.mockReset();
       neteasePlatform.playSongIds.mockResolvedValue(undefined);
       delete (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom;
     });
+    afterEach(() => {
+      releaseMediaSession();
+    });
+
+    /** 挂起的发送：`send()` 发出第一条报文并结束。 */
+    const pendingSend = () => {
+      let send: () => void = () => {};
+      neteasePlatform.playSongIds.mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            send = () => {
+              noteMediaSent("&1{}");
+              resolve();
+            };
+          }),
+      );
+      return {
+        send: async () => {
+          await act(async () => {
+            send();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          });
+        },
+      };
+    };
 
     it("搜索结果与 B 站多 P 内页不给勾选能力", async () => {
       const { ref } = await mount(MODE.music);
@@ -1424,6 +1479,7 @@ describe("专辑 / 歌单内页", () => {
     it("跨页点选：序号依次 1、2、3，翻回仍在；选择条取代底部条", async () => {
       const { ref, controller } = await enter30();
       expect(bar()).toBeNull();
+      expect(deck()).not.toBeNull();
       await toggle(2);
       await toggle(0);
       await act(async () => {
@@ -1436,6 +1492,7 @@ describe("专辑 / 歌单内页", () => {
       expect(selection()!.orderOf(0)).toBe(2);
       expect(selection()!.orderOf(14)).toBe(3);
       expect(bar()!.textContent).toContain("已选 3 首");
+      expect(deck()).toBeNull();
 
       await act(async () => {
         await controller.changecurrentPage(1);
@@ -1445,11 +1502,12 @@ describe("专辑 / 歌单内页", () => {
     });
 
     it("点播所选：按点选顺序发送，发出后清空、选择条消失", async () => {
-      const { noteMediaSent } = await import("../playback/RequestGuard");
       neteasePlatform.playSongIds.mockImplementation(async () => {
         noteMediaSent("&1{}");
       });
       const { ref } = await enter30();
+      const toasts: string[] = [];
+      subscribeRequestToast((toast) => toasts.push(toast.text));
       await toggle(2);
       await toggle(0);
       await toggle(14);
@@ -1466,6 +1524,81 @@ describe("专辑 / 歌单内页", () => {
       );
       expect(stateOf(ref).innerSelection).toEqual([]);
       expect(bar()).toBeNull();
+      // 提示写明是所选几首，与「全部播放」的「已点播《专辑名》」区分开
+      expect(toasts).toEqual([`已点播《${albumData.title}·所选 3 首》`]);
+    });
+
+    it("只选 1 首：成功提示用该曲曲名", async () => {
+      neteasePlatform.playSongIds.mockImplementation(async () => {
+        noteMediaSent("&1{}");
+      });
+      await enter30();
+      const toasts: string[] = [];
+      subscribeRequestToast((toast) => toasts.push(toast.text));
+      await act(async () => {
+        selection()!.onToggle(5, { ...track(5), title: "第六首" });
+      });
+      await act(async () => {
+        playButton().click();
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(toasts).toEqual(["已点播《第六首》"]);
+    });
+
+    it("没有报文发出（handoff）：选择保留", async () => {
+      const { ref } = await enter30();
+      await toggle(1);
+      await toggle(2);
+      await act(async () => {
+        playButton().click();
+      });
+      // 平台函数结束后守卫还会再等晚到的报文 1.5 秒
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1_600));
+      });
+      expect(neteasePlatform.playSongIds).toHaveBeenCalledOnce();
+      expect(stateOf(ref).innerSelection.map((item) => item.position)).toEqual([
+        1, 2,
+      ]);
+      expect(bar()).not.toBeNull();
+    });
+
+    it("发送途中切模式：回来时选择已清空", async () => {
+      const pending = pendingSend();
+      const { ref } = await enter30();
+      await toggle(1);
+      await toggle(2);
+      await act(async () => {
+        playButton().click();
+      });
+      await act(async () => {
+        render(h(Container, { ...props(MODE.video), ref } as object), root);
+      });
+      await pending.send();
+      await act(async () => {
+        render(h(Container, { ...props(MODE.music), ref } as object), root);
+      });
+      expect(stateOf(ref).innerSelection).toEqual([]);
+      expect(bar()).toBeNull();
+    });
+
+    it("发送途中新勾的曲目不被清掉", async () => {
+      const pending = pendingSend();
+      const { ref } = await enter30();
+      await toggle(1);
+      await toggle(2);
+      await act(async () => {
+        playButton().click();
+      });
+      await toggle(5);
+      await pending.send();
+      expect(stateOf(ref).innerSelection.map((item) => item.position)).toEqual([
+        5,
+      ]);
+      expect(selection()!.orderOf(5)).toBe(1);
+      expect(bar()!.textContent).toContain("已选 1 首");
     });
 
     it("只选 1 首也走同一入口（平台层按数量分单曲 / 批量）", async () => {
@@ -1493,6 +1626,7 @@ describe("专辑 / 歌单内页", () => {
       await toggle(1);
       await toggle(3);
       expect(bar()).toBeNull();
+      expect(deck()).not.toBeNull();
     });
 
     it("重复曲目：两个位置分别可选，发送两次", async () => {
@@ -1632,30 +1766,6 @@ describe("清除搜索", () => {
 });
 
 describe("底部条接线", () => {
-  // 最小会话替身：底部条只要 `read` / `subscribe` 与一份 PlaybackMode。
-  function deckSession() {
-    const media = snapshot();
-    const bridge = {
-      current: media,
-      read: () => ({ ...bridge.current }),
-      subscribe(listener: (next: typeof media) => void) {
-        listener(bridge.current);
-        return () => {};
-      },
-      send: () => true,
-      controlUnavailable: false,
-      controlUnavailableMessage: "",
-    };
-    const playback = new PlaybackMode();
-    playback.setMediaPresent(true);
-    playback.applySnapshot(media);
-    return {
-      bridge: bridge as unknown as HostMediaBridge,
-      playback,
-      pickShuffle: () => {},
-    };
-  }
-
   it("关面板与切模式都收起展开层（active / mode 透传到 RoomDeck）", async () => {
     provideMediaSession(deckSession());
     try {
