@@ -772,3 +772,79 @@ describe("歌单 / 专辑内页入口（分段加载）", () => {
     expect(neteaseMusic.getNeteaseSongDetail).not.toHaveBeenCalled();
   });
 });
+
+// —— 内页多选（spec-collection-inner-batch story 3）：与选集面板共用的发送路径 ——
+describe("playSongIds（按给定顺序点播一组曲目）", () => {
+  beforeEach(async () => {
+    (await import("../playback/BatchProgress")).resetBatches();
+    announce.runSingleAnnounce.mockResolvedValue(undefined);
+    announce.runBatchAnnounce.mockResolvedValue(undefined);
+  });
+
+  it("多首按点选顺序交给 finalODSONG，只建一个批量进度卡", async () => {
+    const { getBatches } = await import("../playback/BatchProgress");
+    await NetEasePlatform.playSongIds([3, 1, 15], "冬日歌单");
+
+    expect(announce.runBatchAnnounce).toHaveBeenCalledWith(
+      "冬日歌单",
+      3,
+      expect.any(Function),
+      undefined,
+    );
+    expect(announce.runSingleAnnounce).not.toHaveBeenCalled();
+    expect(getBatches()).toHaveLength(1);
+    expect(getBatches()[0].total).toBe(3);
+    expect(await playedIds()).toEqual([3, 1, 15]);
+  });
+
+  it("只有 1 首：单曲播报，不建批量进度卡", async () => {
+    const { getBatches } = await import("../playback/BatchProgress");
+    await NetEasePlatform.playSongIds([2], "冬日歌单");
+
+    expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
+    expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
+    expect(getBatches()).toHaveLength(0);
+    const loop = announce.runSingleAnnounce.mock.lastCall?.[0] as () => void;
+    await loop();
+    expect(vi.mocked(finalODSONG).mock.lastCall?.[0]).toEqual([2]);
+  });
+
+  it("重复曲目：同一首歌两条都发", async () => {
+    await NetEasePlatform.playSongIds([5, 5], "冬日歌单");
+    expect(await playedIds()).toEqual([5, 5]);
+  });
+
+  it("返回发送过程：发送结束前不 resolve（点播守卫据此显示点播中）", async () => {
+    let release: () => void = () => {};
+    announce.runBatchAnnounce.mockImplementation(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    let done = false;
+    const sending = NetEasePlatform.playSongIds([1, 2], "冬日歌单").then(
+      () => (done = true),
+    );
+    await Promise.resolve();
+    expect(done).toBe(false);
+    release();
+    await sending;
+    expect(done).toBe(true);
+  });
+
+  it("选集面板确认走同一路径（行为不变）", async () => {
+    const spy = vi.spyOn(NetEasePlatform, "playSongIds");
+    const build = vi
+      .spyOn(IIROSEUtils, "buildSelect2")
+      .mockImplementation(() => {});
+    NetEasePlatform.MLOD(songList);
+    const cb = build.mock.lastCall?.[2] as (t: HTMLElement, v: string) => void;
+    await cb(null as unknown as HTMLElement, "2");
+    const options = episodePicker.openEpisodePicker.mock.lastCall?.[0] as {
+      load: () => Promise<EpisodePickEntry[]>;
+      onConfirm: (entries: EpisodePickEntry[]) => void;
+    };
+    const entries = await options.load();
+    options.onConfirm([entries[2], entries[0]]);
+    expect(spy).toHaveBeenCalledWith([3, 1], "冬日歌单", "冬天听");
+    spy.mockRestore();
+  });
+});

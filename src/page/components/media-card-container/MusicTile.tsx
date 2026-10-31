@@ -5,6 +5,7 @@ import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
 import { formatDuration, isPhoneLayout, isTapToReveal } from "./mediaFormat";
 import { NowPlayingBars } from "./TracklistRow";
+import { SelectBox } from "./SelectBox";
 import {
   deskDurationPill,
   deskFocusRingOnRose,
@@ -36,6 +37,10 @@ export interface MusicTileProps {
   onPlay: () => void;
   /** 胶囊的空闲文案（默认「点播」；收藏里的专辑 / 歌单是「查看」，点了进内页）。 */
   idleLabel?: string;
+  /** 内页勾选：给了它才在封面左上角出现勾选框（左下是正在播放徽章）。 */
+  onToggleSelect?: () => void;
+  /** 1 起的点选序号；未选为 undefined。 */
+  selectionOrder?: number;
 }
 
 export function MusicTile({
@@ -46,6 +51,8 @@ export function MusicTile({
   onReveal,
   onPlay,
   idleLabel = "点播",
+  onToggleSelect,
+  selectionOrder,
 }: MusicTileProps) {
   const duration = formatDuration(platformData.duration);
   // 手机与无悬停宽屏点主体只选中（显示胶囊）：两种情况都不是「点播」，读屏名随之改。
@@ -126,6 +133,17 @@ export function MusicTile({
             {requestLabel(status, idleLabel)}
           </button>
         </div>
+
+        {/* 压在遮罩之上：胶囊显示时也能勾选 */}
+        {onToggleSelect && (
+          <SelectBox
+            title={platformData.title}
+            order={selectionOrder}
+            onToggle={onToggleSelect}
+            onCover
+            className="absolute left-1.5 top-1.5 z-[1]"
+          />
+        )}
       </div>
 
       <div className="mt-2 flex items-start gap-1.5">

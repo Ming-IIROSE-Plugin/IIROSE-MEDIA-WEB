@@ -40,6 +40,17 @@ export interface ResultsAreaProps {
   onRetry: () => void;
   /** 清除搜索（收藏 / 电台过滤后为空时）。 */
   onClearSearch: () => void;
+  /**
+   * 歌单 / 专辑内页的勾选（只在那里给）：键为绝对位置 `pageOffset + 行下标`。
+   * 选择状态由容器持有——结果区随 `mediaData` 重置，放这里翻页就丢。
+   */
+  selection?: ResultsSelection;
+}
+
+export interface ResultsSelection {
+  /** 1 起的点选序号；未选为 undefined。 */
+  orderOf: (position: number) => number | undefined;
+  onToggle: (position: number, platformData: PlatformData) => void;
 }
 
 type Shape =
@@ -109,6 +120,7 @@ export function ResultsArea({
   pageOffset = 0,
   onRetry,
   onClearSearch,
+  selection,
 }: ResultsAreaProps) {
   const {
     currentOnDemandPlay,
@@ -246,6 +258,17 @@ export function ResultsArea({
   /** 表头文案：专辑/歌单的时长列换成曲目数。 */
   const durationLabel = shape === "collections" ? "曲目数" : "时长";
 
+  /** 内页勾选只给内页的曲目行 / 音乐网格卡。 */
+  const selectable = !!selection && isInnerPage;
+  const selectProps = (platformData: PlatformData, index: number) => {
+    if (!selection || !selectable) return {};
+    const position = pageOffset + index;
+    return {
+      selectionOrder: selection.orderOf(position),
+      onToggleSelect: () => selection.onToggle(position, platformData),
+    };
+  };
+
   const renderRows = (items: PlatformData[]) => {
     if (shape === "collections") {
       return items.map((platformData, index) => (
@@ -275,6 +298,7 @@ export function ResultsArea({
           nowPlaying={isNowPlaying(platformData)}
           supported={supported}
           onPlay={() => play(platformData)}
+          {...selectProps(platformData, index)}
         />
       ),
     );
@@ -299,6 +323,7 @@ export function ResultsArea({
           onReveal={() => setRevealedKey(key)}
           onPlay={collection ? open : () => play(platformData)}
           idleLabel={collection ? "查看" : "点播"}
+          {...selectProps(platformData, index)}
         />
       ) : (
         <VideoTile
@@ -388,7 +413,12 @@ export function ResultsArea({
     return (
       <div className={deskGutter}>
         {recentHeading}
-        {shape !== "radio" && <TracklistHeader durationLabel={durationLabel} />}
+        {shape !== "radio" && (
+          <TracklistHeader
+            durationLabel={durationLabel}
+            selectable={selectable}
+          />
+        )}
         {renderRows(items)}
       </div>
     );

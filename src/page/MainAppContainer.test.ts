@@ -36,6 +36,7 @@ const neteasePlatform = vi.hoisted(() => ({
   getAlbumMultiPageData: vi.fn(),
   getSongListMultiPageData: vi.fn(),
   playCollectionAll: vi.fn(),
+  playSongIds: vi.fn(),
   MOD: vi.fn(),
   selectEpisodes: vi.fn(),
 }));
@@ -1366,6 +1367,239 @@ describe("专辑 / 歌单内页", () => {
       if (saved === null) localStorage.removeItem("imwPluginSetting");
       else localStorage.setItem("imwPluginSetting", saved);
     }
+  });
+
+  // —— 内页勾选多选（spec-collection-inner-batch story 3）——
+  describe("勾选多选", () => {
+    type Selection = {
+      orderOf: (position: number) => number | undefined;
+      onToggle: (position: number, platformData: PlatformData) => void;
+    };
+    const selection = () =>
+      resultsAreaProps.last!.selection as Selection | undefined;
+    /** 位置 p 的曲目：段替身按 id = 位置回填。 */
+    const track = (position: number, id = position) =>
+      ({ ...trackData, neteaseMusic: { id, fee: 0 } }) as PlatformData;
+    const toggle = async (position: number, id = position) => {
+      await act(async () => {
+        selection()!.onToggle(position, track(position, id));
+      });
+    };
+    const bar = () => root.querySelector("[data-imw-selection-bar]");
+    const playButton = () =>
+      root.querySelector<HTMLElement>("[data-imw-play-selected]")!;
+    const enter30 = async () => {
+      neteasePlatform.getAlbumMultiPageData.mockImplementation(async () =>
+        loaderOf(30),
+      );
+      const mounted = await mount(MODE.music);
+      const controller = await enterInnerPage(mounted.ref);
+      await settle(mounted.ref);
+      return { ...mounted, controller };
+    };
+
+    beforeEach(() => {
+      resetRequestGuard();
+      neteasePlatform.playSongIds.mockReset();
+      neteasePlatform.playSongIds.mockResolvedValue(undefined);
+      delete (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom;
+    });
+
+    it("搜索结果与 B 站多 P 内页不给勾选能力", async () => {
+      const { ref } = await mount(MODE.music);
+      expect(selection()).toBeUndefined();
+      const controller = (ref.current as unknown as Harness).controller;
+      await act(async () => {
+        controller.updateCurrentInMultiPageStatus(true);
+      });
+      await act(async () => {
+        await controller.switchToMultiPage({
+          title: "多 P",
+          bilibili: { bvid: "BV1" },
+        } as unknown as PlatformData);
+      });
+      expect(selection()).toBeUndefined();
+    });
+
+    it("跨页点选：序号依次 1、2、3，翻回仍在；选择条取代底部条", async () => {
+      const { ref, controller } = await enter30();
+      expect(bar()).toBeNull();
+      await toggle(2);
+      await toggle(0);
+      await act(async () => {
+        await controller.changecurrentPage(2);
+      });
+      await settle(ref);
+      expect(stateOf(ref).currentPage).toBe(2);
+      await toggle(14);
+      expect(selection()!.orderOf(2)).toBe(1);
+      expect(selection()!.orderOf(0)).toBe(2);
+      expect(selection()!.orderOf(14)).toBe(3);
+      expect(bar()!.textContent).toContain("已选 3 首");
+
+      await act(async () => {
+        await controller.changecurrentPage(1);
+      });
+      expect(selection()!.orderOf(2)).toBe(1);
+      expect(selection()!.orderOf(0)).toBe(2);
+    });
+
+    it("点播所选：按点选顺序发送，发出后清空、选择条消失", async () => {
+      const { noteMediaSent } = await import("../playback/RequestGuard");
+      neteasePlatform.playSongIds.mockImplementation(async () => {
+        noteMediaSent("&1{}");
+      });
+      const { ref } = await enter30();
+      await toggle(2);
+      await toggle(0);
+      await toggle(14);
+      await act(async () => {
+        playButton().click();
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(neteasePlatform.playSongIds).toHaveBeenCalledOnce();
+      expect(neteasePlatform.playSongIds).toHaveBeenCalledWith(
+        [2, 0, 14],
+        albumData.title,
+      );
+      expect(stateOf(ref).innerSelection).toEqual([]);
+      expect(bar()).toBeNull();
+    });
+
+    it("只选 1 首也走同一入口（平台层按数量分单曲 / 批量）", async () => {
+      await enter30();
+      await toggle(5);
+      await act(async () => {
+        playButton().click();
+      });
+      expect(neteasePlatform.playSongIds).toHaveBeenCalledWith(
+        [5],
+        albumData.title,
+      );
+    });
+
+    it("取消中间一首：后面的序号前移；全部取消后选择条消失", async () => {
+      await enter30();
+      await toggle(1);
+      await toggle(2);
+      await toggle(3);
+      await toggle(2);
+      expect(selection()!.orderOf(1)).toBe(1);
+      expect(selection()!.orderOf(2)).toBeUndefined();
+      expect(selection()!.orderOf(3)).toBe(2);
+      expect(bar()!.textContent).toContain("已选 2 首");
+      await toggle(1);
+      await toggle(3);
+      expect(bar()).toBeNull();
+    });
+
+    it("重复曲目：两个位置分别可选，发送两次", async () => {
+      await enter30();
+      await toggle(3, 77);
+      await toggle(29, 77);
+      expect(selection()!.orderOf(3)).toBe(1);
+      expect(selection()!.orderOf(29)).toBe(2);
+      await act(async () => {
+        playButton().click();
+      });
+      expect(neteasePlatform.playSongIds).toHaveBeenCalledWith(
+        [77, 77],
+        albumData.title,
+      );
+    });
+
+    it("房间不支持：勾选可用，「点播所选」灰化，点击只提示", async () => {
+      const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+      (window as Window & { mediaShareRoom?: boolean }).mediaShareRoom = false;
+      await enter30();
+      await toggle(4);
+      expect(bar()).not.toBeNull();
+      expect(playButton().getAttribute("class")).toContain("opacity-40");
+      await act(async () => {
+        playButton().click();
+      });
+      expect(neteasePlatform.playSongIds).not.toHaveBeenCalled();
+      expect(show).toHaveBeenCalledWith("这个房间不支持点播");
+      show.mockRestore();
+    });
+
+    it("进行中再点无效；失败保留选择", async () => {
+      let fail: (error: Error) => void = () => {};
+      neteasePlatform.playSongIds.mockImplementation(
+        () => new Promise((_, reject) => (fail = reject)),
+      );
+      const { ref } = await enter30();
+      await toggle(1);
+      await toggle(2);
+      await act(async () => {
+        playButton().click();
+      });
+      expect(playButton().getAttribute("aria-busy")).toBe("true");
+      await act(async () => {
+        playButton().click();
+      });
+      expect(neteasePlatform.playSongIds).toHaveBeenCalledOnce();
+
+      await act(async () => {
+        fail(new Error("网络错误"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(stateOf(ref).innerSelection.map((item) => item.position)).toEqual([
+        1, 2,
+      ]);
+      expect(bar()).not.toBeNull();
+    });
+
+    it("清空按钮清掉选择", async () => {
+      const { ref } = await enter30();
+      await toggle(1);
+      const clear = Array.from(root.querySelectorAll("button")).find(
+        (el) => el.textContent === "清空",
+      )!;
+      await act(async () => {
+        clear.click();
+      });
+      expect(stateOf(ref).innerSelection).toEqual([]);
+      expect(bar()).toBeNull();
+    });
+
+    it("返回 / 搜索 / 开另一内页 / 换范围 / 换来源都清空选择", async () => {
+      const cases: ((controller: Controller) => unknown)[] = [
+        (c) => c.switchToOutFromMultiPage(),
+        (c) => c.runSearch("陈绮贞"),
+        (c) => c.switchToMultiPage(songListData),
+        (c) => c.selectScope(2),
+        (c) => c.selectSource(0),
+      ];
+      for (const leave of cases) {
+        const { ref, controller } = await enter30();
+        await toggle(1);
+        expect(stateOf(ref).innerSelection).toHaveLength(1);
+        await act(async () => {
+          await leave(controller);
+        });
+        expect(stateOf(ref).innerSelection).toEqual([]);
+        render(null, root);
+      }
+    });
+
+    it("切模式再回来：选择保留", async () => {
+      const { ref } = await enter30();
+      await toggle(7);
+      await toggle(3);
+      await act(async () => {
+        render(h(Container, { ...props(MODE.video), ref } as object), root);
+      });
+      expect(bar()).toBeNull();
+      await act(async () => {
+        render(h(Container, { ...props(MODE.music), ref } as object), root);
+      });
+      expect(selection()!.orderOf(7)).toBe(1);
+      expect(selection()!.orderOf(3)).toBe(2);
+      expect(bar()!.textContent).toContain("已选 2 首");
+    });
   });
 });
 

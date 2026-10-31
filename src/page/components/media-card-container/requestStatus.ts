@@ -8,7 +8,11 @@ import {
 } from "../../../playback/RequestGuard";
 
 export function useRequestStatus(data: PlatformData): RequestStatus {
-  const key = requestKey(data);
+  return useRequestKeyStatus(requestKey(data));
+}
+
+/** 按守卫键读状态：自定键的入口（内页「点播所选」`…:selected`）用它。 */
+export function useRequestKeyStatus(key: string): RequestStatus {
   const [current, setCurrent] = useState(() => getRequestStatus(key));
   useEffect(() => {
     setCurrent(getRequestStatus(key));

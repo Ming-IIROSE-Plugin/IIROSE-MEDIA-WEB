@@ -5,6 +5,7 @@ import { guardedRequest, requestKey } from "../playback/RequestGuard";
 import { Component, createRef } from "preact";
 import { ResultsArea } from "./components/media-card-container/ResultsArea";
 import { CollectionHeader } from "./components/media-card-container/CollectionHeader";
+import { SelectionBar } from "./components/media-card-container/SelectionBar";
 import type { PlayOrder } from "./components/media-card-container/OrderMenu";
 import {
   isCollectionItem,
@@ -77,6 +78,7 @@ interface ModeSnapshot {
   oldItems: OldItems | null;
   innerCollection: PlatformData | null;
   collectionSegments: CollectionSegments | null;
+  innerSelection: InnerSelectionItem[];
   settingsData: SettingGroupData[] | null;
   currentSubNavBarAction: () => void;
   currentOnDemandPlay: (platformData: PlatformData) => void;
@@ -96,6 +98,7 @@ function emptyModeState(): ModeSnapshot {
     oldItems: null,
     innerCollection: null,
     collectionSegments: null,
+    innerSelection: [],
     settingsData: null,
     currentSubNavBarAction: () => {},
     currentOnDemandPlay: () => {},
@@ -284,6 +287,68 @@ export class MainAppContainer extends Component<
     );
   };
 
+  /** 内页勾选的点选序号（1 起）：键是绝对位置，同一首歌重复出现时各自计序。 */
+  private selectionOrderOf = (position: number): number | undefined => {
+    const at = this.state.innerSelection.findIndex(
+      (item) => item.position === position,
+    );
+    return at === -1 ? undefined : at + 1;
+  };
+
+  /** 勾 / 取消一首：取消后后面的序号自然前移（序号即数组下标）。 */
+  private toggleSelection = (position: number, platformData: PlatformData) => {
+    const id = platformData.neteaseMusic?.id;
+    if (id === undefined) return;
+    const current = this.state.innerSelection;
+    const next = current.some((item) => item.position === position)
+      ? current.filter((item) => item.position !== position)
+      : [...current, { position, id, title: platformData.title }];
+    this.setState({ innerSelection: next });
+  };
+
+  private clearSelection = () => {
+    this.setState({ innerSelection: [] });
+  };
+
+  /** 「点播所选」的守卫键：与整张「全部播放」各自独立。 */
+  private selectionRequestKey(collection: PlatformData): string {
+    return `${requestKey(collection)}:selected`;
+  }
+
+  /**
+   * 选择条「点播所选」：按点选顺序点播（1 首单曲播报，多首批量进度浮窗）。
+   * 发出（或交给下一步）后清空选择；失败 / 进行中保留，可以再点。
+   */
+  private playSelection = () => {
+    const collection = this.state.innerCollection;
+    const selection = this.state.innerSelection;
+    if (!collection || selection.length === 0) return;
+    if (!roomSupportsRequest()) {
+      notifyRoomUnsupported();
+      return;
+    }
+    const mode = this.state.mode;
+    void guardedRequest(
+      collection,
+      () =>
+        NetEasePlatform.playSongIds(
+          selection.map((item) => item.id),
+          collection.title,
+        ),
+      this.selectionRequestKey(collection),
+    ).then((outcome) => {
+      if (outcome !== "sent" && outcome !== "handoff") return;
+      // 只清这一次发出的选择：等待期间改过选择、离开过内页就不动
+      if (this.state.mode === mode) {
+        if (this.state.innerSelection === selection)
+          this.setState({ innerSelection: [] });
+        return;
+      }
+      const snapshot = this.snapshots.get(mode);
+      if (snapshot?.innerSelection === selection) snapshot.innerSelection = [];
+    });
+  };
+
   render() {
     const { ShowOrHideIMC } = this.props;
     const {
@@ -325,6 +390,9 @@ export class MainAppContainer extends Component<
     const innerCollection = this.state.innerCollection;
     const showCollectionHeader =
       !!innerCollection && this.state.isCurrentInMultiPage;
+    const selectionCount = showCollectionHeader
+      ? this.state.innerSelection.length
+      : 0;
 
     return (
       <Provider value={providerValue}>
@@ -415,12 +483,31 @@ export class MainAppContainer extends Component<
                 pageOffset={(currentPage - 1) * this.pageSizeFor(mode)}
                 onRetry={this.handleRetry}
                 onClearSearch={this.handleClearSearch}
+                selection={
+                  showCollectionHeader
+                    ? {
+                        orderOf: this.selectionOrderOf,
+                        onToggle: this.toggleSelection,
+                      }
+                    : undefined
+                }
               />
               <DeskToast />
             </div>
 
-            {/* 底部条 / 迷你条：桌面三栏、手机迷你条 + 展开层（story 3） */}
-            <RoomDeck active={this.props.active} mode={this.state.mode} />
+            {/* 底部条 / 迷你条：桌面三栏、手机迷你条 + 展开层（story 3）；
+                内页有勾选时选择条同位取代它（不另开浮层） */}
+            {selectionCount > 0 && innerCollection ? (
+              <SelectionBar
+                count={selectionCount}
+                requestKey={this.selectionRequestKey(innerCollection)}
+                supported={roomSupportsRequest()}
+                onClear={this.clearSelection}
+                onPlay={this.playSelection}
+              />
+            ) : (
+              <RoomDeck active={this.props.active} mode={this.state.mode} />
+            )}
           </div>
         </div>
       </Provider>
@@ -536,6 +623,7 @@ export class MainAppContainer extends Component<
       oldItems: state.oldItems,
       innerCollection: state.innerCollection,
       collectionSegments: state.collectionSegments,
+      innerSelection: state.innerSelection,
       settingsData: state.settingsData,
       currentSubNavBarAction: state.currentSubNavBarAction,
       currentOnDemandPlay: state.currentOnDemandPlay,
@@ -691,6 +779,7 @@ export class MainAppContainer extends Component<
           oldItems: null,
           innerCollection: null,
           collectionSegments: null,
+          innerSelection: [],
           updating: false,
           currentSubNavBarAction: nextAction,
         },
@@ -732,6 +821,7 @@ export class MainAppContainer extends Component<
           oldItems: null,
           innerCollection: null,
           collectionSegments: null,
+          innerSelection: [],
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -753,6 +843,7 @@ export class MainAppContainer extends Component<
           oldItems: null,
           innerCollection: null,
           collectionSegments: null,
+          innerSelection: [],
           updating: false,
         },
         () => this.runCurrentScope(),
@@ -837,6 +928,7 @@ export class MainAppContainer extends Component<
       this.setState({
         innerCollection: isCollection ? platformData : null,
         collectionSegments: null,
+        innerSelection: [],
       });
 
       if (platformData.bilibili) {
@@ -907,7 +999,11 @@ export class MainAppContainer extends Component<
       this.setState({ totalPage: oldItems.totalPage });
       this.setState({ currentPage: oldItems.currentPage });
       this.setState({ isCurrentInMultiPage: false });
-      this.setState({ innerCollection: null, collectionSegments: null });
+      this.setState({
+        innerCollection: null,
+        collectionSegments: null,
+        innerSelection: [],
+      });
       this.setState({ currentSubNavBarAction: oldItems.SubNavBarAction });
       this.setState({ currentOnDemandPlay: oldItems.OnDemandPlay });
     },

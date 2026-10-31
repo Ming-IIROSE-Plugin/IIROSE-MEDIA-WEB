@@ -7,6 +7,7 @@ import { FavoriteStar } from "./FavoriteStar";
 import { formatDuration, isVideoItem, sourceOf } from "./mediaFormat";
 import { notifyRoomUnsupported } from "./roomSupport";
 import { requestLabel, useRequestStatus } from "./requestStatus";
+import { SelectBox } from "./SelectBox";
 import type { RequestStatus } from "../../../playback/RequestGuard";
 import {
   DeskIcon,
@@ -37,6 +38,10 @@ import {
 /** 桌面七列 / 手机五列；表头与所有行共用，列宽不会漂移。 */
 export const trackColumns =
   "grid grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px] items-center gap-3 max-[768px]:grid-cols-[48px_1fr_auto_40px_40px] max-[768px]:gap-2";
+
+/** 可勾选（歌单 / 专辑内页）：多一列勾选框——桌面在序号列前，手机在封面前（手机无序号列）。 */
+export const selectableTrackColumns =
+  "grid grid-cols-[32px_38px_56px_1.6fr_1fr_74px_44px_96px] items-center gap-3 max-[768px]:grid-cols-[32px_48px_1fr_auto_40px_40px] max-[768px]:gap-2";
 
 const rowFrame = `group w-[calc(100%+28px)] border-0 ${deskRowRule} bg-transparent text-left ${deskRowHover} mx-[-14px] px-[14px] max-[768px]:mx-0 max-[768px]:w-full max-[768px]:px-0`;
 
@@ -156,6 +161,10 @@ export interface TracklistRowProps {
   nowPlaying?: boolean;
   supported?: boolean;
   onPlay: () => void;
+  /** 内页勾选：给了它才出现勾选列（搜索结果、电台、收藏不给，列模板不变）。 */
+  onToggleSelect?: () => void;
+  /** 1 起的点选序号；未选为 undefined。 */
+  selectionOrder?: number;
 }
 
 export function TracklistRow({
@@ -165,6 +174,8 @@ export function TracklistRow({
   nowPlaying = false,
   supported = true,
   onPlay,
+  onToggleSelect,
+  selectionOrder,
 }: TracklistRowProps) {
   const radio = variant === "radio";
   const status = useRequestStatus(platformData);
@@ -172,10 +183,19 @@ export function TracklistRow({
 
   return (
     <div
-      className={`${rowFrame} ${trackColumns} min-h-[62px] max-[768px]:min-h-[66px]`}
+      className={`${rowFrame} ${onToggleSelect ? selectableTrackColumns : trackColumns} min-h-[62px] max-[768px]:min-h-[66px]`}
       data-imw-tracklist-row="true"
       data-now-playing={nowPlaying ? "true" : undefined}
+      data-selected={selectionOrder !== undefined ? "true" : undefined}
     >
+      {onToggleSelect && (
+        <SelectBox
+          title={platformData.title}
+          order={selectionOrder}
+          onToggle={onToggleSelect}
+        />
+      )}
+
       <span className="grid place-items-center max-[768px]:hidden">
         {!radio &&
           (nowPlaying ? (
@@ -248,15 +268,19 @@ export function TracklistRow({
 /** 表头：仅桌面（手机不显示）。列名与行同宽，等宽大写。 */
 export function TracklistHeader({
   durationLabel = "时长",
+  selectable = false,
 }: {
   durationLabel?: string;
+  /** 与行同一份列模板：可勾选时多出勾选列。 */
+  selectable?: boolean;
 }) {
   return (
     <div
-      className={`${trackColumns} h-[34px] border-0 border-b border-solid ${deskRule} ${typeMonoCaption} ${deskInk3} max-[768px]:hidden`}
+      className={`${selectable ? selectableTrackColumns : trackColumns} h-[34px] border-0 border-b border-solid ${deskRule} ${typeMonoCaption} ${deskInk3} max-[768px]:hidden`}
       aria-hidden="true"
       data-imw-tracklist-header="true"
     >
+      {selectable && <span />}
       <span className="px-1">#</span>
       <span />
       <span className="px-1">标题</span>

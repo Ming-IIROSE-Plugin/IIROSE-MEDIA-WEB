@@ -13,12 +13,15 @@ import { CollectionRow } from "./CollectionRow";
 import { FavoriteStar } from "./FavoriteStar";
 import { MusicTile } from "./MusicTile";
 import { ResultsArea, shapeOf } from "./ResultsArea";
+import { SelectionBar } from "./SelectionBar";
 import { SkeletonRows, SkeletonTiles } from "./Skeletons";
 import {
   NowPlayingBars,
   RequestButton,
   TracklistHeader,
   TracklistRow,
+  selectableTrackColumns,
+  trackColumns,
 } from "./TracklistRow";
 import { VideoTile } from "./VideoTile";
 import { hasOverlayLayers } from "../desk/overlayLayers";
@@ -38,6 +41,8 @@ import favoriteStarSrc from "./FavoriteStar.tsx?raw";
 import musicTileSrc from "./MusicTile.tsx?raw";
 import orderMenuSrc from "./OrderMenu.tsx?raw";
 import resultsAreaSrc from "./ResultsArea.tsx?raw";
+import selectBoxSrc from "./SelectBox.tsx?raw";
+import selectionBarSrc from "./SelectionBar.tsx?raw";
 import skeletonsSrc from "./Skeletons.tsx?raw";
 import stateMessageSrc from "./StateMessage.tsx?raw";
 import tracklistSrc from "./TracklistRow.tsx?raw";
@@ -260,6 +265,8 @@ describe("组件源码的令牌纪律", () => {
     "MusicTile.tsx": musicTileSrc,
     "OrderMenu.tsx": orderMenuSrc,
     "ResultsArea.tsx": resultsAreaSrc,
+    "SelectBox.tsx": selectBoxSrc,
+    "SelectionBar.tsx": selectionBarSrc,
     "Skeletons.tsx": skeletonsSrc,
     "StateMessage.tsx": stateMessageSrc,
     "TracklistRow.tsx": tracklistSrc,
@@ -1619,5 +1626,210 @@ describe("手机：没有操作条，收藏星与点播钮直接在行 / 卡上"
     });
     expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(song);
     vi.unstubAllGlobals();
+  });
+});
+
+// —— 内页勾选多选（spec-collection-inner-batch story 3）——
+describe("内页勾选", () => {
+  const tracks = [song, secondSong, { ...song, title: "第三首" }].map(
+    (item, i) =>
+      ({ ...item, neteaseMusic: { id: 100 + i, fee: 0 } }) as PlatformData,
+  );
+  const checkboxes = () =>
+    Array.from(host.querySelectorAll<HTMLElement>('[role="checkbox"]'));
+
+  it("曲目行：给了勾选回调才多一列勾选框，列模板与表头同步", async () => {
+    await mount(
+      withCtx(
+        h("div", null, [
+          h(TracklistHeader, { selectable: true }),
+          h(TracklistRow, {
+            platformData: song,
+            index: 1,
+            onPlay: () => {},
+            onToggleSelect: () => {},
+            selectionOrder: 2,
+          }),
+        ]),
+      ),
+    );
+    const row = host.querySelector("[data-imw-tracklist-row]")!;
+    const header = host.querySelector("[data-imw-tracklist-header]")!;
+    expect(row.getAttribute("class")).toContain(selectableTrackColumns);
+    expect(header.getAttribute("class")).toContain(selectableTrackColumns);
+    const box = checkboxes()[0];
+    expect(box.getAttribute("aria-checked")).toBe("true");
+    expect(box.getAttribute("aria-label")).toContain("晴天");
+    expect(box.getAttribute("aria-label")).toContain("2");
+    expect(box.textContent).toBe("2");
+    // 勾选框是行的第一格（桌面在序号列前、手机在封面前）
+    expect(row.firstElementChild).toBe(box);
+  });
+
+  it("未选为空框；点勾选框只切换选择、不点播", async () => {
+    const onPlay = vi.fn();
+    const onToggle = vi.fn();
+    await mount(
+      withCtx(
+        h(TracklistRow, {
+          platformData: song,
+          index: 1,
+          onPlay,
+          onToggleSelect: onToggle,
+        }),
+      ),
+    );
+    const box = checkboxes()[0];
+    expect(box.getAttribute("aria-checked")).toBe("false");
+    expect(box.textContent).toBe("");
+    // 手机可点区 ≥44px：32px 本体 + 四周外扩 6px
+    expect(box.getAttribute("class")).toContain("after:-inset-[6px]");
+    expect(box.getAttribute("class")).toContain("h-8");
+    await act(async () => box.click());
+    expect(onToggle).toHaveBeenCalledOnce();
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  it("搜索结果（非内页）不出现勾选框，列模板与现状一致", async () => {
+    await mount(
+      results({
+        ...resultsBase,
+        mediaData: ready(tracks),
+        selection: { orderOf: () => 1, onToggle: vi.fn() },
+      }),
+      ready(tracks),
+    );
+    expect(checkboxes()).toHaveLength(0);
+    const row = host.querySelector("[data-imw-tracklist-row]")!;
+    expect(row.getAttribute("class")).toContain(trackColumns);
+    expect(row.getAttribute("class")).not.toContain(selectableTrackColumns);
+    expect(
+      host.querySelector("[data-imw-tracklist-header]")!.getAttribute("class"),
+    ).toContain(trackColumns);
+  });
+
+  it("内页列表：位置 = pageOffset + 行下标，序号来自容器", async () => {
+    const onToggle = vi.fn();
+    const data = ready(tracks);
+    await mount(
+      results({
+        ...resultsBase,
+        isInnerPage: true,
+        pageOffset: 10,
+        mediaData: data,
+        selection: {
+          orderOf: (position: number) => (position === 11 ? 1 : undefined),
+          onToggle,
+        },
+      }),
+      data,
+    );
+    const boxes = checkboxes();
+    expect(boxes).toHaveLength(3);
+    expect(boxes.map((box) => box.getAttribute("aria-checked"))).toEqual([
+      "false",
+      "true",
+      "false",
+    ]);
+    await act(async () => boxes[2].click());
+    expect(onToggle).toHaveBeenCalledWith(12, tracks[2]);
+    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+  });
+
+  it("内页网格：同一份选择，点勾选框不点播、不显示「点播」胶囊", async () => {
+    const onToggle = vi.fn();
+    const data = ready(tracks);
+    await mount(
+      results({
+        ...resultsBase,
+        viewMode: "card",
+        isInnerPage: true,
+        pageOffset: 0,
+        mediaData: data,
+        selection: {
+          orderOf: (position: number) => (position === 0 ? 3 : undefined),
+          onToggle,
+        },
+      }),
+      data,
+    );
+    const boxes = checkboxes();
+    expect(boxes).toHaveLength(3);
+    expect(boxes[0].textContent).toBe("3");
+    expect(boxes[0].closest("[data-imw-tile]")).not.toBeNull();
+    // 无悬停设备上首点卡片才会显示胶囊：点勾选框不算
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("hover"),
+    }));
+    await act(async () => boxes[1].click());
+    expect(onToggle).toHaveBeenCalledWith(1, tracks[1]);
+    expect(host.querySelector('[data-revealed="true"]')).toBeNull();
+    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+  });
+});
+
+describe("选择条", () => {
+  afterEach(async () => {
+    (await import("../../../playback/RequestGuard")).resetRequestGuard();
+  });
+
+  const bar = (overrides: Record<string, unknown> = {}) => ({
+    count: 3,
+    requestKey: "netease:album:9:selected",
+    supported: true,
+    onClear: vi.fn(),
+    onPlay: vi.fn(),
+    ...overrides,
+  });
+  const playButton = () =>
+    host.querySelector<HTMLElement>("[data-imw-play-selected]")!;
+
+  it("显示已选数，清空与点播所选各自回调", async () => {
+    const props = bar();
+    await mount(h(SelectionBar, props));
+    expect(host.textContent).toContain("已选 3 首");
+    const clear = Array.from(host.querySelectorAll("button")).find(
+      (el) => el.textContent === "清空",
+    )!;
+    await act(async () => clear.click());
+    expect(props.onClear).toHaveBeenCalledOnce();
+    await act(async () => playButton().click());
+    expect(props.onPlay).toHaveBeenCalledOnce();
+  });
+
+  it("桌面同底部条 60px、手机同迷你条 58px，不另开浮层", async () => {
+    await mount(h(SelectionBar, bar()));
+    const surface = host.querySelector('[role="group"]')!;
+    expect(classesOf(surface)).toContain("h-[60px]");
+    expect(classesOf(surface)).toContain("max-[768px]:h-[58px]");
+    expect(hasOverlayLayers()).toBe(false);
+  });
+
+  it("房间不支持：按钮灰化、可点、只提示", async () => {
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    const props = bar({ supported: false });
+    await mount(h(SelectionBar, props));
+    expect(classesOf(playButton())).toContain("opacity-40");
+    await act(async () => playButton().click());
+    expect(props.onPlay).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledWith("这个房间不支持点播");
+    show.mockRestore();
+  });
+
+  it("守卫进行中：「点播中」转圈，再点无效", async () => {
+    const { guardedRequest } = await import("../../../playback/RequestGuard");
+    const props = bar();
+    await mount(h(SelectionBar, props));
+    await act(async () => {
+      void guardedRequest(
+        song,
+        () => new Promise(() => {}),
+        "netease:album:9:selected",
+      );
+    });
+    expect(playButton().getAttribute("aria-busy")).toBe("true");
+    expect(playButton().textContent).toContain("点播中");
+    await act(async () => playButton().click());
+    expect(props.onPlay).not.toHaveBeenCalled();
   });
 });

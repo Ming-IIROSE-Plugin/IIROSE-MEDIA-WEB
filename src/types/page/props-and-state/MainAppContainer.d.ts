@@ -29,12 +29,22 @@ interface MainAppContainerState {
   /** 歌单 / 专辑内页的分段加载器（曲目详情按页取）；其余内页与外层为 null。 */
   collectionSegments:
     import("../../../platforms/CollectionSegments").CollectionSegments | null;
+  /** 内页勾选（按点选顺序）：只在网易云歌单 / 专辑内页有内容。 */
+  innerSelection: InnerSelectionItem[];
   /** 设置 / 关于：一组一张卡（`SettingGroupData.title` 是组卡标题）。 */
   settingsData: SettingGroupData[] | null;
   isCurrentInMultiPage: boolean;
   requestToken: number;
   currentSubNavBarAction: () => void;
   currentOnDemandPlay: (platformData: PlatformData) => void;
+}
+
+/** 内页勾选的一首：键是它在整张列表里的绝对位置（同一首歌重复出现时各自可选）。 */
+interface InnerSelectionItem {
+  position: number;
+  /** 网易云曲目 id（发送用）。 */
+  id: number;
+  title: string;
 }
 
 interface MainAppContainerActionContext {

@@ -230,26 +230,41 @@ export class NetEasePlatform extends Platform {
         return entriesOf(detail.songs ?? []);
       },
       onConfirm: (chosen) => {
-        const ids = chosen.map(songIdOf);
-        if (ids.length === 1) {
-          // 单项：单曲播报窗口，卡片不被并行批量抑制吞掉
-          void Announce.runSingleAnnounce(() =>
-            NetEasePlatform.finalODSONG(ids),
-          ).catch((error) => Announce.showBatchItemError(error));
-          return;
-        }
-        // `finalODSONG` 按入参顺序重排详情结果，这里传的就是点选顺序
-        const batch = startBatch(collection.title, ids.length);
-        void Promise.resolve(
-          Announce.runBatchAnnounce(
-            collection.title,
-            ids.length,
-            () => NetEasePlatform.finalODSONG(ids, batch),
-            collection.description,
-          ),
-        ).finally(() => batch.finish());
+        void NetEasePlatform.playSongIds(
+          chosen.map(songIdOf),
+          collection.title,
+          collection.description,
+        );
       },
     });
+  };
+
+  /**
+   * 按给定顺序点播一组曲目（选集面板与内页多选共用）：单首走单曲播报，
+   * 多首走批量进度浮窗 + 批量播报。返回发送过程：点播守卫据此显示「点播中」。
+   */
+  public static playSongIds = (
+    ids: number[],
+    title: string,
+    description?: string,
+  ): Promise<void> => {
+    if (ids.length === 0) return Promise.resolve();
+    if (ids.length === 1) {
+      // 单项：单曲播报窗口，卡片不被并行批量抑制吞掉
+      return Promise.resolve(
+        Announce.runSingleAnnounce(() => NetEasePlatform.finalODSONG(ids)),
+      ).catch((error) => Announce.showBatchItemError(error));
+    }
+    // `finalODSONG` 按入参顺序重排详情结果，这里传的就是点选顺序
+    const batch = startBatch(title, ids.length);
+    return Promise.resolve(
+      Announce.runBatchAnnounce(
+        title,
+        ids.length,
+        () => NetEasePlatform.finalODSONG(ids, batch),
+        description,
+      ),
+    ).finally(() => batch.finish());
   };
 
   private static Search = async (
