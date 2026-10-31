@@ -393,7 +393,6 @@ export class MainAppContainer extends Component<
 
             {/* 底部条 / 迷你条：桌面三栏、手机迷你条 + 展开层（story 3） */}
             <RoomDeck active={this.props.active} mode={this.state.mode} />
-
           </div>
         </div>
       </Provider>

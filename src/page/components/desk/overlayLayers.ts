@@ -22,11 +22,7 @@ interface OverlayLayer {
 }
 
 /** 主面板内最上层：三者互斥，`closePanelTier` 保证同时只留一个。 */
-const PANEL_TIER: readonly OverlayLayerKind[] = [
-  "deck",
-  "order",
-  "source",
-];
+const PANEL_TIER: readonly OverlayLayerKind[] = ["deck", "order", "source"];
 
 /** 从下到上登记；栈顶是最后一个。 */
 const layers: OverlayLayer[] = [];
