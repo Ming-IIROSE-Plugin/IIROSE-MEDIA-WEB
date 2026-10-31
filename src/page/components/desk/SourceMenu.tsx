@@ -44,7 +44,7 @@ export function SourceMenu({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  // 先登记层级（会收起操作条 / 展开的底部条等互斥层），再移动焦点。
+  // 先登记层级（会收起展开的底部条、顺序菜单等互斥层），再移动焦点。
   useEffect(() => {
     closePanelTier("source");
     return pushOverlayLayer("source", () => onCloseRef.current());

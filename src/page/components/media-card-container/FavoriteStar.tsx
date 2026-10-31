@@ -13,9 +13,15 @@ import {
 export interface FavoriteStarProps {
   platformData: PlatformData;
   onToggle?: (isFavorited: boolean) => void;
+  /** 卡片里的紧凑形态：手机上也保持 32px（点击区外扩到 44px），给窄卡的标题留位置。 */
+  compact?: boolean;
 }
 
-export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
+export function FavoriteStar({
+  platformData,
+  onToggle,
+  compact = false,
+}: FavoriteStarProps) {
   const favoritable = !!FavoritesStorageService.deriveFavoriteId(platformData);
   const [isFavorited, setIsFavorited] = useState(() =>
     favoritable ? FavoritesStorageService.isFavorited(platformData) : false,
@@ -82,7 +88,7 @@ export function FavoriteStar({ platformData, onToggle }: FavoriteStarProps) {
       aria-pressed={isFavorited}
       aria-label={isFavorited ? "取消收藏" : "收藏"}
       title={isFavorited ? "已收藏，点击取消" : "点击添加到收藏"}
-      className={`grid h-8 w-8 cursor-pointer place-items-center border-0 bg-transparent p-0 ${deskFocusRing} ${deskPress} ${isFavorited ? deskStarOn : deskInk3}`}
+      className={`relative grid h-8 w-8 cursor-pointer place-items-center border-0 bg-transparent p-0 after:absolute after:content-[''] ${compact ? "after:-inset-[6px]" : "after:-inset-[2px] max-[768px]:h-10 max-[768px]:w-10"} ${deskFocusRing} ${deskPress} ${isFavorited ? deskStarOn : deskInk3}`}
       onClick={toggle}
     >
       <DeskIcon

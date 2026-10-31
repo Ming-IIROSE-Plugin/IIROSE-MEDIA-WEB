@@ -15,11 +15,6 @@ export const MediaContainerContext = createContext({
   updateCurrentInMultiPageStatus: (isCurrentInMultiPage: boolean) => {
     isCurrentInMultiPage;
   },
-  /** 手机点行 / 卡主体：操作条挂点（story 4 填充）。 */
-  onRowActivate: (platformData: PlatformData, trigger?: HTMLElement | null) => {
-    platformData;
-    trigger;
-  },
   ShowOrHideIMC: () => {},
 });
 

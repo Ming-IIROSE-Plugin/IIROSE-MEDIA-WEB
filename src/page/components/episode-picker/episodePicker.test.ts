@@ -388,7 +388,7 @@ describe("取消路径（都不点播）", () => {
 
   it("Esc 只关这一层：面板在时下一层不动，再按一次才关下一层", async () => {
     const below = vi.fn();
-    const release = pushOverlayLayer("sheet", below);
+    const release = pushOverlayLayer("source", below);
     try {
       const { onCancel } = await open();
       await press("Escape");

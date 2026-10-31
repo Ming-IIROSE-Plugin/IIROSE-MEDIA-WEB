@@ -112,7 +112,6 @@ export function ResultsArea({
 }: ResultsAreaProps) {
   const {
     currentOnDemandPlay,
-    onRowActivate,
     switchToMultiPage,
     updateCurrentInMultiPageStatus,
   } = useContext(MediaContainerContext);
@@ -214,15 +213,6 @@ export function ResultsArea({
     });
   };
 
-  /** 行 / 卡的主体点击：手机上挂操作条，桌面不动作。触发元素用于收起后归还焦点。 */
-  const activate = (
-    platformData: PlatformData,
-    trigger?: HTMLElement | null,
-  ) => {
-    if (!isPhoneLayout()) return;
-    onRowActivate?.(platformData, trigger ?? null);
-  };
-
   const openCollection = async (platformData: PlatformData) => {
     await updateCurrentInMultiPageStatus(true);
     void switchToMultiPage(platformData);
@@ -285,7 +275,6 @@ export function ResultsArea({
           nowPlaying={isNowPlaying(platformData)}
           supported={supported}
           onPlay={() => play(platformData)}
-          onActivate={(trigger) => activate(platformData, trigger)}
         />
       ),
     );
@@ -309,9 +298,6 @@ export function ResultsArea({
           revealed={revealed}
           onReveal={() => setRevealedKey(key)}
           onPlay={collection ? open : () => play(platformData)}
-          onActivate={
-            collection ? open : (trigger) => activate(platformData, trigger)
-          }
           idleLabel={collection ? "查看" : "点播"}
         />
       ) : (
@@ -323,7 +309,6 @@ export function ResultsArea({
           revealed={revealed}
           onReveal={() => setRevealedKey(key)}
           onPlay={() => play(platformData)}
-          onActivate={(trigger) => activate(platformData, trigger)}
           // 课程没有分 P 详情 / 播放流接口（课程流走 `BiliBiliCourseApi`）：面板取不到
           // 分集，桌面保留内页钻取这条既有能力；其余多 P / 多集由面板接管。
           onSelectEpisodes={

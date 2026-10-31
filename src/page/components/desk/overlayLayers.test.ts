@@ -19,7 +19,7 @@ const callBack = () =>
   )();
 
 const releases: (() => void)[] = [];
-const layer = (kind: "sheet" | "deck" | "order" | "inner") => {
+const layer = (kind: "source" | "deck" | "order" | "inner") => {
   const dismiss = vi.fn();
   releases.push(pushOverlayLayer(kind, dismiss));
   return dismiss;
@@ -71,7 +71,7 @@ describe("栈的 LIFO 与注销", () => {
 
   it("注销函数幂等：自己的层已关掉后不再误删别人的层", () => {
     const a = layer("inner");
-    const releaseB = pushOverlayLayer("sheet", () => {});
+    const releaseB = pushOverlayLayer("source", () => {});
 
     // 关掉最上层（b）后，b 的注销是空操作
     dismissTopOverlay();
@@ -83,7 +83,7 @@ describe("栈的 LIFO 与注销", () => {
   });
 
   it("面板内三层互斥：收起别的面板层，内页不受影响", () => {
-    const sheet = layer("sheet");
+    const sheet = layer("source");
     const deck = layer("deck");
     const inner = layer("inner");
 
@@ -114,21 +114,21 @@ describe("Esc 监听", () => {
     const event = escape(document);
     expect(event.defaultPrevented).toBe(false);
 
-    const dismiss = layer("sheet");
+    const dismiss = layer("source");
     const handled = escape(document);
     expect(dismiss).toHaveBeenCalledOnce();
     expect(handled.defaultPrevented).toBe(true);
   });
 
   it("连按只关一层（组件还没注销也不会二次落到同一层）", () => {
-    const dismiss = layer("sheet");
+    const dismiss = layer("source");
     escape(document);
     escape(document);
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
   it("按住 Esc 的重复事件被吞掉但不继续关层：一次按键只关一层", () => {
-    const sheet = layer("sheet");
+    const sheet = layer("source");
     const deck = layer("deck");
     const inner = layer("inner");
 
@@ -163,7 +163,7 @@ describe("Esc 监听", () => {
   });
 
   it("组合输入中的 Esc 不算关闭手势", () => {
-    const dismiss = layer("sheet");
+    const dismiss = layer("source");
     escape(document, { isComposing: true });
     expect(dismiss).not.toHaveBeenCalled();
   });
@@ -185,7 +185,7 @@ describe("宿站返回键", () => {
   it("面板开着且层非空：只关层，宿站不执行返回", () => {
     const closePanel = vi.fn();
     setPanelBackHandler(closePanel);
-    const dismiss = layer("sheet");
+    const dismiss = layer("source");
 
     callBack();
 
@@ -239,7 +239,7 @@ describe("宿站返回键", () => {
 
   it("随机面板开着时交给它自己的包装（返回先关它）", () => {
     setPanelBackHandler(vi.fn());
-    const dismiss = layer("sheet");
+    const dismiss = layer("source");
     hostWindow().__imwShufflePickerBack = () => {};
 
     callBack();
@@ -252,7 +252,7 @@ describe("宿站返回键", () => {
     delete hostWindow().Utils;
     const closePanel = vi.fn();
     setPanelBackHandler(closePanel);
-    const dismiss = layer("sheet");
+    const dismiss = layer("source");
     // 不抛错：Esc 仍能关层
     escape(document);
     expect(dismiss).toHaveBeenCalledOnce();

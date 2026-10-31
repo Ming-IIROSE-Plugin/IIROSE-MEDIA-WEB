@@ -1,6 +1,6 @@
 // 曲目行与曲目表表头（DESIGN.md `tracklist-row` / `tracklist-header`）。
 // 桌面七列（序号 / 封面 / 标题+歌手 / 出处 / 时长 / 星标 / 点播胶囊），
-// 手机四列（封面 / 标题+歌手 / 时长 / 40px 点播钮），手机不显示表头、序号、出处与星标。
+// 手机五列（封面 / 标题+歌手 / 时长 / 40px 收藏星 / 40px 点播钮），手机不显示表头、序号与出处。
 // 音乐、收藏、电台与专辑/歌单内页共用这个结构；电台行只用到封面、台名与点播列。
 import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
@@ -33,9 +33,9 @@ import {
   deskPress,
 } from "../floating-panel/tokens";
 
-/** 桌面七列 / 手机四列；表头与所有行共用，列宽不会漂移。 */
+/** 桌面七列 / 手机五列；表头与所有行共用，列宽不会漂移。 */
 export const trackColumns =
-  "grid grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px] items-center gap-3 max-[768px]:grid-cols-[48px_1fr_auto_40px]";
+  "grid grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px] items-center gap-3 max-[768px]:grid-cols-[48px_1fr_auto_40px_40px] max-[768px]:gap-2";
 
 const rowFrame = `group w-[calc(100%+28px)] border-0 border-b border-solid ${deskRule} bg-transparent text-left ${deskRowHover} mx-[-14px] px-[14px] max-[768px]:mx-0 max-[768px]:w-full max-[768px]:px-0`;
 
@@ -155,8 +155,6 @@ export interface TracklistRowProps {
   nowPlaying?: boolean;
   supported?: boolean;
   onPlay: () => void;
-  /** 行体点击 = 手机操作条的挂点（触发元素用于收起后归还焦点），桌面无动作。 */
-  onActivate?: (trigger: HTMLElement) => void;
 }
 
 export function TracklistRow({
@@ -166,7 +164,6 @@ export function TracklistRow({
   nowPlaying = false,
   supported = true,
   onPlay,
-  onActivate,
 }: TracklistRowProps) {
   const radio = variant === "radio";
   const status = useRequestStatus(platformData);
@@ -177,7 +174,6 @@ export function TracklistRow({
       className={`${rowFrame} ${trackColumns} min-h-[62px] max-[768px]:min-h-[66px]`}
       data-imw-tracklist-row="true"
       data-now-playing={nowPlaying ? "true" : undefined}
-      onClick={(event) => onActivate?.(event.currentTarget as HTMLElement)}
     >
       <span className="grid place-items-center max-[768px]:hidden">
         {!radio &&
@@ -233,7 +229,8 @@ export function TracklistRow({
         {duration}
       </span>
 
-      <span className="grid place-items-center max-[768px]:hidden">
+      {/* 手机也显示收藏星（40px 方钮，与点播钮并排；取消操作条后收藏的唯一入口） */}
+      <span className="grid place-items-center">
         {!radio && <FavoriteStar platformData={platformData} />}
       </span>
 

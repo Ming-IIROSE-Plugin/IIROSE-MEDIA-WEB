@@ -41,7 +41,6 @@ import { SyncManager } from "../sync/SyncManager";
 import { PageHeader } from "./components/desk/PageHeader";
 import { SearchBar, type SearchSource } from "./components/desk/SearchBar";
 import { ScopeRow, type ScopeItem } from "./components/desk/ScopeRow";
-import { ActionSheet } from "./components/action-sheet/ActionSheet";
 import { RoomDeck } from "./components/room-deck/RoomDeck";
 import { restoreFocus } from "./components/desk/focusTrap";
 import {
@@ -134,8 +133,6 @@ export class MainAppContainer extends Component<
       requestToken: 0,
       searchViewMode:
         PluginSettings.getPluginSetting().searchViewMode || "card",
-      sheetItem: null,
-      sheetTrigger: null,
     };
   }
 
@@ -169,8 +166,6 @@ export class MainAppContainer extends Component<
       this.searchBarRef.current?.focus();
 
     // 面板关闭：面板内的操作条一并收起（焦点不留在屏幕外）
-    if (prevProps.active && !this.props.active && this.state.sheetItem)
-      this.setState({ sheetItem: null, sheetTrigger: null });
 
     // 切模式：先快照当前现场，再恢复目标模式的现场
     if (prevProps.mode !== this.props.mode) {
@@ -230,61 +225,6 @@ export class MainAppContainer extends Component<
     this.controller.switchToOutFromMultiPage();
   };
 
-  /** 手机操作条：要么点播到房间（与行内点播同一路径），要么收藏，要么选集。 */
-  private handleRowActivate = (
-    platformData: PlatformData,
-    trigger?: HTMLElement | null,
-  ) => {
-    // 三者互斥：展开的底部条与顺序菜单先收起
-    closePanelTier("sheet");
-    this.setState({ sheetItem: platformData, sheetTrigger: trigger ?? null });
-  };
-
-  private closeSheet = () => {
-    if (!this.state.sheetItem) return;
-    this.setState({ sheetItem: null, sheetTrigger: null });
-  };
-
-  private playFromSheet = (platformData: PlatformData) => {
-    // 操作条随即收起，结果由面板提示条告知（已点播 / 刚刚点过了）
-    void guardedRequest(
-      platformData,
-      this.state.currentOnDemandPlay,
-      undefined,
-      {
-        minPendingMs: this.state.mode === MODE.radio ? RADIO_MIN_PENDING_MS : 0,
-      },
-    );
-    this.closeSheet();
-  };
-
-  /** 操作条的「选集」：收起操作条，按条目形态开插件自有的选集面板（CAP-8）。 */
-  private selectEpisodesFromSheet = (platformData: PlatformData) => {
-    const trigger = this.state.sheetTrigger;
-    this.closeSheet();
-    // 面板开在 body 上、记住打开时的焦点元素：先把焦点还给行体，别让它记成
-    // 即将卸载的操作条按钮（否则关闭面板后焦点落回 body）。
-    restoreFocus(trigger);
-    // B 站课程没有分 P 详情 / 播放流接口（课程流走 `BiliBiliCourseApi`）：仍按内页钻取，
-    // 面板只接普通多 P 与多源剧集。
-    if (platformData.bilibili?.course_id) {
-      void this.controller.updateCurrentInMultiPageStatus(true);
-      void this.controller.switchToMultiPage(platformData);
-      return;
-    }
-    // 分派不出条目形态就不开面板（「选集」本就只在多 P / 多集条目上出现）
-    if (platformData.bilibili) {
-      BilibiliPlatform.selectEpisodes(platformData);
-    } else if ((platformData.playList?.length ?? 0) > 0) {
-      AllVideosPlatform.selectEpisodes(platformData);
-    } else if (
-      platformData.neteaseMusic?.isSongList ||
-      platformData.neteaseMusic?.isAlbum
-    ) {
-      NetEasePlatform.selectEpisodes(platformData);
-    }
-  };
-
   /** 重试：内页重载内页，否则重发当前范围。 */
   private handleRetry = () => {
     const source = this.innerPageSource ?? this.state.innerCollection;
@@ -329,8 +269,6 @@ export class MainAppContainer extends Component<
       totalPage,
       searchViewMode,
       currentOnDemandPlay,
-      sheetItem,
-      sheetTrigger,
     } = this.state;
 
     const categories = this.getActiveCategories();
@@ -353,7 +291,6 @@ export class MainAppContainer extends Component<
       currentOnDemandPlay,
       updateCurrentInMultiPageStatus:
         this.controller.updateCurrentInMultiPageStatus,
-      onRowActivate: this.handleRowActivate,
       ShowOrHideIMC,
     };
 
@@ -457,17 +394,6 @@ export class MainAppContainer extends Component<
             {/* 底部条 / 迷你条：桌面三栏、手机迷你条 + 展开层（story 3） */}
             <RoomDeck active={this.props.active} mode={this.state.mode} />
 
-            {/* 手机操作条：挂在主面板内部（面板 `transform` 是 `fixed` 的包含块），
-                因而压得住迷你条与标签栏，也不新设 z-index 根。 */}
-            {this.props.active && sheetItem && (
-              <ActionSheet
-                platformData={sheetItem}
-                returnFocus={sheetTrigger}
-                onClose={this.closeSheet}
-                onPlay={() => this.playFromSheet(sheetItem)}
-                onSelectEpisodes={() => this.selectEpisodesFromSheet(sheetItem)}
-              />
-            )}
           </div>
         </div>
       </Provider>
@@ -612,9 +538,6 @@ export class MainAppContainer extends Component<
       {
         mode: next,
         ...restored,
-        // 面板内的浮层不跨模式存活（操作条随切模式收起，焦点不留在屏幕外）
-        sheetItem: null,
-        sheetTrigger: null,
         updating: false,
         requestToken: this.state.requestToken + 1,
       },
@@ -843,16 +766,7 @@ export class MainAppContainer extends Component<
      * @description 更新目前是否在多集页面里面
      */
     updateCurrentInMultiPageStatus: (status: boolean) => {
-      // 进内页时收起面板内的浮层（内页登记为层级栈的一层）
-      this.setState(
-        status
-          ? {
-              isCurrentInMultiPage: status,
-              sheetItem: null,
-              sheetTrigger: null,
-            }
-          : { isCurrentInMultiPage: status },
-      );
+      this.setState({ isCurrentInMultiPage: status });
     },
 
     /**

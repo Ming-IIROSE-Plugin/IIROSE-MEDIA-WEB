@@ -200,7 +200,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
   const openDeck = () => {
     // 房间无播放时点主体不展开。
     if (expandedRef.current || !media.playing) return;
-    // 三者互斥：操作条与顺序菜单先收起
+    // 互斥：顺序菜单、来源菜单先收起
     closePanelTier("deck");
     setOpen(true);
   };

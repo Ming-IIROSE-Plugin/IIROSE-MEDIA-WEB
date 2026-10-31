@@ -122,7 +122,7 @@ describe("Esc 与宿站返回键", () => {
     expect(isOpen()).toBe(true);
 
     const dismiss = vi.fn();
-    const release = pushOverlayLayer("sheet", dismiss);
+    const release = pushOverlayLayer("source", dismiss);
     await escape();
     expect(dismiss).toHaveBeenCalledOnce();
     expect(isOpen()).toBe(true);

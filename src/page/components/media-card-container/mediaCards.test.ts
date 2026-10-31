@@ -323,7 +323,7 @@ describe("封面", () => {
 });
 
 describe("曲目表", () => {
-  it("桌面七列 / 手机四列；表头仅桌面", async () => {
+  it("桌面七列 / 手机五列（含收藏星）；表头仅桌面", async () => {
     await mount(
       withCtx(
         h("div", {}, [
@@ -336,7 +336,7 @@ describe("曲目表", () => {
     expect(classesOf(header)).toEqual(
       expect.arrayContaining([
         "grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px]",
-        "max-[768px]:grid-cols-[48px_1fr_auto_40px]",
+        "max-[768px]:grid-cols-[48px_1fr_auto_40px_40px]",
         "h-[34px]",
         "max-[768px]:hidden",
       ]),
@@ -350,7 +350,7 @@ describe("曲目表", () => {
     expect(classesOf(row)).toEqual(
       expect.arrayContaining([
         "grid-cols-[38px_56px_1.6fr_1fr_74px_44px_96px]",
-        "max-[768px]:grid-cols-[48px_1fr_auto_40px]",
+        "max-[768px]:grid-cols-[48px_1fr_auto_40px_40px]",
       ]),
     );
     expect(row.textContent).toContain("01");
@@ -477,13 +477,12 @@ describe("曲目表", () => {
 });
 
 describe("音乐网格卡", () => {
-  it("1:1 封面、单行标题、歌手 · 等宽时长、桌面右端收藏星", async () => {
+  it("1:1 封面、单行标题、歌手 · 等宽时长、标题行右端收藏星（手机也显示）", async () => {
     await mount(
       withCtx(
         h(MusicTile, {
           platformData: song,
           onPlay: () => {},
-          onActivate: () => {},
         }),
       ),
     );
@@ -491,7 +490,7 @@ describe("音乐网格卡", () => {
     expect(host.textContent).toContain("晴天");
     expect(host.textContent).toContain("04:29");
     const star = host.querySelector('button[aria-label="收藏"]')!;
-    expect(star.parentElement!.getAttribute("class")).toContain(
+    expect(star.parentElement!.getAttribute("class")).not.toContain(
       "max-[768px]:hidden",
     );
   });
@@ -1505,8 +1504,8 @@ describe("B 站课程卡：桌面保留内页钻取入口", () => {
       (el) => el.textContent === "选集",
     )!;
     expect(select).toBeDefined();
-    // 手机走操作条的「选集」，卡片上的这个入口只在桌面出现
-    expect(select.getAttribute("class")).toContain("max-[768px]:hidden");
+    // 操作条已取消：这个入口手机上也显示
+    expect(select.getAttribute("class")).not.toContain("max-[768px]:hidden");
     await act(async () => {
       select.click();
     });
@@ -1537,108 +1536,47 @@ describe("B 站课程卡：桌面保留内页钻取入口", () => {
   });
 });
 
-describe("行 / 卡主体点击 → 手机操作条挂点", () => {
-  /** 只把宽度判成手机：`hover: none` 不成立，点按选中（无悬停宽屏）不参与。 */
+describe("手机：没有操作条，收藏星与点播钮直接在行 / 卡上", () => {
+  /** 只把宽度判成手机：`hover: none` 不成立。 */
   const phoneLayout = () =>
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: query.includes("max-width: 768px"),
     }));
 
-  it("手机点视频缩略图与音乐网格卡主体：条目与触发元素一起交给容器", async () => {
+  it("手机点音乐网格卡主体：先显示「点播」胶囊，不直接点播", async () => {
     phoneLayout();
-
-    const videos = ready([video]);
-    await mount(
-      results({
-        ...resultsBase,
-        mode: MODE.video,
-        viewMode: "card",
-        mediaData: videos,
-      }),
-      videos,
-    );
-    const videoBody = host.querySelector<HTMLElement>(
-      "button[data-imw-tile-body]",
-    )!;
-    await act(async () => {
-      videoBody.click();
-    });
-    expect(ctx.onRowActivate).toHaveBeenCalledWith(video, videoBody);
-    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
-
-    render(null, host);
-    ctx.onRowActivate.mockClear();
     const songs = ready([song]);
     await mount(
-      results({
-        ...resultsBase,
-        keyword: "晴天",
-        viewMode: "card",
-        mediaData: songs,
-      }),
+      results({ ...resultsBase, viewMode: "card", mediaData: songs }),
       songs,
     );
-    const musicBody = host.querySelector<HTMLElement>(
-      "button[data-imw-tile-body]",
-    )!;
+    const tile = host.querySelector<HTMLElement>('[data-imw-tile="music"]')!;
     await act(async () => {
-      musicBody.click();
+      tile.querySelector<HTMLElement>('[data-imw-tile-body="true"]')!.click();
     });
-    expect(ctx.onRowActivate).toHaveBeenCalledWith(song, musicBody);
+    expect(tile.getAttribute("data-revealed")).toBe("true");
     expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
-  it("手机点曲目行主体出操作条；行内点播按钮不触发行激活", async () => {
+  it("手机曲目行：点行体什么都不做；收藏星可见，点播钮照常点播", async () => {
     phoneLayout();
     const songs = ready([song]);
     await mount(results({ ...resultsBase, mediaData: songs }), songs);
     const row = host.querySelector<HTMLElement>("[data-imw-tracklist-row]")!;
-
     await act(async () => {
       row.click();
     });
-    expect(ctx.onRowActivate).toHaveBeenCalledWith(song, row);
     expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
-
-    // 行内点播按钮自己 stopPropagation：一键点播照旧，不弹操作条
-    ctx.onRowActivate.mockClear();
-    const play = Array.from(row.querySelectorAll("button")).find(
-      (el) => el.getAttribute("aria-label") === "点播 晴天",
-    ) as HTMLElement;
-    await act(async () => {
-      play.click();
-    });
-    expect(ctx.onRowActivate).not.toHaveBeenCalled();
-    expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(song);
-  });
-
-  it("桌面：行体不动作，卡片主体仍直接点播", async () => {
-    const songs = ready([song]);
-    await mount(results({ ...resultsBase, mediaData: songs }), songs);
-    const row = host.querySelector<HTMLElement>("[data-imw-tracklist-row]")!;
-    await act(async () => {
-      row.click();
-    });
-    expect(ctx.onRowActivate).not.toHaveBeenCalled();
-    expect(ctx.currentOnDemandPlay).not.toHaveBeenCalled();
-
-    render(null, host);
-    const videos = ready([video]);
-    await mount(
-      results({
-        ...resultsBase,
-        mode: MODE.video,
-        viewMode: "card",
-        mediaData: videos,
-      }),
-      videos,
+    const star = row.querySelector('button[aria-label="收藏"]')!;
+    expect(star.parentElement!.getAttribute("class")).not.toContain(
+      "max-[768px]:hidden",
     );
-    const body = host.querySelector<HTMLElement>("button[data-imw-tile-body]")!;
-    expect(body.getAttribute("aria-label")).toBe("点播 某视频");
+    expect(star.getAttribute("class")).toContain("max-[768px]:h-10");
     await act(async () => {
-      body.click();
+      row.querySelector<HTMLElement>('button[aria-label^="点播 "]')!.click();
     });
-    expect(ctx.onRowActivate).not.toHaveBeenCalled();
-    expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(video);
+    expect(ctx.currentOnDemandPlay).toHaveBeenCalledWith(song);
+    vi.unstubAllGlobals();
   });
 });

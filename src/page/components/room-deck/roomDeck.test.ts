@@ -559,14 +559,14 @@ describe("迷你条与展开的底部条", () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it("与操作条互斥：展开时收起别的面板层，操作条打开时展开层先收起", () => {
+  it("与来源菜单互斥：展开时收起别的面板层，来源菜单打开时展开层先收起", () => {
     const { session } = harness();
     provideMediaSession(session);
     mount();
 
-    // 操作条（或顺序菜单）开着 → 点迷你条展开时先收起它
+    // 来源菜单（或顺序菜单）开着 → 点迷你条展开时先收起它
     const dismissSheet = vi.fn();
-    const releaseSheet = pushOverlayLayer("sheet", dismissSheet);
+    const releaseSheet = pushOverlayLayer("source", dismissSheet);
     act(() => {
       miniBody().click();
     });
@@ -574,9 +574,9 @@ describe("迷你条与展开的底部条", () => {
     expect(deck("expanded")).not.toBeNull();
     releaseSheet();
 
-    // 反向：展开层开着时，操作条打开（`closePanelTier("sheet")`）会先收起展开层
+    // 反向：展开层开着时，来源菜单打开（`closePanelTier("source")`）会先收起展开层
     act(() => {
-      closePanelTier("sheet");
+      closePanelTier("source");
     });
     settleCollapse();
     expect(deck("expanded")).toBeNull();

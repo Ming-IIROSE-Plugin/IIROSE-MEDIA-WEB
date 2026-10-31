@@ -41,8 +41,6 @@ export interface VideoTileProps {
   revealed?: boolean;
   onReveal?: () => void;
   onPlay: () => void;
-  /** 手机点缩略图（点播按钮以外）= 操作条挂点（触发元素用于收起后归还焦点）。 */
-  onActivate?: (trigger: HTMLElement) => void;
   /**
    * 桌面「选集」入口：只给选集面板服务不了的条目（B 站课程——没有分 P 详情与播放流
    * 接口，面板只会「加载失败」），走内页钻取。普通多 P / 多集由面板接管，不传该 prop。
@@ -57,7 +55,6 @@ export function VideoTile({
   revealed = false,
   onReveal,
   onPlay,
-  onActivate,
   onSelectEpisodes,
 }: VideoTileProps) {
   const live = isLiveItem(platformData);
@@ -67,14 +64,12 @@ export function VideoTile({
   } ${platformData.title}`;
   const duration = formatDuration(platformData.duration);
 
+  // 没有悬停的设备（手机、iPad）：第一次点卡片只显示按钮，再点按钮才点播；
+  // 有悬停的桌面：点卡片即点播（同点胶囊）。
   const handleBodyClick = (event: MouseEvent) => {
     event.stopPropagation();
-    if (isTapToReveal()) {
+    if (isTapToReveal() || isPhoneLayout()) {
       if (!revealed) onReveal?.();
-      return;
-    }
-    if (isPhoneLayout()) {
-      onActivate?.(event.currentTarget as HTMLElement);
       return;
     }
     onPlay();
@@ -111,9 +106,9 @@ export function VideoTile({
           onClick={handleBodyClick}
         />
 
-        {/* 桌面可收藏（旧卡片有）；手机走 story 4 的操作条 */}
-        <span className="absolute right-1 top-1 max-[768px]:hidden">
-          <FavoriteStar platformData={platformData} />
+        {/* 收藏星：桌面与手机都在封面右上角 */}
+        <span className="absolute right-1 top-1">
+          <FavoriteStar platformData={platformData} compact />
         </span>
 
         {nowPlaying && (
@@ -158,7 +153,7 @@ export function VideoTile({
           {onSelectEpisodes && (
             <button
               type="button"
-              className={`border-0 bg-transparent p-0 max-[768px]:hidden ${deskOnRose} ${typeLabelStrong} underline ${overlayHit}`}
+              className={`border-0 bg-transparent p-0 ${deskOnRose} ${typeLabelStrong} underline ${overlayHit}`}
               onClick={(event) => {
                 event.stopPropagation();
                 onSelectEpisodes();

@@ -34,8 +34,6 @@ export interface MusicTileProps {
   revealed?: boolean;
   onReveal?: () => void;
   onPlay: () => void;
-  /** 手机点卡片（点播按钮以外）= 操作条挂点（触发元素用于收起后归还焦点）。 */
-  onActivate?: (trigger: HTMLElement) => void;
   /** 胶囊的空闲文案（默认「点播」；收藏里的专辑 / 歌单是「查看」，点了进内页）。 */
   idleLabel?: string;
 }
@@ -47,7 +45,6 @@ export function MusicTile({
   revealed = false,
   onReveal,
   onPlay,
-  onActivate,
   idleLabel = "点播",
 }: MusicTileProps) {
   const duration = formatDuration(platformData.duration);
@@ -56,14 +53,12 @@ export function MusicTile({
     isPhoneLayout() || isTapToReveal() ? "查看" : "点播"
   } ${platformData.title}`;
 
+  // 没有悬停的设备（手机、iPad）：第一次点卡片只显示按钮，再点按钮才点播；
+  // 有悬停的桌面：点卡片即点播（同点胶囊）。
   const handleBodyClick = (event: MouseEvent) => {
     event.stopPropagation();
-    if (isTapToReveal()) {
+    if (isTapToReveal() || isPhoneLayout()) {
       if (!revealed) onReveal?.();
-      return;
-    }
-    if (isPhoneLayout()) {
-      onActivate?.(event.currentTarget as HTMLElement);
       return;
     }
     onPlay();
@@ -146,8 +141,8 @@ export function MusicTile({
             {duration && <span className={typeMonoNumSm}>{duration}</span>}
           </div>
         </div>
-        <span className="shrink-0 max-[768px]:hidden">
-          <FavoriteStar platformData={platformData} />
+        <span className="shrink-0">
+          <FavoriteStar platformData={platformData} compact />
         </span>
       </div>
     </div>

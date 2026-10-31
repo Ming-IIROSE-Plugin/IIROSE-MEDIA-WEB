@@ -1,7 +1,7 @@
 // 专辑 / 歌单结果行（DESIGN.md `collection-row`）：沿用曲目行的列结构，
 // 时长列换成等宽曲目数，点播钮位换成「查看」描边胶囊。
 // 桌面只有封面、标题与「查看」进入内页（整行可点会让收藏星很难点中，用户反馈）；
-// 手机没有星标列，整行点按进入。行本身不提供整张点播——整张播放在内页头「全部播放」。
+// 手机整行点按进入（收藏星自己拦截点击）。行本身不提供整张点播——整张播放在内页头「全部播放」。
 import { Cover } from "./Cover";
 import { FavoriteStar } from "./FavoriteStar";
 import { SourceCell, trackColumns } from "./TracklistRow";
@@ -85,7 +85,7 @@ export function CollectionRow({
         {trackCountLabel(platformData.trackCount)}
       </span>
 
-      <span className="grid place-items-center max-[768px]:hidden">
+      <span className="grid place-items-center">
         <FavoriteStar platformData={platformData} />
       </span>
 

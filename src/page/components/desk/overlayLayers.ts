@@ -4,11 +4,10 @@
 //
 // 关闭顺序：收藏随机面板（独立根、自管 `Esc` 的单槽位，`dispatchBack` 先让位给它）
 // > 选集面板（独立根 `z-[90010]`，但登记 `episode` 层，不进 `PANEL_TIER`）
-// > 操作条 / 展开的底部条 / 顺序菜单 / 来源菜单（主面板内最上层，互斥）
+// > 展开的底部条 / 顺序菜单 / 来源菜单（主面板内最上层，互斥）
 // > 专辑·歌单内页 > 主面板。
 
 export type OverlayLayerKind =
-  | "sheet"
   | "deck"
   | "order"
   /** 搜索栏的来源菜单。 */
@@ -24,7 +23,6 @@ interface OverlayLayer {
 
 /** 主面板内最上层：三者互斥，`closePanelTier` 保证同时只留一个。 */
 const PANEL_TIER: readonly OverlayLayerKind[] = [
-  "sheet",
   "deck",
   "order",
   "source",
