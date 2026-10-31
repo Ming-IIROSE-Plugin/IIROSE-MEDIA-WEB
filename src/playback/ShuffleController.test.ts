@@ -8,6 +8,10 @@ import { SHUFFLE_REASONS, ShuffleController } from "./ShuffleController";
 import type { ShufflePrepareOptions, ShuffleTarget } from "./ShuffleController";
 import { saveShufflePlatform } from "./ShuffleSelection";
 import type { ShufflePlatform, ShuffleSelection } from "./ShuffleSelection";
+import {
+  SETTINGS_REV,
+  SETTINGS_REV_KEY,
+} from "../settings/pluginSettings/PluginSettings";
 
 const settle = async () => {
   for (let index = 0; index < 12; index++) await Promise.resolve();
@@ -123,6 +127,8 @@ function setup(
 }
 
 function setDefaultPage(defaultPage: number) {
+  // 模拟「已经吃过模式重编号迁移」的存档：这些用例考的是迁移之后的语义
+  localStorage.setItem(SETTINGS_REV_KEY, String(SETTINGS_REV));
   localStorage.setItem(
     "imwPluginSetting",
     JSON.stringify({

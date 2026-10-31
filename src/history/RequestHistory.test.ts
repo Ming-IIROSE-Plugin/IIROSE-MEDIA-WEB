@@ -1,10 +1,24 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REQUEST_HISTORY_KEY, RequestHistory } from "./RequestHistory";
 import { Media } from "../iirose_func/Socket/Media";
 
 beforeEach(() => {
+  // 写盘节流用定时器：伪时钟让「一秒窗口」可断言，也避免上一个用例的待写定时器漏到下一个
+  vi.useFakeTimers();
   localStorage.clear();
+  RequestHistory.resetForTests();
 });
+
+afterEach(() => {
+  RequestHistory.resetForTests();
+  vi.useRealTimers();
+});
+
+/** 存档里实际落盘的内容（尚未落盘时为 null）。 */
+const saved = () => {
+  const raw = localStorage.getItem(REQUEST_HISTORY_KEY);
+  return raw === null ? null : (JSON.parse(raw) as { entries: unknown[] });
+};
 
 /** `&1` 点播报文：`Socket/Media.mediaEvent` 产出的字段（`c` / `o` 已被截掉 `http`）。 */
 const payload = (overrides: Record<string, unknown> = {}) =>
@@ -256,9 +270,10 @@ describe("收录规则", () => {
     expect(entries.map((entry) => entry.title)).not.toContain("曲1");
   });
 
-  it("存储写入失败静默：不抛错，已有记录原样保留", () => {
+  it("存储写入失败静默：不抛错，内存里的记录照常可读，存档不被半截覆盖", () => {
     RequestHistory.recordPayload(payload());
-    expect(RequestHistory.load()).toHaveLength(1);
+    RequestHistory.flush();
+    expect(saved()?.entries).toHaveLength(1);
 
     const setItem = vi
       .spyOn(Storage.prototype, "setItem")
@@ -271,17 +286,117 @@ describe("收录规则", () => {
           payload({ n: "乙", o: "s://music.163.com/#/song?id=2" }),
         ),
       ).not.toThrow();
+      expect(() => RequestHistory.flush()).not.toThrow();
     } finally {
       setItem.mockRestore();
     }
-    // 第二条没写进去，第一条也没被半截覆盖
-    expect(RequestHistory.load().map((entry) => entry.title)).toEqual(["晴天"]);
+    // 内存副本是读的真相：新记录照常可见，点播不因存储故障中断
+    expect(RequestHistory.load().map((entry) => entry.title)).toEqual([
+      "乙",
+      "晴天",
+    ]);
+    // 存储里仍是上一次成功写入的那份：既没丢也没被半截覆盖
+    expect(saved()?.entries).toHaveLength(1);
   });
 
   it("存储键字面量是 imwRequestHistory", () => {
     expect(REQUEST_HISTORY_KEY).toBe("imwRequestHistory");
     RequestHistory.recordPayload(payload());
+    RequestHistory.flush();
     expect(localStorage.getItem("imwRequestHistory")).not.toBeNull();
+  });
+});
+
+describe("合并写盘", () => {
+  it("一秒内多条报文只写一次，内容合并到那份存档里", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    for (let id = 1; id <= 20; id++) {
+      RequestHistory.recordPayload(
+        payload({ n: `曲${id}`, o: `s://music.163.com/#/song?id=${id}` }),
+      );
+    }
+    // 窗口没到：一条都没落盘（旧实现这时候已经重写了 20 遍）
+    expect(setItem).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(999);
+    expect(setItem).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(
+      saved()?.entries.map((entry) => (entry as { title: string }).title),
+    ).toEqual(Array.from({ length: 20 }, (_, index) => `曲${20 - index}`));
+  });
+
+  it("持续点播时每秒至多写一次（千首批量不会逐条重写整份存档）", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    let id = 0;
+    for (let second = 0; second < 3; second++) {
+      for (let index = 0; index < 5; index++) {
+        id += 1;
+        RequestHistory.recordPayload(
+          payload({ n: `曲${id}`, o: `s://music.163.com/#/song?id=${id}` }),
+        );
+      }
+      vi.advanceTimersByTime(1000);
+      expect(setItem).toHaveBeenCalledTimes(second + 1);
+    }
+    expect(saved()?.entries).toHaveLength(15);
+  });
+
+  it("批量超过上限也只写一份 50 条的存档", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    for (let id = 1; id <= 120; id++) {
+      RequestHistory.recordPayload(
+        payload({ n: `曲${id}`, o: `s://music.163.com/#/song?id=${id}` }),
+      );
+    }
+    vi.advanceTimersByTime(1000);
+    expect(setItem).toHaveBeenCalledTimes(1);
+    const entries = saved()!.entries as { title: string }[];
+    expect(entries).toHaveLength(50);
+    expect(entries[0].title).toBe("曲120");
+  });
+
+  it("读到的立刻是新内容，不等落盘", () => {
+    RequestHistory.recordPayload(payload());
+    expect(RequestHistory.load().map((entry) => entry.title)).toEqual(["晴天"]);
+    expect(RequestHistory.recentMusic()).toHaveLength(1);
+    // 还没到写窗口：存档里什么都没有，但读的已经是对的了
+    expect(saved()).toBeNull();
+  });
+
+  it("pagehide 时把待写内容立即落盘（不丢最后一秒）", () => {
+    RequestHistory.recordPayload(payload());
+    expect(saved()).toBeNull();
+    window.dispatchEvent(new Event("pagehide"));
+    expect(saved()?.entries).toHaveLength(1);
+
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    vi.advanceTimersByTime(1000);
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("存档被外部改写（另一个标签页 / 清场）后按存储重新种子化", () => {
+    RequestHistory.recordPayload(payload());
+    RequestHistory.flush();
+    expect(RequestHistory.load()).toHaveLength(1);
+
+    localStorage.setItem(REQUEST_HISTORY_KEY, JSON.stringify({ entries: [] }));
+    expect(RequestHistory.load()).toEqual([]);
+  });
+
+  it("flush 立即写出合并结果，之后没有改动就不重复写", () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    RequestHistory.recordPayload(payload({ n: "甲" }));
+    RequestHistory.recordPayload(
+      payload({ n: "乙", o: "s://music.163.com/#/song?id=2" }),
+    );
+    RequestHistory.flush();
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(saved()?.entries).toHaveLength(2);
+
+    RequestHistory.flush();
+    expect(setItem).toHaveBeenCalledTimes(1);
   });
 });
 

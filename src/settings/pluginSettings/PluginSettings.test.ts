@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PluginSettings } from "./PluginSettings";
+import {
+  PluginSettings,
+  SETTINGS_REV,
+  SETTINGS_REV_KEY,
+} from "./PluginSettings";
+import {
+  DEFAULT_DESK_MODE,
+  DESK_MODE_LIST,
+  type DeskModeDescriptor,
+} from "../deskModeCatalog";
 
 describe("normalizeSyncSettings", () => {
   const empty = PluginSettings.normalizeSyncSettings(null);
@@ -156,6 +165,111 @@ describe("点播播报模式设置", () => {
     expect(PluginSettings.getPluginSetting()).not.toHaveProperty(
       "shuffleIncludeCollections",
     );
+  });
+});
+
+describe("启动默认页（模式重编号的一次性迁移）", () => {
+  const KEY = "imwPluginSetting";
+  const stored = () => JSON.parse(localStorage.getItem(KEY) ?? "null");
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("旧存档（defaultPage: 2、没有版本标记）重置为音乐并写入标记", () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        chatBox: { isProxyAtInput: false },
+        defaultPage: 2,
+        searchViewMode: "list",
+        announceMode: "summary",
+        favoritesPageSize: 50,
+        sync: { enabled: true, lastSyncAt: 1700000000000 },
+      }),
+    );
+
+    expect(PluginSettings.getPluginSetting().defaultPage).toBe(
+      DEFAULT_DESK_MODE,
+    );
+    expect(localStorage.getItem(SETTINGS_REV_KEY)).toBe(String(SETTINGS_REV));
+    // 存档本身也要改：只改返回值的话，下一次读（标记已在）又会拿回 2
+    expect(stored().defaultPage).toBe(DEFAULT_DESK_MODE);
+    // 其余设置一项不动
+    expect(stored()).toMatchObject({
+      chatBox: { isProxyAtInput: false },
+      searchViewMode: "list",
+      announceMode: "summary",
+      favoritesPageSize: 50,
+    });
+    expect(stored().sync).toMatchObject({
+      enabled: true,
+      lastSyncAt: 1700000000000,
+    });
+  });
+
+  it("已带标记的存档不再被改写：defaultPage: 3 就是收藏", () => {
+    localStorage.setItem(SETTINGS_REV_KEY, String(SETTINGS_REV));
+    localStorage.setItem(KEY, JSON.stringify({ defaultPage: 3 }));
+
+    expect(PluginSettings.getPluginSetting().defaultPage).toBe(3);
+    expect(stored().defaultPage).toBe(3);
+    expect(PluginSettings.parseDefaultPage(3)).toBe("收藏");
+  });
+
+  it("迁移只跑一次：用户之后自己选的页面留得住", () => {
+    localStorage.setItem(KEY, JSON.stringify({ defaultPage: 3 }));
+
+    const ps = PluginSettings.getPluginSetting();
+    expect(ps.defaultPage).toBe(DEFAULT_DESK_MODE);
+    ps.defaultPage = 4;
+    localStorage.setItem(KEY, JSON.stringify(ps));
+
+    expect(PluginSettings.getPluginSetting().defaultPage).toBe(4);
+    expect(PluginSettings.parseDefaultPage(4)).toBe("设置");
+  });
+
+  it("迁移幂等：第二次读取不再写盘", () => {
+    localStorage.setItem(KEY, JSON.stringify({ defaultPage: 2 }));
+    PluginSettings.getPluginSetting();
+
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    expect(PluginSettings.getPluginSetting().defaultPage).toBe(
+      DEFAULT_DESK_MODE,
+    );
+    expect(setItem).not.toHaveBeenCalled();
+  });
+
+  it("手改出的非法值一律回退音乐", () => {
+    localStorage.setItem(SETTINGS_REV_KEY, String(SETTINGS_REV));
+    for (const raw of ["电台", -1, 99, 2.5, null, undefined]) {
+      localStorage.setItem(KEY, JSON.stringify({ defaultPage: raw }));
+      expect(PluginSettings.getPluginSetting().defaultPage).toBe(
+        DEFAULT_DESK_MODE,
+      );
+    }
+    expect(PluginSettings.normalizeDefaultPage("音乐")).toBe(DEFAULT_DESK_MODE);
+  });
+
+  it("合法范围与文案都取自共享模式目录：多出第七种模式照样归一化", () => {
+    localStorage.setItem(SETTINGS_REV_KEY, String(SETTINGS_REV));
+    // 临时模拟第七种模式：目录增长后归一化与文案无需改动即跟上
+    const list = DESK_MODE_LIST as unknown as DeskModeDescriptor[];
+    list.push({
+      index: 6,
+      id: "lab" as DeskModeDescriptor["id"],
+      label: "实验室",
+      title: "实验室",
+    });
+    try {
+      expect(PluginSettings.normalizeDefaultPage(6)).toBe(6);
+      expect(PluginSettings.parseDefaultPage(6)).toBe("实验室");
+      localStorage.setItem(KEY, JSON.stringify({ defaultPage: 6 }));
+      expect(PluginSettings.getPluginSetting().defaultPage).toBe(6);
+      expect(PluginSettings.normalizeDefaultPage(7)).toBe(DEFAULT_DESK_MODE);
+    } finally {
+      list.pop();
+    }
   });
 });
 

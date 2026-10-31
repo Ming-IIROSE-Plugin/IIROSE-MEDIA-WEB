@@ -1,33 +1,34 @@
-// 点歌台的六种模式：下标即 `CategoriesIndex` / `PluginSettings.defaultPage` 的语义。
-// 0 音乐、1 视频、2 电台、3 收藏、4 设置、5 关于（手机端「关于」并入设置标签）。
+// 点歌台的六种模式：目录（下标 / 文案 / 合法范围）在 `settings/deskModeCatalog`，
+// 设置层的「启动默认页面」与这里的导航、页标题共用同一份，不各写一套。
+import {
+  DESK_MODE_LIST,
+  DEFAULT_DESK_MODE,
+  deskModeTitle,
+  normalizeDeskMode,
+  type DeskModeDescriptor,
+  type DeskModeId,
+} from "../../../settings/deskModeCatalog";
+
+/** 按 id 取下标：目录是唯一真相，这里不重复写数字。 */
+function modeIndexOf(id: DeskModeId): number {
+  const mode = DESK_MODE_LIST.find((item) => item.id === id);
+  return mode ? mode.index : DEFAULT_DESK_MODE;
+}
+
 export const MODE = {
-  music: 0,
-  video: 1,
-  radio: 2,
-  favorites: 3,
-  settings: 4,
-  about: 5,
+  music: modeIndexOf("music"),
+  video: modeIndexOf("video"),
+  radio: modeIndexOf("radio"),
+  favorites: modeIndexOf("favorites"),
+  settings: modeIndexOf("settings"),
+  about: modeIndexOf("about"),
 } as const;
 
 export type DeskMode = number;
 
-export interface DeskModeInfo {
-  index: number;
-  id: "music" | "video" | "radio" | "favorites" | "settings" | "about";
-  /** 导航项文字。 */
-  label: string;
-  /** 页标题（音乐页为「点歌台」）。 */
-  title: string;
-}
+export type DeskModeInfo = DeskModeDescriptor;
 
-export const DESK_MODES: readonly DeskModeInfo[] = [
-  { index: MODE.music, id: "music", label: "音乐", title: "点歌台" },
-  { index: MODE.video, id: "video", label: "视频", title: "视频" },
-  { index: MODE.radio, id: "radio", label: "电台", title: "电台" },
-  { index: MODE.favorites, id: "favorites", label: "收藏", title: "收藏" },
-  { index: MODE.settings, id: "settings", label: "设置", title: "设置" },
-  { index: MODE.about, id: "about", label: "关于", title: "关于" },
-];
+export const DESK_MODES: readonly DeskModeInfo[] = DESK_MODE_LIST;
 
 /** 桌面竖栏：四个内容模式在弹性空白之上，设置与关于在下方。 */
 export const RAIL_MODES = DESK_MODES.slice(0, 4);
@@ -38,10 +39,7 @@ export const TAB_MODES = DESK_MODES.filter((mode) => mode.id !== "about");
 
 /** 非法下标（手改 localStorage、旧版本残留）一律回退音乐模式。 */
 export function normalizeMode(raw: unknown): number {
-  const value = Number(raw);
-  return Number.isInteger(value) && value >= 0 && value < DESK_MODES.length
-    ? value
-    : MODE.music;
+  return normalizeDeskMode(raw);
 }
 
 export function modeInfo(index: unknown): DeskModeInfo {
@@ -50,7 +48,7 @@ export function modeInfo(index: unknown): DeskModeInfo {
 
 /** 页标题：音乐是「点歌台」，其余为模式名。 */
 export function modeTitle(index: unknown): string {
-  return modeInfo(index).title;
+  return deskModeTitle(index);
 }
 
 /** 有搜索栏的模式：设置与关于没有搜索作用（EXPERIENCE 各模式的来源、范围与内容）。 */

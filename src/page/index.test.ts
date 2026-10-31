@@ -17,6 +17,10 @@ import { resetPanelFocus, setPanelFocus } from "../playback/PanelFocus";
 import { releaseShufflePicker } from "./components/shuffle-picker/openShufflePicker";
 import { mediaSession } from "../media-progress/MediaSession";
 import { Gesture } from "../listener/Gesture";
+import {
+  SETTINGS_REV,
+  SETTINGS_REV_KEY,
+} from "../settings/pluginSettings/PluginSettings";
 
 const sent = vi.fn();
 const payload = `&1${JSON.stringify({
@@ -302,7 +306,9 @@ describe("收藏随机选择面板接线", () => {
     const selectedTab = () =>
       dialog()?.querySelector('[role="tab"][aria-selected="true"]')
         ?.textContent;
-    const setDefaultPage = (defaultPage: number) =>
+    const setDefaultPage = (defaultPage: number) => {
+      // 模拟「已吃过模式重编号迁移」的存档
+      localStorage.setItem(SETTINGS_REV_KEY, String(SETTINGS_REV));
       localStorage.setItem(
         "imwPluginSetting",
         JSON.stringify({
@@ -313,6 +319,7 @@ describe("收藏随机选择面板接线", () => {
           sync: {},
         }),
       );
+    };
 
     it("首次打开按「插件启动默认页面」：视频 → B站，确认存到 bilibili 并记下平台", async () => {
       setDefaultPage(1);

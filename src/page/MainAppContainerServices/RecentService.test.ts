@@ -36,6 +36,8 @@ function makeCtx(currentPage = 1) {
 
 beforeEach(() => {
   localStorage.clear();
+  // 历史的内存副本与待写定时器跨用例存活：清场时一并重置
+  RequestHistory.resetForTests();
 });
 
 describe("音乐首屏「最近点播」供数", () => {
@@ -84,6 +86,7 @@ describe("音乐首屏「最近点播」供数", () => {
     expect(page.platformData.map((d) => d.title)).toEqual(["曲2", "曲1"]);
 
     localStorage.clear();
+    RequestHistory.resetForTests();
     const empty = makeCtx();
     RecentService.load(empty.ctx, 10);
     expect((await empty.state().mediaData!).platformData).toEqual([]);

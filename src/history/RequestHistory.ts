@@ -10,6 +10,8 @@ const STORAGE_VERSION = 1;
 const MAX_ENTRIES = 50;
 /** 报文前缀：只认点播报文，卡片报文（`{"m":...}`）不写。 */
 const PAYLOAD_PREFIX = "&1";
+/** 合并写盘的最短间隔（毫秒）：超出窗口的改动并进下一次写，至多一秒一次。 */
+const WRITE_INTERVAL_MS = 1000;
 
 /** 来源：`@0` 网易云单曲、`!7` 网易云 MV、`!3`/`!8` B 站、其余记「其他」。 */
 export type RequestHistorySource =
@@ -150,13 +152,97 @@ function parsePayload(text: string): RequestHistoryEntry | null {
 /**
  * 点播历史：写入点收在 `Socket.send` 的观察钩子上（覆盖面板、收藏、
  * 电台、选集与 `@` 链接拦截）。存储不可用或写入抛错一律静默，绝不影响点播报文。
+ *
+ * 写盘是旁路：内存里的列表才是读的真相，落盘按「一秒内至多一次合并写」节流
+ * （一次千首批量点播不会再重写一千遍整份存档），页面隐藏 / 卸载时立即补写一次。
  */
 export class RequestHistory {
+  /** 内存副本：`load` 的唯一来源；`null` 表示还未从存储种子化。 */
+  private static entries: RequestHistoryEntry[] | null = null;
+  /** 上次与存储对齐时的原始串，用来发现外部改动（另一个标签页 / 存档被清）。 */
+  private static snapshot: string | null = null;
+  /** 有尚未落盘的改动。 */
+  private static dirty = false;
+  private static timer: ReturnType<typeof setTimeout> | null = null;
+  /** pagehide / beforeunload 只登记一次。 */
+  private static unloadHooked = false;
+
   /** 读取本地历史（最新在前）；损坏 / 版本不符 / 非数组一律按空历史。 */
   public static load(): RequestHistoryEntry[] {
+    return [...this.current()];
+  }
+
+  /** 记录一条报文：同一媒体移到最前，超过上限丢弃最旧的。写入失败静默。 */
+  public static recordPayload(text: string): void {
     try {
-      const raw = localStorage.getItem(REQUEST_HISTORY_KEY);
-      if (!raw) return [];
+      const entry = parsePayload(text);
+      if (!entry) return;
+      this.entries = [
+        entry,
+        ...this.current().filter((item) => item.key !== entry.key),
+      ].slice(0, MAX_ENTRIES);
+      this.dirty = true;
+      this.scheduleWrite();
+    } catch {
+      /* 存储不可用或报文异常：历史只是旁路，不影响点播 */
+    }
+  }
+
+  /** 立即把待写内容落盘（页面隐藏 / 卸载、批量空闲时调用）。失败保留待写标记。 */
+  public static flush(): void {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (!this.dirty) return;
+    const payload = JSON.stringify({
+      version: STORAGE_VERSION,
+      entries: this.current(),
+    });
+    try {
+      localStorage.setItem(REQUEST_HISTORY_KEY, payload);
+      this.snapshot = payload;
+      this.dirty = false;
+    } catch {
+      /* 存储不可用：保留内容在内存里，下次再试 */
+    }
+  }
+
+  /** 「最近点播」只列网易云单曲（能经 `NetEasePlatform.MOD` 重新解析音源）。 */
+  public static recentMusic(): RequestHistoryEntry[] {
+    return this.current().filter(
+      (entry) =>
+        entry.source === "netease" && entry.kind === "music" && !!entry.mediaId,
+    );
+  }
+
+  /** 内存副本（必要时先按存储种子化 / 跟随外部改动）。 */
+  private static current(): RequestHistoryEntry[] {
+    if (this.entries === null) return this.reseed(this.readRaw());
+    if (this.dirty) return this.entries;
+    // 没有待写改动时跟随存储：另一个标签页写过、存档被清掉都立刻可见。
+    const raw = this.readRaw();
+    if (raw !== this.snapshot) return this.reseed(raw);
+    return this.entries;
+  }
+
+  private static reseed(raw: string | null): RequestHistoryEntry[] {
+    this.entries = this.parseSaved(raw);
+    this.snapshot = raw;
+    return this.entries;
+  }
+
+  private static readRaw(): string | null {
+    try {
+      return localStorage.getItem(REQUEST_HISTORY_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private static parseSaved(raw: string | null): RequestHistoryEntry[] {
+    if (!raw) return [];
+    try {
       const saved = JSON.parse(raw) as { version?: unknown; entries?: unknown };
       if (saved.version !== STORAGE_VERSION) return [];
       if (!Array.isArray(saved.entries)) return [];
@@ -166,30 +252,38 @@ export class RequestHistory {
     }
   }
 
-  /** 记录一条报文：同一媒体移到最前，超过上限丢弃最旧的。写入失败静默。 */
-  public static recordPayload(text: string): void {
-    try {
-      const entry = parsePayload(text);
-      if (!entry) return;
-      const entries = [
-        entry,
-        ...this.load().filter((item) => item.key !== entry.key),
-      ].slice(0, MAX_ENTRIES);
-      localStorage.setItem(
-        REQUEST_HISTORY_KEY,
-        JSON.stringify({ version: STORAGE_VERSION, entries }),
-      );
-    } catch {
-      /* 存储不可用或报文异常：历史只是旁路，不影响点播 */
-    }
+  /** 节流：一秒窗口内多条报文只排一次合并写（不因新报文顺延，避免长批量一直不落盘）。 */
+  private static scheduleWrite(): void {
+    this.hookUnload();
+    if (this.timer !== null) return;
+    this.timer = setTimeout(() => {
+      this.timer = null;
+      this.flush();
+    }, WRITE_INTERVAL_MS);
   }
 
-  /** 「最近点播」只列网易云单曲（能经 `NetEasePlatform.MOD` 重新解析音源）。 */
-  public static recentMusic(): RequestHistoryEntry[] {
-    return this.load().filter(
-      (entry) =>
-        entry.source === "netease" && entry.kind === "music" && !!entry.mediaId,
-    );
+  /** 页面隐藏 / 卸载时补写：批量还在跑就关页面也不丢最近一秒的记录。 */
+  private static hookUnload(): void {
+    if (this.unloadHooked) return;
+    this.unloadHooked = true;
+    if (typeof window === "undefined" || !window.addEventListener) return;
+    window.addEventListener("pagehide", this.onUnload);
+    window.addEventListener("beforeunload", this.onUnload);
+  }
+
+  private static readonly onUnload = (): void => {
+    RequestHistory.flush();
+  };
+
+  /** 仅供测试：丢弃内存副本与待写定时器，让下一次读取重新从存储种子化。 */
+  public static resetForTests(): void {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.entries = null;
+    this.snapshot = null;
+    this.dirty = false;
   }
 
   /** 历史条目还原成首屏曲目行：`neteaseMusic.id`、秒级时长、https 封面。 */

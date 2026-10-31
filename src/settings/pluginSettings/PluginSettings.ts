@@ -1,6 +1,40 @@
 import { ShowMessage } from "../../iirose_func/ShowMessage";
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
 import { Input_Behavior_Module } from "../../input-behavior-module/Input-Behavior-Module";
+import {
+  DEFAULT_DESK_MODE,
+  DESK_MODE_LIST,
+  deskModeLabel,
+  normalizeDeskMode,
+  type DeskModeId,
+} from "../deskModeCatalog";
+
+/** 插件设置存档键。 */
+const PLUGIN_SETTINGS_KEY = "imwPluginSetting";
+
+/**
+ * 设置版本标记：单独一个键，**不放进 `imwPluginSetting` 存档里**。
+ * `LocalStorageUtils.mergeSetting` 启动时会把默认值合并进已有存档，
+ * 标记若在存档内，会被它悄悄盖上，迁移就永远看不到「旧存档」。
+ */
+export const SETTINGS_REV_KEY = "imwSettingsRev";
+
+/**
+ * 当前设置版本：
+ * 1 = 模式重编号（0 视频 / 1 音乐 / 2 设置 / 3 关于 → 0 音乐 / 1 视频 / 2 电台 /
+ * 3 收藏 / 4 设置 / 5 关于）后的一次性迁移：不猜测旧值原意，统一重置为音乐。
+ */
+export const SETTINGS_REV = 1;
+
+/** 启动默认页选择框的图标位（按模式 id 取，缺项由类型检查兜住）。 */
+const DEFAULT_PAGE_ICONS: Record<DeskModeId, string> = {
+  music: "imwModeMusic",
+  video: "imwModeVideo",
+  radio: "imwModeRadio",
+  favorites: "imwModeFavorites",
+  settings: "imwModeSettings",
+  about: "imwModeAbout",
+};
 
 export type SearchViewMode = "card" | "list";
 
@@ -64,7 +98,7 @@ export class PluginSettings {
     pluginSettings.chatBox.isProxyAtInput =
       !pluginSettings.chatBox.isProxyAtInput;
     try {
-      localStorage.setItem("imwPluginSetting", JSON.stringify(pluginSettings));
+      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(pluginSettings));
     } catch {
       // 存储不可用（隐私模式 / 配额满）：内存里的设置照常生效，不打断交互
     }
@@ -81,7 +115,7 @@ export class PluginSettings {
       const ps = PluginSettings.getPluginSetting();
       if (ps) {
         ps.defaultPage = PluginSettings.normalizeDefaultPage(s);
-        localStorage.setItem("imwPluginSetting", JSON.stringify(ps));
+        localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(ps));
       }
 
       if (changeActionTitleAction) {
@@ -91,29 +125,12 @@ export class PluginSettings {
       }
     };
 
-    const iconClass = [
-      "imwModeMusic",
-      "imwModeVideo",
-      "imwModeRadio",
-      "imwModeFavorites",
-      "imwModeSettings",
-      "imwModeAbout",
-    ];
-
-    const selectOption: (string | number)[][] = [
-      [0, "音乐"],
-      [1, "视频"],
-      [2, "电台"],
-      [3, "收藏"],
-      [4, "设置"],
-      [5, "关于"],
-    ];
-
-    selectOption.forEach((item, index) => {
-      item.push(
-        `<div class="${iconClass[index]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      );
-    });
+    // 选项由共享模式目录生成：下标、文案、顺序都只有一份
+    const selectOption: (string | number)[][] = DESK_MODE_LIST.map((mode) => [
+      mode.index,
+      mode.label,
+      `<div class="${DEFAULT_PAGE_ICONS[mode.id]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
+    ]);
 
     IIROSEUtils.buildSelect2(
       null,
@@ -146,7 +163,7 @@ export class PluginSettings {
     const ps = PluginSettings.getPluginSetting();
     ps.favoritesPageSize = PluginSettings.normalizeFavoritesPageSize(size);
     try {
-      localStorage.setItem("imwPluginSetting", JSON.stringify(ps));
+      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(ps));
     } catch {
       // 存储不可用：本次会话内不生效，不打断交互
     }
@@ -219,27 +236,47 @@ export class PluginSettings {
     );
   }
 
-  /** 启动默认页面：0 音乐、1 视频、2 电台、3 收藏、4 设置、5 关于；非法值回退音乐。 */
+  /**
+   * 启动默认页面：合法范围与文案都取自共享模式目录
+   * （`settings/deskModeCatalog`），不再在这里硬编码 0..5 与一套中文表。
+   */
   public static normalizeDefaultPage(raw: unknown): number {
-    const value = Number(raw);
-    return Number.isInteger(value) && value >= 0 && value <= 5 ? value : 0;
+    return normalizeDeskMode(raw);
   }
 
   public static parseDefaultPage(page: number): string {
-    const selectOption: [number, string][] = [
-      [0, "音乐"],
-      [1, "视频"],
-      [2, "电台"],
-      [3, "收藏"],
-      [4, "设置"],
-      [5, "关于"],
-    ];
+    return deskModeLabel(page);
+  }
 
-    const optionInText = selectOption.find(
-      (option) => option[0] === PluginSettings.normalizeDefaultPage(page),
-    );
+  /** 读已有存档的设置版本标记；读不到（首次 / 存储不可用）按「未迁移」处理。 */
+  private static settingsRev(): number {
+    try {
+      return Number(localStorage.getItem(SETTINGS_REV_KEY));
+    } catch {
+      return Number.NaN;
+    }
+  }
 
-    return optionInText ? optionInText[1] : "音乐";
+  /**
+   * 一次性迁移：旧存档的 `defaultPage` 下标对应的是另一套模式（0 视频 / 1 音乐 /
+   * 2 设置 / 3 关于），无法反推用户原意，因此**只重置一次**为音乐，随后写版本标记。
+   * 幂等：标记存在即不再动 `defaultPage`，用户之后自己选的页面留得住。
+   * 其余设置原样保留（写盘的就是刚归一化过的这个对象）。
+   */
+  private static migrateSettingsRevision(
+    parsed: PluginSettingsInterface,
+  ): number {
+    if (PluginSettings.settingsRev() === SETTINGS_REV)
+      return PluginSettings.normalizeDefaultPage(parsed.defaultPage);
+
+    parsed.defaultPage = DEFAULT_DESK_MODE;
+    try {
+      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(parsed));
+      localStorage.setItem(SETTINGS_REV_KEY, String(SETTINGS_REV));
+    } catch {
+      // 存储不可用：本次会话内照样按音乐启动，下次读取再试（迁移幂等）
+    }
+    return parsed.defaultPage;
   }
 
   /**
@@ -250,7 +287,7 @@ export class PluginSettings {
 
     pluginSettings.searchViewMode =
       pluginSettings.searchViewMode === "list" ? "card" : "list";
-    localStorage.setItem("imwPluginSetting", JSON.stringify(pluginSettings));
+    localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(pluginSettings));
 
     return pluginSettings.searchViewMode;
   }
@@ -268,7 +305,7 @@ export class PluginSettings {
     const set = (_t: HTMLElement, s: string) => {
       const pluginSettings = PluginSettings.getPluginSetting();
       pluginSettings.announceMode = PluginSettings.normalizeAnnounceMode(s);
-      localStorage.setItem("imwPluginSetting", JSON.stringify(pluginSettings));
+      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(pluginSettings));
 
       if (changeActionTitleAction) {
         changeActionTitleAction(
@@ -322,7 +359,7 @@ export class PluginSettings {
   }
 
   public static getPluginSetting(): PluginSettingsInterface {
-    const pluginSettings = localStorage.getItem("imwPluginSetting");
+    const pluginSettings = localStorage.getItem(PLUGIN_SETTINGS_KEY);
     if (pluginSettings) {
       const parsed = JSON.parse(pluginSettings) as PluginSettingsInterface;
       // 单点归一化：手改 localStorage 产生的非法值一律回退 "card"
@@ -332,23 +369,21 @@ export class PluginSettings {
         parsed.announceMode,
       );
       parsed.sync = PluginSettings.normalizeSyncSettings(parsed.sync);
-      // 分类下标扩到 2–5（电台 / 收藏 / 设置 / 关于），非法值回退音乐
-      parsed.defaultPage = PluginSettings.normalizeDefaultPage(
-        parsed.defaultPage,
-      );
       parsed.favoritesPageSize = PluginSettings.normalizeFavoritesPageSize(
         parsed.favoritesPageSize,
       );
       // 已退役的「随机包含专辑/歌单」：随机范围改由面板选择决定，旧值不再生效。
       delete (parsed as { shuffleIncludeCollections?: unknown })
         .shuffleIncludeCollections;
+      // 模式重编号的一次性迁移放在归一化之后：写盘时落的是已经清干净的对象
+      parsed.defaultPage = PluginSettings.migrateSettingsRevision(parsed);
       return parsed;
     }
     return {
       chatBox: {
         isProxyAtInput: true,
       },
-      defaultPage: 0,
+      defaultPage: DEFAULT_DESK_MODE,
       searchViewMode: "card",
       announceMode: "card",
       favoritesPageSize: 10,
