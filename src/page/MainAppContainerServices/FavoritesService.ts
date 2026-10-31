@@ -5,6 +5,7 @@ import {
 import { PluginSettings } from "../../settings/pluginSettings/PluginSettings";
 import { NetEasePlatform } from "../../platforms/NetEasePlatform";
 import { BilibiliPlatform } from "../../platforms/BilibiliPlatform";
+import { ShowMessage } from "../../iirose_func/ShowMessage";
 
 /** 收藏来源筛选：「全部」= 不按平台过滤（story 6 接入三来源切换器）。 */
 export type FavoritePlatformFilter = "all" | "netease" | "bilibili";
@@ -95,12 +96,23 @@ export class FavoritesService {
     ctx.setState({ updating: true, requestToken: currentRequestToken });
 
     // 从 IndexedDB 中提取匹配条件的收藏记录（「歌单与专辑」用 types 合并查询）
-    const records = await FavoritesStorageService.query({
-      platform,
-      type: type === "all" || type === "collection" ? undefined : type,
-      types: type === "collection" ? COLLECTION_TYPES : undefined,
-      keyword: effectiveKeyword || undefined,
-    });
+    let records: FavoriteRecord[];
+    try {
+      records = await FavoritesStorageService.query({
+        platform,
+        type: type === "all" || type === "collection" ? undefined : type,
+        types: type === "collection" ? COLLECTION_TYPES : undefined,
+        keyword: effectiveKeyword || undefined,
+      });
+    } catch {
+      // 存储拒绝（库打不开 / 事务中断）：不把 `updating` 卡在 true——分页守卫会因此永久早退。
+      // 更要紧的是这条路径每敲一个过滤键就跑一次，所以只提示一次、且只由「最新那次」提示：
+      // 迟到的失败不能改新一轮的状态，也不该为用户看不到的旧请求弹提示。
+      if (ctx.getState().requestToken !== currentRequestToken) return;
+      ctx.setState({ updating: false });
+      ShowMessage.show("读取收藏失败，请稍后重试");
+      return;
+    }
 
     if (ctx.getState().requestToken !== currentRequestToken) {
       return;

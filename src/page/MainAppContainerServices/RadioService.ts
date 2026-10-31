@@ -2,6 +2,20 @@ import { RadioPlatform } from "../../platforms/RadioPlatform";
 
 export class RadioService {
   /**
+   * 已经取过网的电台列表（按渲染中的数据承诺记）：电台列表可能**合法为空**，
+   * 光看 `allMediaData.length` 会把「加载完但 0 个台」当成「没加载」，于是每敲一个
+   * 过滤键都重新发请求。列表非空与「已加载一次」要分开判断。
+   */
+  private static loadedLists = new WeakSet<object>();
+
+  /** 当前渲染的数据是否就是本服务取回来的那份电台列表。 */
+  private static hasLoadedList(
+    mediaData: MainAppContainerState["mediaData"],
+  ): boolean {
+    return !!mediaData && this.loadedLists.has(mediaData);
+  }
+
+  /**
    * @description 通用搜索处理器 (内部私有)
    */
   private static handleSearch(
@@ -27,7 +41,11 @@ export class RadioService {
     const maxPage = Math.ceil(filtered.length / itemsPerPage);
 
     // 1. 逻辑 A: 处理本地分页缓存（已加载过列表就只切片：过滤为空也不联网）
-    if (allMediaData.length > 0 || currentPage <= maxPage) {
+    if (
+      allMediaData.length > 0 ||
+      currentPage <= maxPage ||
+      this.hasLoadedList(ctx.getState().mediaData)
+    ) {
       const startIndex = (currentPage - 1) * itemsPerPage;
       const endIndex = Math.min(startIndex + itemsPerPage, filtered.length);
       const currentPageData = filtered.slice(startIndex, endIndex);
@@ -37,11 +55,15 @@ export class RadioService {
         ? RadioPlatform.MOD
         : getOnDemandPlay(RadioPlatform);
 
+      const listData = Promise.resolve({
+        platformData: currentPageData,
+        totalPage: 1,
+      });
+      // 切片结果同样是「本服务取回来的列表」：下一次逐字过滤还在它上面切，不再出网
+      this.loadedLists.add(listData);
+
       ctx.setState({
-        mediaData: Promise.resolve({
-          platformData: currentPageData,
-          totalPage: 1,
-        }),
+        mediaData: listData,
         currentOnDemandPlay: onDemand,
       });
     }
@@ -75,6 +97,8 @@ export class RadioService {
       });
 
       dataPromise.then((res) => {
+        // 落地成功才算「已加载一次」：失败（拒绝）不记，下一次过滤键仍可重试
+        this.loadedLists.add(dataPromise);
         ctx.pushAllData(
           currentRequestToken,
           res.allPlatformData,

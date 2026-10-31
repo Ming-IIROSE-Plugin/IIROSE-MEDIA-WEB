@@ -107,4 +107,26 @@ describe("电台过滤", () => {
     expect((await payload())?.platformData).toEqual([]);
     expect(search).not.toHaveBeenCalled();
   });
+
+  it("接口合法返回 0 个电台：只联网一次，再敲过滤键不再请求", async () => {
+    const search = vi.spyOn(RadioPlatform, "searchSongs").mockResolvedValue({
+      platformData: [],
+      totalPage: 0,
+      allPlatformData: [],
+    });
+    const { ctx, payload } = makeCtx({ searchKeyword: "l" });
+
+    RadioService.search(ctx, 10, "japan");
+    await payload();
+    expect(search).toHaveBeenCalledOnce();
+    search.mockClear();
+
+    // 列表为空但「已加载过一次」：逐字过滤只切本地（空）缓存，不再出网
+    for (const keyword of ["li", "lis", "list"]) {
+      ctx.setState({ searchKeyword: keyword, currentPage: 1 });
+      RadioService.search(ctx, 10, "japan");
+      expect((await payload())?.platformData).toEqual([]);
+    }
+    expect(search).not.toHaveBeenCalled();
+  });
 });

@@ -3,8 +3,9 @@
 // 透明拦截层：点外侧 = 取消不点播。`Esc` / 宿站返回键走层级栈（story 4）：打开即登记
 // 一层并先收起别的面板内浮层，因此三种形态互斥、每次返回只关这一层。
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { trackCountLabel } from "./mediaFormat";
+import { isPhoneLayout, trackCountLabel } from "./mediaFormat";
 import { closePanelTier, pushOverlayLayer } from "../desk/overlayLayers";
+import { stopHostGestures } from "../floating-panel/floatingPanel";
 import {
   DeskIcon,
   deskFocusRing,
@@ -53,11 +54,20 @@ export function OrderMenu({
     top: 0,
     right: 12,
   });
-  const [phone, setPhone] = useState(
-    () => window.matchMedia?.("(max-width: 768px)").matches ?? false,
-  );
+  const [phone, setPhone] = useState(isPhoneLayout);
   const onCancelRef = useRef(onCancel);
   onCancelRef.current = onCancel;
+
+  // 断点只读一次会在旋转 / 改窗口大小后停在旧形态（桌面开菜单→变窄仍是小浮层）；
+  // 订阅 `change` 跟着改，关闭时退订。
+  useEffect(() => {
+    const query = window.matchMedia?.("(max-width: 768px)");
+    if (!query?.addEventListener) return;
+    const onChange = (event: MediaQueryListEvent) => setPhone(event.matches);
+    setPhone(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
 
   // 登记层级必须先于移动焦点：互斥收起别的层（如展开的底部条）会把焦点还给它的触发元素，
   // 顺序反过来会把焦点从菜单项上抢走。
@@ -119,12 +129,14 @@ export function OrderMenu({
       className="fixed inset-0 z-40"
       data-imw-order-menu="true"
       onClick={onCancel}
+      {...stopHostGestures}
     >
       {phone ? (
         <div
           ref={menuRef}
           className={`absolute inset-x-0 bottom-0 overflow-hidden border-t border-solid ${deskRule} ${deskSheet} ${roundedXl} animate-[imwSheetRise_220ms_var(--imw-ease)] motion-reduce:animate-none`}
           onClick={(event) => event.stopPropagation()}
+          {...stopHostGestures}
         >
           <div
             className={`flex items-baseline gap-2 border-b border-solid px-4 py-3 ${deskRule}`}
@@ -144,6 +156,7 @@ export function OrderMenu({
           className={`absolute w-[200px] overflow-hidden border border-solid p-1.5 ${roundedXl} ${deskRule} ${deskSheet} ${deskMenuShadow} animate-[imwMenuIn_160ms_var(--imw-ease)] motion-reduce:animate-none`}
           style={{ top: `${position.top}px`, right: `${position.right}px` }}
           onClick={(event) => event.stopPropagation()}
+          {...stopHostGestures}
         >
           {optionList}
         </div>

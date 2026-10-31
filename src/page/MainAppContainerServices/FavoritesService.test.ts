@@ -126,6 +126,75 @@ describe("收藏查询与还原", () => {
   });
 });
 
+describe("收藏查询失败", () => {
+  it("查询拒绝：updating 复原为 false 并只提示一次", async () => {
+    const { ShowMessage } = await import("../../iirose_func/ShowMessage");
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    storage.query.mockRejectedValueOnce(new Error("IndexedDB 打不开"));
+    try {
+      const { ctx, state } = makeCtx();
+      await FavoritesService.loadFavorites(ctx, "all", "all", 10);
+
+      // 失败后分页守卫不能再被「updating 永远为真」挡住
+      expect(state().updating).toBe(false);
+      expect(show).toHaveBeenCalledOnce();
+      expect(show).toHaveBeenCalledWith("读取收藏失败，请稍后重试");
+      // 没有把半成品列表写进现场
+      expect(state().mediaData ?? null).toBeNull();
+    } finally {
+      show.mockRestore();
+    }
+  });
+
+  it("迟到的失败不覆盖新一轮：token 已前进时保持 updating，也不为旧请求弹提示", async () => {
+    const { ShowMessage } = await import("../../iirose_func/ShowMessage");
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+
+    let rejectFirst: (error: Error) => void = () => {};
+    let resolveSecond: (records: Record_[]) => void = () => {};
+    storage.query
+      .mockImplementationOnce(
+        () =>
+          new Promise<Record_[]>((_, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<Record_[]>((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    try {
+      const { ctx, state } = makeCtx();
+      const first = FavoritesService.loadFavorites(ctx, "all", "all", 10);
+      expect(state().requestToken).toBe(1);
+
+      // 第二次查询接上：token 前进到 2，updating 仍为真
+      const second = FavoritesService.loadFavorites(ctx, "netease", "song", 10);
+      expect(state().requestToken).toBe(2);
+      expect(state().updating).toBe(true);
+
+      // 旧请求的失败是迟到的：不许改新一轮的 updating，也不弹提示
+      rejectFirst(new Error("旧请求失败"));
+      await first;
+      expect(state().requestToken).toBe(2);
+      expect(state().updating).toBe(true);
+      expect(show).not.toHaveBeenCalled();
+
+      // 新一轮自己成功：updating 才归 false
+      resolveSecond([favorite("netease:song:9", "song")]);
+      await second;
+      expect(state().updating).toBe(false);
+      expect((await state().mediaData!).platformData).toHaveLength(1);
+      expect(show).not.toHaveBeenCalled();
+    } finally {
+      show.mockRestore();
+    }
+  });
+});
+
 describe("收藏点播交回发送过程", () => {
   it("单曲 / 视频把平台的 Promise 交回去（点播守卫据此显示「点播中」）", async () => {
     const { NetEasePlatform } = await import("../../platforms/NetEasePlatform");

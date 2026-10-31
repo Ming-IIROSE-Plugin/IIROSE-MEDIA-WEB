@@ -12,6 +12,7 @@ import { CollectionHeader } from "./CollectionHeader";
 import { CollectionRow } from "./CollectionRow";
 import { FavoriteStar } from "./FavoriteStar";
 import { MusicTile } from "./MusicTile";
+import { OrderMenu } from "./OrderMenu";
 import { ResultsArea, shapeOf } from "./ResultsArea";
 import { SelectBox } from "./SelectBox";
 import { SelectionBar } from "./SelectionBar";
@@ -766,9 +767,131 @@ describe("专辑 / 歌单行与内页头", () => {
   });
 });
 
+/** 可控的 `matchMedia`：能断言「订阅了 change」并主动改断点。 */
+const stubMediaQuery = (initialMatches: boolean) => {
+  const listeners = new Set<(event: { matches: boolean }) => void>();
+  const query = {
+    matches: initialMatches,
+    media: "(max-width: 768px)",
+    addEventListener: (
+      _type: string,
+      listener: (event: { matches: boolean }) => void,
+    ) => {
+      listeners.add(listener);
+    },
+    removeEventListener: (
+      _type: string,
+      listener: (event: { matches: boolean }) => void,
+    ) => {
+      listeners.delete(listener);
+    },
+  };
+  vi.stubGlobal("matchMedia", () => query);
+  return {
+    listenerCount: () => listeners.size,
+    /** 模拟旋转 / 改窗口大小：改值并广播 change。 */
+    change(matches: boolean) {
+      query.matches = matches;
+      for (const listener of listeners) listener({ matches });
+    },
+  };
+};
+
+const orderMenuProps = () => ({
+  title: album.title,
+  trackCount: album.trackCount,
+  onSelect: vi.fn(),
+  onCancel: vi.fn(),
+});
+
+const orderMenuCard = () =>
+  document.querySelector<HTMLElement>("[data-imw-order-menu] > div")!;
+
+describe("顺序菜单", () => {
+  it("菜单上的触摸 / 按下不冒泡：横滑不会翻掉背后的页，点菜单项照常点播", async () => {
+    const props = orderMenuProps();
+    await mount(withCtx(h(OrderMenu, props)));
+    const root = document.querySelector<HTMLElement>("[data-imw-order-menu]")!;
+    expect(root).not.toBeNull();
+    const card = orderMenuCard();
+    const item = card.querySelector<HTMLElement>('[role="menuitem"]')!;
+
+    // 主面板容器（宿站手势的祖先）上挂同款监听：冒泡到此就等于会翻页 / 关面板
+    const ancestor = vi.fn();
+    const types = [
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "mousedown",
+      "mouseup",
+    ];
+    for (const type of types) host.addEventListener(type, ancestor);
+    try {
+      await act(async () => {
+        for (const type of types) {
+          // 点菜单项（卡片内部）与点菜单框本身都不能漏到宿主
+          for (const target of [item, card, root])
+            target.dispatchEvent(
+              new Event(type, { bubbles: true, cancelable: true }),
+            );
+        }
+      });
+      expect(ancestor).not.toHaveBeenCalled();
+
+      await act(async () => item.click());
+      expect(props.onSelect).toHaveBeenCalledWith("asc");
+    } finally {
+      for (const type of types) host.removeEventListener(type, ancestor);
+    }
+  });
+
+  it("断点跟着 change 走：菜单开着旋转 / 改窗口大小即换形态，关闭后退订", async () => {
+    const media = stubMediaQuery(false);
+    await mount(withCtx(h(OrderMenu, orderMenuProps())));
+
+    // 桌面：贴在按钮下方的小浮层（200px、无专辑名头）
+    expect(classesOf(orderMenuCard())).toContain("w-[200px]");
+    expect(host.textContent).not.toContain(album.title);
+    expect(media.listenerCount()).toBe(1);
+
+    // 变窄：底部操作条（整宽 + 专辑名头），不用重开菜单
+    await act(async () => media.change(true));
+    expect(classesOf(orderMenuCard())).not.toContain("w-[200px]");
+    expect(classesOf(orderMenuCard())).toContain("bottom-0");
+    expect(host.textContent).toContain(album.title);
+
+    // 改回宽屏：仍是同一个菜单，形态回到小浮层
+    await act(async () => media.change(false));
+    expect(classesOf(orderMenuCard())).toContain("w-[200px]");
+    expect(host.textContent).not.toContain(album.title);
+    render(null, host);
+    expect(media.listenerCount()).toBe(0);
+  });
+});
+
 describe("结果区状态机", () => {
+  it("还没拿到数据承诺（mediaData 为 null）时出骨架，不闪假空态", async () => {
+    await mount(results({ ...resultsBase }));
+    expect(
+      host.querySelectorAll("[data-imw-skeleton-row]").length,
+    ).toBeGreaterThan(0);
+    expect(host.textContent).not.toContain("没有找到结果");
+    expect(host.textContent).not.toContain("还没有点播记录");
+
+    // 网格形态同样走骨架瓦片
+    render(null, host);
+    await mount(
+      results({ ...resultsBase, mode: MODE.video, viewMode: "card" }),
+    );
+    expect(
+      host.querySelectorAll("[data-imw-skeleton-tile]").length,
+    ).toBeGreaterThan(0);
+    expect(host.textContent).not.toContain("没有找到结果");
+  });
+
   it("音乐首屏（未搜索）显示空历史文案", async () => {
-    await mount(results({ ...resultsBase, mediaData: null }));
+    const empty = ready([]);
+    await mount(results({ ...resultsBase, mediaData: empty }), empty);
     expect(host.textContent).toContain(
       "还没有点播记录。搜索歌名或歌手，点播到房间。",
     );

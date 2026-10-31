@@ -363,7 +363,9 @@ export function ResultsArea({
     // 方形卡网格：音乐网格与收藏网格
     const square = shape === "musicGrid" || shape === "favoritesGrid";
 
-    if (load.status === "loading") {
+    // idle = 还没有任何数据承诺（首次进入某模式 / 恢复到 `mediaData: null` 的快照）：
+    // 此时渲染骨架，不能落到空态——否则会闪一帧「没有找到结果」。
+    if (load.status === "idle" || load.status === "loading") {
       return shape === "tracklist" ||
         shape === "collections" ||
         shape === "favorites" ||
