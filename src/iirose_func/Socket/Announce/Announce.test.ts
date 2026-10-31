@@ -147,6 +147,38 @@ describe("runBatchAnnounce（批量点播播报）", () => {
     expect(raw).not.toMatch(/\n/);
   });
 
+  it("loop 报回实际数 = N：不发校正", async () => {
+    setMode("summary");
+    await Announce.runBatchAnnounce("冬日歌单", 5, async () => 5);
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("loop 报回 0：补发「已取消，未提交曲目」", async () => {
+    setMode("summary");
+    await Announce.runBatchAnnounce("冬日*歌单", 5, async () => 0);
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    const parsed = JSON.parse(sendMock.mock.calls[1][0]) as { m: string };
+    expect(parsed.m).toBe("\\\\\\*\n🎵 《冬日\\*歌单》已取消，未提交曲目");
+  });
+
+  it("loop 报回部分数：补发「已停止，实际提交 X / N 项」", async () => {
+    setMode("summary");
+    await Announce.runBatchAnnounce("冬日歌单", 5, async () => 3);
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    const parsed = JSON.parse(sendMock.mock.calls[1][0]) as { m: string };
+    expect(parsed.m).toBe(
+      "\\\\\\*\n🎵 《冬日歌单》已停止，实际提交 **3** / 5 项",
+    );
+  });
+
+  it("card / silent 档没发总结：实际数少了也不校正", async () => {
+    for (const mode of ["card", "silent"]) {
+      setMode(mode);
+      await Announce.runBatchAnnounce("冬日歌单", 5, async () => 0);
+    }
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
   it("总结附简介：平台有详细介绍时以 blockquote 追加为第三行", async () => {
     setMode("summary");
     await Announce.runBatchAnnounce(

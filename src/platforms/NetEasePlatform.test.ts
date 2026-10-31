@@ -495,6 +495,21 @@ describe("批量发送：即停与边取边发", () => {
     vi.useRealTimers();
   });
 
+  it("返回实际发出数：不含无版权跳过与单项失败", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue([
+      song(1),
+      { ...song(2), noCopyrightRcmd: {} },
+      song(3),
+      song(4),
+    ]);
+    api.getLyric = vi.fn(async (id: number) => {
+      if (id === 3) throw new Error("歌词挂了");
+      return null;
+    });
+    const sent = await (run([1, 2, 3, 4]) as unknown as Promise<number>);
+    expect(sent).toBe(2);
+  });
+
   it("准备中停止：详情请求被 abort，卡片收起后详情才返回也不复活", async () => {
     vi.useFakeTimers();
     const { startBatch, stopBatch, getBatches, BATCH_STOP_LINGER_MS } =

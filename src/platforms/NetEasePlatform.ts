@@ -1036,19 +1036,24 @@ export class NetEasePlatform extends Platform {
   /**
    * @param batch 批量点播进度句柄（整张播放 / 选集多选）：逐首上报，
    *   每首发送前检查「停止」；单曲点播不传。
+   * @returns 实际发出播放报文的曲目数（批量总结据此校正）
    */
   private static finalODSONG = async (
     songsID: number[],
     batch?: BatchHandle,
-  ) => {
+  ): Promise<number> => {
     try {
-      await NetEasePlatform.sendSongs(songsID, batch);
+      return await NetEasePlatform.sendSongs(songsID, batch);
     } finally {
       batch?.finish();
     }
   };
 
-  private static sendSongs = async (songsID: number[], batch?: BatchHandle) => {
+  /** 返回实际发出播放报文的曲目数（不含无版权跳过与单项失败）。 */
+  private static sendSongs = async (
+    songsID: number[],
+    batch?: BatchHandle,
+  ): Promise<number> => {
     const media = new Media();
     const socket = new Socket();
     const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
@@ -1062,6 +1067,7 @@ export class NetEasePlatform extends Platform {
     // 预计条数：取不到详情的逐段扣掉；段失败时校正为已处理数
     let total = songsID.length;
     let processed = 0;
+    let sent = 0;
 
     // 边取边发：每 100 首取一段详情就发这一段，大歌单不必等全部详情
     for (let at = 0; at < songsID.length; at += size) {
@@ -1127,6 +1133,7 @@ export class NetEasePlatform extends Platform {
           if (batch?.cancelled) break;
           Announce.sendMediaCard(socket, mediacard);
           socket.send(mediaEvent);
+          sent++;
         } catch (error) {
           // 单项失败：带曲名提示（同因 10 秒去重）后跳过，剩余曲目照播
           Announce.showBatchItemError(error, item.name);
@@ -1139,6 +1146,7 @@ export class NetEasePlatform extends Platform {
     if (noCopyrightSkipped > 0 && !batch?.cancelled) {
       ShowMessage.show(`已跳过 ${noCopyrightSkipped} 首无版权曲目`);
     }
+    return sent;
   };
 
   private static convertQualityToReadable = (

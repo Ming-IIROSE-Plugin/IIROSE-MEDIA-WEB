@@ -58,7 +58,7 @@ export class Announce {
    * 接受的竞态代价。
    */
   public static async runSingleAnnounce(
-    loop: () => Promise<void> | void,
+    loop: () => Promise<void | number> | void | number,
   ): Promise<void> {
     forceDepth++;
     try {
@@ -75,11 +75,12 @@ export class Announce {
    * 第二行「🎵 已提交点播 **《标题》**，共 **N** 项」，平台有简介时再附一行 blockquote。
    * 总结先于循环发送；循环中单项失败由平台层逐项 catch 提示并跳过，
    * 逐项 catch 之外的异常走本函数的兜底 catch：终止本批、提示一次、不上抛。
+   * loop 可返回实际发出的项数：已发总结且实际数 < N 时补发一条校正消息。
    */
   public static async runBatchAnnounce(
     title: string,
     count: number,
-    loop: () => Promise<void> | void,
+    loop: () => Promise<void | number> | void | number,
     description?: string | null,
   ): Promise<void> {
     try {
@@ -102,10 +103,21 @@ export class Announce {
       new Socket().sendMessage(lines.join("\n"));
 
       batchModeSnapshots.push(mode);
+      let sent: void | number;
       try {
-        await loop();
+        sent = await loop();
       } finally {
         batchModeSnapshots.pop();
+      }
+
+      // 中途停止 / 失败：总结已告诉房间 N 项，实际少了就补发一条校正
+      // （只有 loop 报回实际数的平台才校正；返回 void 的照旧）
+      if (typeof sent === "number" && sent < count) {
+        const correction =
+          sent === 0
+            ? `🎵 《${safeTitle}》已取消，未提交曲目`
+            : `🎵 《${safeTitle}》已停止，实际提交 **${sent}** / ${count} 项`;
+        new Socket().sendMessage(["\\\\\\*", correction].join("\n"));
       }
     } catch (error) {
       // 兜底 catch 契约：本函数任何路径均不上抛，异常一律转为提示
