@@ -26,11 +26,6 @@ export class CollectionSegments {
     private readonly segmentSize = 100,
   ) {}
 
-  /** 曲目总数（按完整 id 列表，不按已取回的详情）。 */
-  public get size(): number {
-    return this.ids.length;
-  }
-
   public get aborted(): boolean {
     return this.controller.signal.aborted;
   }

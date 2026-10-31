@@ -803,9 +803,9 @@ describe("专辑 / 歌单内页", () => {
     Array.from({ length: to - from }, (_, i) => from + i);
 
   /** 段请求替身：按入参 id 回填曲目（真实分段加载器 + 假网络）。 */
-  const segmentFetch = vi.fn<FetchSegment>(async (ids) =>
-    ids.map((id) => ({ ...trackData, neteaseMusic: { id, fee: 0 } })),
-  );
+  const fillSegment: FetchSegment = async (ids) =>
+    ids.map((id) => ({ ...trackData, neteaseMusic: { id, fee: 0 } }));
+  const segmentFetch = vi.fn<FetchSegment>(fillSegment);
   const loaderOf = (count: number) =>
     new CollectionSegments(range(0, count), segmentFetch, 100);
 
@@ -819,7 +819,7 @@ describe("专辑 / 歌单内页", () => {
     });
   };
 
-  /** 只等微任务（段请求挂起、不会 resolve 时用）。 */
+  /** 等一轮宏任务（排在其前的微任务都跑完；段请求挂起、不会 resolve 时用）。 */
   const tick = async () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -841,9 +841,126 @@ describe("专辑 / 歌单内页", () => {
   };
 
   beforeEach(() => {
+    // 清掉上个用例没用完的 Once 队列，再装回默认实现
+    segmentFetch.mockReset();
+    segmentFetch.mockImplementation(fillSegment);
     neteasePlatform.getAlbumMultiPageData.mockImplementation(async () =>
       loaderOf(1),
     );
+  });
+
+  /** 段请求挂起时进歌单内页，返回飞行中那次段请求的 signal。 */
+  const enterWithPendingSegment = async (ref: {
+    current: MainAppContainer | null;
+  }) => {
+    neteasePlatform.getSongListMultiPageData.mockImplementation(async () =>
+      loaderOf(300),
+    );
+    segmentFetch.mockImplementationOnce(() => new Promise(() => {}));
+    const controller = await enterInnerPage(ref, songListData);
+    await tick();
+    const signal = segmentFetch.mock.calls[0][1];
+    expect(signal.aborted).toBe(false);
+    return { controller, signal };
+  };
+
+  it("换来源中止内页的段请求", async () => {
+    const { ref } = await mount(MODE.music);
+    const { controller, signal } = await enterWithPendingSegment(ref);
+    await act(async () => {
+      controller.selectSource(0);
+    });
+    expect(signal.aborted).toBe(true);
+    expect(stateOf(ref).collectionSegments).toBeNull();
+  });
+
+  it("换范围中止内页的段请求", async () => {
+    const { ref } = await mount(MODE.music);
+    const { controller, signal } = await enterWithPendingSegment(ref);
+    await act(async () => {
+      controller.selectScope(1);
+    });
+    expect(signal.aborted).toBe(true);
+    expect(stateOf(ref).collectionSegments).toBeNull();
+  });
+
+  it("卸载中止内页的段请求", async () => {
+    const { ref } = await mount(MODE.music);
+    const { signal } = await enterWithPendingSegment(ref);
+    await act(async () => {
+      render(null, root);
+    });
+    expect(signal.aborted).toBe(true);
+  });
+
+  /** 歌单详情挂起时进内页并切到视频，返回放行详情的函数。 */
+  const enterThenLeaveMode = async (ref: {
+    current: MainAppContainer | null;
+  }) => {
+    let release: (loader: CollectionSegments) => void = () => {};
+    neteasePlatform.getSongListMultiPageData.mockImplementationOnce(
+      () => new Promise((resolve) => (release = resolve)),
+    );
+    await enterInnerPage(ref, songListData);
+    await act(async () => {
+      render(h(Container, { ...props(MODE.video), ref } as object), root);
+    });
+    return (loader: CollectionSegments) => release(loader);
+  };
+
+  /** 切回音乐：首屏照常出现，总页数正确，不多发详情 / 段请求。 */
+  const expectMusicRecovered = async (ref: {
+    current: MainAppContainer | null;
+  }) => {
+    await act(async () => {
+      render(h(Container, { ...props(MODE.music), ref } as object), root);
+    });
+    await settle(ref);
+    const state = stateOf(ref);
+    expect(state.isCurrentInMultiPage).toBe(true);
+    expect(state.totalPage).toBe(30);
+    expect(state.collectionSegments).not.toBeNull();
+    const first = await state.mediaData!;
+    expect(first.platformData.map((item) => item.neteaseMusic?.id)).toEqual(
+      range(0, 10),
+    );
+    expect(first.totalPage).toBe(30);
+    expect(root.textContent).toContain("01 / 30");
+    expect(neteasePlatform.getSongListMultiPageData).toHaveBeenCalledTimes(1);
+    expect(segmentFetch).toHaveBeenCalledTimes(1);
+  };
+
+  it("详情飞行中切模式：落进原模式快照，切回首屏照常出现", async () => {
+    const { ref } = await mount(MODE.music);
+    const release = await enterThenLeaveMode(ref);
+    const videoTotal = stateOf(ref).totalPage;
+
+    await act(async () => {
+      release(loaderOf(300));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    // 视频的现场不被音乐内页的详情改写
+    expect(stateOf(ref).mode).toBe(MODE.video);
+    expect(stateOf(ref).collectionSegments).toBeNull();
+    expect(stateOf(ref).totalPage).toBe(videoTotal);
+
+    await expectMusicRecovered(ref);
+  });
+
+  it("详情飞行中切到视频并搜索：音乐内页仍能恢复", async () => {
+    const { ref } = await mount(MODE.music);
+    const release = await enterThenLeaveMode(ref);
+    await act(async () => {
+      (ref.current as unknown as Harness).controller.runSearch("某视频");
+    });
+
+    await act(async () => {
+      release(loaderOf(300));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(stateOf(ref).collectionSegments).toBeNull();
+
+    await expectMusicRecovered(ref);
   });
 
   it("进入内页保存集合，范围行换成内页头", async () => {

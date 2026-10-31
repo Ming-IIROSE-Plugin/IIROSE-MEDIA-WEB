@@ -127,10 +127,11 @@ export class MainAppContainer extends Component<
   private innerPageSource: PlatformData | null = null;
   /**
    * 当前模式内页的分段加载器（与 state 同步，但 setState 生效前也能拿到）；
-   * `innerLoad` 每次进出内页递增，迟到的内页详情据此丢弃。
+   * `innerLoad` 按模式记票号：该模式进出 / 换掉内页即递增，迟到的内页详情据此丢弃
+   * （别的模式里的搜索、换内页不影响它）。
    */
   private activeSegments: CollectionSegments | null = null;
-  private innerLoad = 0;
+  private innerLoad = new Map<number, number>();
   /** 各模式现场快照；没有 = 该模式首次进入。 */
   private snapshots = new Map<number, ModeSnapshot>();
   private searchBarRef = createRef<SearchBar>();
@@ -173,9 +174,14 @@ export class MainAppContainer extends Component<
     this.dropSegments();
   }
 
+  private innerTicket(mode: number): number {
+    return this.innerLoad.get(mode) ?? 0;
+  }
+
   /** 离开（或换掉）当前内页：中止未完成的段请求，迟到结果不再落地。 */
   private dropSegments() {
-    this.innerLoad++;
+    const mode = this.state.mode;
+    this.innerLoad.set(mode, this.innerTicket(mode) + 1);
     this.activeSegments?.abort();
     this.activeSegments = null;
   }
@@ -827,7 +833,7 @@ export class MainAppContainer extends Component<
       const isCollection = isCollectionItem(platformData);
       // 换掉上一个内页：它未完成的段请求中止，迟到的详情丢弃
       this.dropSegments();
-      const ticket = this.innerLoad;
+      const ticket = this.innerTicket(this.state.mode);
       this.setState({
         innerCollection: isCollection ? platformData : null,
         collectionSegments: null,
@@ -859,16 +865,24 @@ export class MainAppContainer extends Component<
         const data = entry(platformData).then(async (segments) => {
           if (!segments) throw new Error("内页加载失败");
           if (
-            ticket !== this.innerLoad ||
-            this.state.mode !== mode ||
-            !this.state.isCurrentInMultiPage
+            ticket !== this.innerTicket(mode) ||
+            (this.state.mode === mode && !this.state.isCurrentInMultiPage)
           ) {
             segments.abort();
             throw new Error("内页已离开");
           }
           const totalPage = segments.totalPage(this.itemsPerPage);
-          this.activeSegments = segments;
-          this.setState({ collectionSegments: segments, totalPage });
+          if (this.state.mode === mode) {
+            this.activeSegments = segments;
+            this.setState({ collectionSegments: segments, totalPage });
+          } else {
+            // 详情回来时已切到别的模式：落进原模式的快照，切回时原样恢复
+            const snapshot = this.snapshots.get(mode);
+            if (snapshot) {
+              snapshot.collectionSegments = segments;
+              snapshot.totalPage = totalPage;
+            }
+          }
           const page = await segments.loadPage(1, this.itemsPerPage);
           return { platformData: page, totalPage };
         });
