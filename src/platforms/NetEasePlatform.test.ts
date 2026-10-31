@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // 平台层的整单点播（`playCollectionAll`）：内页头「全部播放」与宿站弹窗的
 // select 0/1 共用它，所以「正序保序 / 乱序是同一集合的置换 / 不碰 buildSelect2」
@@ -12,6 +12,7 @@ const announce = vi.hoisted(() => ({
   runBatchAnnounce: vi.fn(),
   runSingleAnnounce: vi.fn(),
   showBatchItemError: vi.fn(),
+  sendMediaCard: vi.fn(),
 }));
 const episodePicker = vi.hoisted(() => ({ openEpisodePicker: vi.fn() }));
 
@@ -449,6 +450,172 @@ describe("批量发送：进度与停止", () => {
     ).finalODSONG([1, 2, 3], batch);
     expect(lyricCalls).toBe(1);
     expect(getBatches()[0]).toMatchObject({ status: "stopped", total: 3 });
+  });
+});
+
+describe("批量发送：即停与边取边发", () => {
+  type Batch = import("../playback/BatchProgress").BatchHandle;
+  const song = (id: number) => ({
+    id,
+    name: `曲${id}`,
+    fee: 0,
+    duration: 1000,
+    artists: [{ name: "甲" }],
+    album: { picUrl: "" },
+  });
+  const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+  const run = (ids: number[], batch?: Batch) =>
+    (
+      NetEasePlatform as unknown as {
+        finalODSONG: (ids: number[], b?: Batch) => Promise<void>;
+      }
+    ).finalODSONG(ids, batch);
+  const api = neteaseMusic as unknown as {
+    getLyric: ReturnType<typeof vi.fn>;
+  };
+  let socketSend: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    finalODSONG.mockRestore();
+    const { Socket } = await import("../iirose_func/Socket");
+    // 测试环境没有宿站的全局 socket：只记录不发送
+    socketSend = vi
+      .spyOn(Socket.prototype, "send")
+      .mockImplementation(() => {});
+    (await import("../playback/BatchProgress")).resetBatches();
+    api.getLyric = vi.fn(async () => null);
+  });
+
+  afterEach(() => {
+    socketSend.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it("准备中停止：详情请求被 abort，卡片收起后详情才返回也不复活", async () => {
+    vi.useFakeTimers();
+    const { startBatch, stopBatch, getBatches, BATCH_STOP_LINGER_MS } =
+      await import("../playback/BatchProgress");
+    let release!: () => void;
+    let seen: AbortSignal | undefined;
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      (ids: number[], signal?: AbortSignal) => {
+        seen = signal;
+        return new Promise((resolve) => {
+          release = () => resolve(ids.map(song));
+        });
+      },
+    );
+    const batch = startBatch("千首歌单", 3);
+    const done = run([1, 2, 3], batch);
+    await Promise.resolve();
+    stopBatch(batch.id);
+    expect(seen?.aborted).toBe(true);
+    // 超过 1.4 秒：卡片已移除
+    await vi.advanceTimersByTimeAsync(BATCH_STOP_LINGER_MS + 1_000);
+    expect(getBatches()).toHaveLength(0);
+    release();
+    await done;
+    expect(api.getLyric).not.toHaveBeenCalled();
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(socketSend).not.toHaveBeenCalled();
+    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledTimes(1);
+  });
+
+  it("发送中停止（200 首）：该歌词请求 abort，之后不再取详情 / 歌词，不再发卡", async () => {
+    const { startBatch, stopBatch, getBatches } =
+      await import("../playback/BatchProgress");
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => ids.map(song),
+    );
+    const batch = startBatch("两百首", 200);
+    let lyricSignal: AbortSignal | undefined;
+    api.getLyric = vi.fn(async (id: number, signal?: AbortSignal) => {
+      if (id === 5) {
+        lyricSignal = signal;
+        stopBatch(batch.id);
+      }
+      return null;
+    });
+    await run(range(200), batch);
+    expect(lyricSignal?.aborted).toBe(true);
+    expect(api.getLyric).toHaveBeenCalledTimes(5);
+    expect(announce.sendMediaCard).toHaveBeenCalledTimes(4);
+    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledTimes(1);
+    expect(getBatches()[0].status).toBe("stopped");
+  });
+
+  it("边取边发：250 首按 100/100/50 分段，下一段在上一段发完后才请求", async () => {
+    const events: string[] = [];
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => {
+        events.push(`detail:${ids.length}`);
+        return ids.map(song);
+      },
+    );
+    api.getLyric = vi.fn(async (id: number) => {
+      events.push(`lyric:${id}`);
+      return null;
+    });
+    const { startBatch, getBatches } =
+      await import("../playback/BatchProgress");
+    const batch = startBatch("两百五", 250);
+    await run(range(250), batch);
+    expect(events.filter((e) => e.startsWith("detail"))).toEqual([
+      "detail:100",
+      "detail:100",
+      "detail:50",
+    ]);
+    // 第 1 首在第 1 段返回后即发；第 2 段在第 1 段全部处理后才发起
+    expect(events.slice(0, 2)).toEqual(["detail:100", "lyric:1"]);
+    expect(events.indexOf("lyric:100")).toBe(100);
+    expect(events[101]).toBe("detail:100");
+    expect(announce.sendMediaCard).toHaveBeenCalledTimes(250);
+    expect(getBatches()[0]).toMatchObject({
+      status: "done",
+      done: 250,
+      total: 250,
+    });
+  });
+
+  it("发送顺序 = 入参顺序，不跟接口返回顺序", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => [...ids].reverse().map(song),
+    );
+    const order: number[] = [];
+    api.getLyric = vi.fn(async (id: number) => {
+      order.push(id);
+      return null;
+    });
+    await run([3, 1, 2]);
+    expect(order).toEqual([3, 1, 2]);
+  });
+
+  it("段失败：后续段不再取，总数校正为已处理数，已发保留", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => (ids[0] === 101 ? null : ids.map(song)),
+    );
+    const { startBatch, getBatches } =
+      await import("../playback/BatchProgress");
+    const batch = startBatch("两百五", 250);
+    await run(range(250), batch);
+    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledTimes(2);
+    expect(announce.sendMediaCard).toHaveBeenCalledTimes(100);
+    expect(getBatches()[0]).toMatchObject({
+      status: "done",
+      done: 100,
+      total: 100,
+    });
+  });
+
+  it("首段失败：不发报文，卡片显示失败", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue(null);
+    const { startBatch, getBatches } =
+      await import("../playback/BatchProgress");
+    const batch = startBatch("两百五", 250);
+    await run(range(250), batch);
+    expect(api.getLyric).not.toHaveBeenCalled();
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(getBatches()[0].status).toBe("failed");
   });
 });
 

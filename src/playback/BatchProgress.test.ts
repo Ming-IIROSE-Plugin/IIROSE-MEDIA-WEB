@@ -51,6 +51,28 @@ describe("批量点播进度", () => {
     expect(getBatches()).toHaveLength(0);
   });
 
+  it("停止即 abort 句柄信号；卡片移除后停止标记仍有效", () => {
+    const batch = startBatch("千首歌单", 130);
+    expect(batch.signal.aborted).toBe(false);
+    stopBatch(batch.id);
+    expect(batch.signal.aborted).toBe(true);
+    vi.advanceTimersByTime(BATCH_STOP_LINGER_MS + BATCH_LEAVE_MS);
+    expect(getBatches()).toHaveLength(0);
+    // 准备阶段停掉的批次不能在详情取回后「复活」
+    expect(batch.cancelled).toBe(true);
+    expect(batch.signal.aborted).toBe(true);
+  });
+
+  it("正常结束不 abort 信号", () => {
+    const batch = startBatch("专辑", 1);
+    batch.step();
+    batch.finish();
+    vi.advanceTimersByTime(BATCH_LINGER_MS + BATCH_LEAVE_MS);
+    expect(getBatches()).toHaveLength(0);
+    expect(batch.cancelled).toBe(false);
+    expect(batch.signal.aborted).toBe(false);
+  });
+
   it("多次批量各自一张卡", () => {
     startBatch("A", 1);
     startBatch("B", 2);

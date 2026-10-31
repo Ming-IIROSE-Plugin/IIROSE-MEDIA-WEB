@@ -1,5 +1,6 @@
 // 批量点播进度（整张正序 / 乱序、选集多选）：发送循环逐首上报，浮窗订阅显示，
-// 用户可随时「停止」——循环在下一首发送前看到停止标记就结束，已发出的不撤回。
+// 用户可随时「停止」——飞行中的请求随句柄的 signal 中止，循环在下一首发送前
+// 看到停止标记就结束，已发出的不撤回。
 // 浮窗挂在面板之外，关掉点播面板后进度仍在。
 
 export type BatchStatus =
@@ -24,8 +25,10 @@ export interface BatchRun {
 /** 发送循环拿到的句柄。 */
 export interface BatchHandle {
   readonly id: number;
-  /** 用户点了「停止」：循环应在下一首之前结束。 */
+  /** 用户点了「停止」：循环应在下一首之前结束（卡片收起后仍为 true）。 */
   readonly cancelled: boolean;
+  /** 停止即 abort：传给该批次的网络请求，飞行中的一并中止。 */
+  readonly signal: AbortSignal;
   /** 详情取回后才知道实际可发的条数（去掉取不到详情的）。 */
   setTotal(total: number): void;
   /** 处理完一首（发出或跳过）。 */
@@ -42,7 +45,9 @@ export const BATCH_STOP_LINGER_MS = 1_200;
 export const BATCH_LEAVE_MS = 200;
 
 let runs: BatchRun[] = [];
-const cancelled = new Set<number>();
+// 每批一个中止源：句柄闭包另持一份，卡片移除后停止标记仍有效（否则准备阶段
+// 停掉的批次会在详情取回后「复活」）。这里的表只供 stopBatch 按 id 找到它。
+const controllers = new Map<number, AbortController>();
 const timers = new Map<number, ReturnType<typeof setTimeout>[]>();
 const listeners = new Set<() => void>();
 let seq = 0;
@@ -68,7 +73,7 @@ function later(id: number, ms: number, step: () => void) {
 function remove(id: number) {
   timers.get(id)?.forEach((timer) => clearTimeout(timer));
   timers.delete(id);
-  cancelled.delete(id);
+  controllers.delete(id);
   runs = runs.filter((run) => run.id !== id);
   emit();
 }
@@ -94,7 +99,7 @@ export function subscribeBatches(listener: () => void): () => void {
 
 /** 已点「停止」的不再被循环里的上报改回「进行中」。 */
 function liveStatus(id: number): BatchStatus {
-  return cancelled.has(id) ? "stopped" : "running";
+  return controllers.get(id)?.signal.aborted ? "stopped" : "running";
 }
 
 /** 开始一次批量点播；`total` 是预计条数，详情取回后可用 `setTotal` 校正。 */
@@ -104,13 +109,16 @@ export function startBatch(title: string, total: number): BatchHandle {
     ...runs,
     { id, title, total, done: 0, status: "preparing", leaving: false },
   ];
+  const controller = new AbortController();
+  controllers.set(id, controller);
   emit();
   let finished = false;
   return {
     id,
     get cancelled() {
-      return cancelled.has(id);
+      return controller.signal.aborted;
     },
+    signal: controller.signal,
     setTotal(next: number) {
       if (!find(id) || finished) return;
       update(id, { total: next, status: liveStatus(id) });
@@ -128,7 +136,7 @@ export function startBatch(title: string, total: number): BatchHandle {
       finished = true;
       if (!find(id)) return;
       // 停止时 stopBatch 已安排收起，这里不再重复
-      if (cancelled.has(id)) return;
+      if (controller.signal.aborted) return;
       const run = find(id);
       update(id, { status: run && run.done === 0 ? "failed" : "done" });
       later(id, BATCH_LINGER_MS, () => dismissBatch(id));
@@ -140,8 +148,8 @@ export function startBatch(title: string, total: number): BatchHandle {
 export function stopBatch(id: number): void {
   const run = find(id);
   if (!run || run.status === "done" || run.status === "stopped") return;
-  cancelled.add(id);
   update(id, { status: "stopped" });
+  controllers.get(id)?.abort();
   later(id, BATCH_STOP_LINGER_MS, () => dismissBatch(id));
 }
 
@@ -157,7 +165,7 @@ export function dismissBatch(id: number): void {
 export function resetBatches(): void {
   timers.forEach((list) => list.forEach((timer) => clearTimeout(timer)));
   timers.clear();
-  cancelled.clear();
+  controllers.clear();
   runs = [];
   listeners.clear();
 }

@@ -1073,24 +1073,39 @@ export class NetEasePlatform extends Platform {
     const socket = new Socket();
     const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
 
-    let songDetailSongs: SongDetailSong[] | null = null;
-    let songDetailFromBinaryify: SongsFromBinaryify[] | null = null;
-    songDetailSongs = await NeteaseMusicAPI.getNeteaseSongDetail(songsID);
-    if (!songDetailSongs && !songDetailFromBinaryify) return;
     const quality = neteaseSetting.quality;
+    const signal = batch?.signal;
+    const size = NetEasePlatform.DETAIL_CHUNK;
 
-    if (songDetailSongs) {
-      const songMap = new Map(songDetailSongs.map((s) => [s.id, s]));
-      const orderedSongs = songsID
+    // 无版权曲目按批聚合计数：循环结束统一提示一次，不逐曲刷屏
+    let noCopyrightSkipped = 0;
+    // 预计条数：取不到详情的逐段扣掉；段失败时校正为已处理数
+    let total = songsID.length;
+    let processed = 0;
+
+    // 边取边发：每 100 首取一段详情就发这一段，大歌单不必等全部详情
+    for (let at = 0; at < songsID.length; at += size) {
+      if (batch?.cancelled) break;
+      const chunk = songsID.slice(at, at + size);
+      const details = await NeteaseMusicAPI.getNeteaseSongDetail(chunk, signal);
+      if (batch?.cancelled) break;
+      if (!details) {
+        // 非中止的失败：提示已由 neteaseRequest 发出，已发的保留，后续段不再取
+        batch?.setTotal(processed);
+        break;
+      }
+
+      // 按入参顺序重排（正序 / 乱序 / 点选顺序），接口返回顺序不可信
+      const songMap = new Map(details.map((s) => [s.id, s]));
+      const orderedSongs = chunk
         .map((id) => songMap.get(id))
         .filter((s): s is SongDetailSong => Boolean(s));
-
-      // 无版权曲目按批聚合计数：循环结束统一提示一次，不逐曲刷屏
-      let noCopyrightSkipped = 0;
-      batch?.setTotal(orderedSongs.length);
+      total -= chunk.length - orderedSongs.length;
+      batch?.setTotal(total);
 
       for (const item of orderedSongs) {
         if (batch?.cancelled) break;
+        processed++;
         if (item.noCopyrightRcmd) {
           noCopyrightSkipped++;
           batch?.step();
@@ -1101,7 +1116,7 @@ export class NetEasePlatform extends Platform {
           // playUrl = `https://v.iarc.top/?type=url&id=${item.id}#.mp3`;
           playUrl = `https://1309510434-1fsutl4dzp.ap-hongkong.tencentscf.com/musicstreamlink/?platform=netease&id=${item.id}&quality=320&vip=${item.fee}#.mp3`;
           //playUrl = `https://1309510434-k3dderqeb9.ap-guangzhou.tencentscf.com/musicstreamlink/?platform=netease&id=${item.id}&quality=320&vip=${item.fee}#.mp3`;
-          const lyrdata = await NeteaseMusicAPI.getLyric(item.id);
+          const lyrdata = await NeteaseMusicAPI.getLyric(item.id, signal);
 
           let lyric = ``;
 
@@ -1137,10 +1152,10 @@ export class NetEasePlatform extends Platform {
         }
         batch?.step();
       }
+    }
 
-      if (noCopyrightSkipped > 0) {
-        ShowMessage.show(`已跳过 ${noCopyrightSkipped} 首无版权曲目`);
-      }
+    if (noCopyrightSkipped > 0) {
+      ShowMessage.show(`已跳过 ${noCopyrightSkipped} 首无版权曲目`);
     }
   };
 

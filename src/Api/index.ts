@@ -338,14 +338,18 @@ export class SendFetch {
    * @param params POST body / GET query
    * @param method 请求方法
    * @param headers 额外请求头（POST 用）
-   * @returns 解析后的 JSON；全部节点失败返回 null
+   * @param signal 调用方的中止信号（如批量点播的「停止」）：与 5 秒超时区分，
+   *   中止后立即返回 null，不换节点、不提示
+   * @returns 解析后的 JSON；全部节点失败或被外部中止返回 null
    */
   protected static async neteaseRequest(
     url: string,
     params: URLSearchParams | string,
     method: "GET" | "POST",
     headers?: Headers,
+    signal?: AbortSignal,
   ): Promise<any | null> {
+    if (signal?.aborted) return null;
     const TIMEOUT_MS = 5000;
     const primary = this.getNeteaseCors();
     // Dev 模式下仅本地开发节点可用；其余情况优先节点在前，另一个 SCF 兜底
@@ -360,10 +364,14 @@ export class SendFetch {
     let lastStatus: number | undefined;
 
     for (const node of nodes) {
+      if (signal?.aborted) return null;
       // 每个节点独立判定，避免上一节点的状态码污染最终提示
       lastStatus = undefined;
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      // 外部中止联动当前节点的请求（超时与外部中止共用这一个 controller）
+      const onAbort = () => controller.abort();
+      signal?.addEventListener("abort", onAbort);
       try {
         const response =
           method === "GET"
@@ -383,6 +391,7 @@ export class SendFetch {
               );
 
         if (controller.signal.aborted) {
+          if (signal?.aborted) return null;
           lastError = "timeout";
           continue;
         }
@@ -408,6 +417,8 @@ export class SendFetch {
         try {
           data = await response.json();
         } catch {
+          // 读 body 期间被外部中止，不算节点失败
+          if (signal?.aborted) return null;
           // 假 200：body 不是 JSON
           lastError = "http";
           continue;
@@ -425,11 +436,15 @@ export class SendFetch {
             ? "risk"
             : "http";
       } catch {
+        if (signal?.aborted) return null;
         lastError = controller.signal.aborted ? "timeout" : "network";
       } finally {
         clearTimeout(timer);
+        signal?.removeEventListener("abort", onAbort);
       }
     }
+
+    if (signal?.aborted) return null;
 
     const reason =
       lastError === "risk"

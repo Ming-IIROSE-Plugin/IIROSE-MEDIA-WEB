@@ -397,6 +397,89 @@ describe("neteaseRequest：全部节点失败", () => {
   });
 });
 
+describe("neteaseRequest：外部中止信号", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    showMock.mockClear();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const hanging = (_url: string, init: RequestInit) =>
+    new Promise((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () =>
+        reject(new DOMException("Aborted", "AbortError")),
+      );
+    });
+
+  it("请求期间外部中止：立即返回 null，不换节点、不提示、无残留定时器", async () => {
+    fetchMock.mockImplementation(hanging);
+    const abort = new AbortController();
+    const pending = (SendFetch as any).neteaseRequest(
+      URL_UNDER_TEST,
+      POST_BODY,
+      "GET",
+      undefined,
+      abort.signal,
+    );
+    await vi.advanceTimersByTimeAsync(100);
+    abort.abort();
+    await expect(pending).resolves.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(showMock).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("入口已中止：不发请求，直接返回 null", async () => {
+    const abort = new AbortController();
+    abort.abort();
+    const data = await (SendFetch as any).neteaseRequest(
+      URL_UNDER_TEST,
+      POST_BODY,
+      "GET",
+      undefined,
+      abort.signal,
+    );
+    expect(data).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(showMock).not.toHaveBeenCalled();
+  });
+
+  it("传了信号但未中止：超时仍按原逻辑换节点", async () => {
+    fetchMock
+      .mockImplementationOnce(hanging)
+      .mockResolvedValueOnce(json200({ code: 200 }));
+    const pending = (SendFetch as any).neteaseRequest(
+      URL_UNDER_TEST,
+      POST_BODY,
+      "GET",
+      undefined,
+      new AbortController().signal,
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    await expect(pending).resolves.toEqual({ code: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("getNeteaseSongDetail 中止后不再请求后续分段", async () => {
+    const abort = new AbortController();
+    fetchMock.mockImplementation(async () => {
+      abort.abort();
+      return json200({ code: 200, songs: [] });
+    });
+    const ids = Array.from({ length: 250 }, (_, i) => i + 1);
+    const data = await NeteaseMusicAPI.getNeteaseSongDetail(ids, abort.signal);
+    expect(data).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("端点方法：调用处只拼一层代理前缀", () => {
   beforeEach(() => {
     localStorage.clear();

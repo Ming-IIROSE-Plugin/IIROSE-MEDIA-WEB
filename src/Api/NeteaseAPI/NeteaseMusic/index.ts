@@ -51,11 +51,12 @@ export class NeteaseMusicAPI extends SendFetch {
   /**
    * 直接访问网易云音乐的接口获取歌曲详情
    * @param id
-   * @param corsnum
+   * @param signal 中止后不再请求后续分段，飞行中的请求返回 null
    * @returns
    */
   public static async getNeteaseSongDetail(
     ids: number[],
+    signal?: AbortSignal,
   ): Promise<SongDetailSong[] | null> {
     const CHUNK_SIZE = 100; // 每次最多 150 个 ids
     const allSongs: SongDetailSong[] = []; // 用于存储所有的 songs
@@ -66,6 +67,7 @@ export class NeteaseMusicAPI extends SendFetch {
     try {
       // 逐个请求每个子数组
       for (const chunk of chunks) {
+        if (signal?.aborted) return null;
         const params = new URLSearchParams({
           ids: `[${chunk.toString()}]`,
         });
@@ -74,6 +76,8 @@ export class NeteaseMusicAPI extends SendFetch {
           "https://music.163.com/api/song/detail",
           params,
           "GET",
+          undefined,
+          signal,
         );
 
         if (data && data.code === 200) {
@@ -153,7 +157,7 @@ export class NeteaseMusicAPI extends SendFetch {
     }
   }
 
-  public static async getLyric(id: number) {
+  public static async getLyric(id: number, signal?: AbortSignal) {
     const url = `https://music.163.com/api/song/lyric`;
     const params = new URLSearchParams({
       id: id.toString(),
@@ -170,6 +174,7 @@ export class NeteaseMusicAPI extends SendFetch {
       params,
       "GET",
       headers,
+      signal,
     );
 
     if (lyric && lyric.code === 200) {
