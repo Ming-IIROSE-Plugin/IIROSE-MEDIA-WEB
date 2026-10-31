@@ -29,7 +29,17 @@ import {
   type DeskSourceKey,
   deskPress,
 } from "../floating-panel/tokens";
-import { detectVideoTarget } from "./searchIntent";
+import {
+  detectVideoTarget,
+  parseBilibiliLink,
+  type BilibiliLinkTarget,
+} from "./searchIntent";
+import { playBilibiliLink } from "../../../platforms/bilibiliLink";
+import { guardedRequest } from "../../../playback/RequestGuard";
+import {
+  roomSupportsRequest,
+  notifyRoomUnsupported,
+} from "../media-card-container/roomSupport";
 import { SourceMenu } from "./SourceMenu";
 
 export interface SearchSource {
@@ -164,12 +174,44 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
 
   private handlePaste = (event: ClipboardEvent) => {
     const text = event.clipboardData?.getData("text") ?? "";
+
+    // 带 `?p=` 的哔哩哔哩链接：直接点播该分 P（与聊天输入框的链接拦截同一份实现），
+    // 不能退化成搜索——那样分 P 会丢，单 P 直达就再也用不上了。
+    const link = parseBilibiliLink(text);
+    if (link?.targetP) {
+      event.preventDefault();
+      this.playPageLink(link);
+      return;
+    }
+
     const target = detectVideoTarget(text);
     if (!target) return; // 普通文本照常粘贴
     event.preventDefault();
     this.setState({ value: target });
     this.props.onSubmit(target);
   };
+
+  /** 粘贴的分 P 链接：走点播守卫，转圈 / 失败提示与其它手动点播一致。 */
+  private playPageLink(link: BilibiliLinkTarget) {
+    const { videoId, targetP } = link;
+    if (!roomSupportsRequest()) {
+      notifyRoomUnsupported();
+      return;
+    }
+    // 详情要等平台层取回：守卫只用到标题（成功提示）与 bvid（条目键，与结果区同一条目一致）
+    const data: PlatformData = {
+      title: `${videoId} P${targetP}`,
+      coverImg: "",
+      author: "bilibili",
+      websiteUrl: link.url.href,
+      bilibili: /^av/i.test(videoId)
+        ? { aid: parseInt(videoId.slice(2), 10) }
+        : { bvid: videoId },
+    };
+    void guardedRequest(data, () =>
+      playBilibiliLink(link.url.href, { requirePage: true }),
+    );
+  }
 
   private placeholder = () =>
     this.props.placeholderPhone &&

@@ -1,4 +1,4 @@
-import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
+import { playBilibiliLink } from "../platforms/bilibiliLink";
 import { NetEasePlatform } from "../platforms/NetEasePlatform";
 import { UrlExtractor } from "../tools/UrlExtractor";
 import { ShowMessage } from "../iirose_func/ShowMessage";
@@ -77,40 +77,9 @@ export class InputPlatformAnalysis {
         }
       }
 
-      // 5. 哔哩哔哩平台链接处理
+      // 5. 哔哩哔哩平台链接处理（取详情、`?p=` 分 P 直达在 platforms/bilibiliLink 共用）
       if (hostname.includes("bilibili.com") || hostname === "b23.tv") {
-        const bvMatch = resolvedUrl.match(/(BV[a-zA-Z0-9]+|av\d+)/i);
-        if (bvMatch) {
-          const videoId = bvMatch[1];
-          const bvideoDetail =
-            await BilibiliPlatform.getBilibiliVideoDetail(videoId);
-          if (!bvideoDetail) return;
-
-          const pParam = parsedUrl.searchParams.get("p");
-          const targetP = pParam ? parseInt(pParam, 10) : undefined;
-          const isMulti = bvideoDetail.pages && bvideoDetail.pages.length > 1;
-
-          const platformData: PlatformData = {
-            title: bvideoDetail.title,
-            coverImg: bvideoDetail.pic,
-            author: bvideoDetail.owner?.name || "bilibili",
-            websiteUrl: `https://www.bilibili.com/video/${bvideoDetail.bvid}${
-              targetP ? `?p=${targetP}` : ""
-            }`,
-            duration: bvideoDetail.duration,
-            bilibili: {
-              aid: bvideoDetail.aid,
-              bvid: bvideoDetail.bvid,
-              cid: bvideoDetail.cid,
-            },
-            multiPage: isMulti
-              ? Promise.resolve({ platform: "bilibili" })
-              : undefined,
-          };
-
-          await BilibiliPlatform.VOD(platformData, targetP);
-          return;
-        }
+        if (await playBilibiliLink(resolvedUrl)) return;
       }
 
       // 6. 直链媒体探测与处理（支持扩展名及无扩展名探测，限制 8 秒超时）

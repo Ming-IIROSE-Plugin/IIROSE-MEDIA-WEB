@@ -1,8 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRef, h, render } from "preact";
 import { act } from "preact/test-utils";
+import {
+  noteMediaSent,
+  resetRequestGuard,
+  subscribeRequestToast,
+} from "../../../playback/RequestGuard";
 import { SearchBar, type SearchBarProps, type SearchSource } from "./SearchBar";
-import { detectVideoTarget } from "./searchIntent";
+import { detectVideoTarget, parseBilibiliLink } from "./searchIntent";
+
+// 分 P 链接要落到共用的点播实现上（真实实现会发网络请求并点播）
+const playBilibiliLink = vi.hoisted(() => vi.fn(async () => true));
+vi.mock("../../../platforms/bilibiliLink", () => ({ playBilibiliLink }));
 
 const SOURCES: SearchSource[] = [
   { label: "网易云音乐", short: "网易云", dot: "netease" },
@@ -11,6 +20,14 @@ const SOURCES: SearchSource[] = [
 let host: HTMLDivElement;
 const input = () => host.querySelector("input")!;
 const kbd = () => host.querySelector("kbd")!;
+const paste = (text: string) => {
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: { getData: () => text },
+  });
+  input().dispatchEvent(event);
+  return event;
+};
 const draw = (props: Partial<SearchBarProps> = {}) => {
   const ref = createRef<SearchBar>();
   const onSubmit = vi.fn();
@@ -33,6 +50,8 @@ const draw = (props: Partial<SearchBarProps> = {}) => {
 beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
+  playBilibiliLink.mockClear();
+  resetRequestGuard();
   // `/` 只在面板打开时抢焦点
   const panel = document.createElement("div");
   panel.id = "IIROSE_MEDIA_CONTAINER";
@@ -42,6 +61,7 @@ beforeEach(() => {
 afterEach(() => {
   render(null, host);
   host.remove();
+  resetRequestGuard();
   document.getElementById("IIROSE_MEDIA_CONTAINER")?.remove();
 });
 
@@ -229,23 +249,39 @@ describe("搜索栏", () => {
     expect(onLiveInput).toHaveBeenLastCalledWith("周杰伦");
   });
 
-  it("粘贴 BV 号 / 哔哩哔哩链接自动识别并提交", () => {
+  it("粘贴带 ?p= 的哔哩哔哩链接：直接点播该分 P，不退化成搜索", async () => {
     const { onSubmit } = draw();
-    const paste = (text: string) => {
-      const event = new Event("paste", { bubbles: true, cancelable: true });
-      Object.defineProperty(event, "clipboardData", {
-        value: { getData: () => text },
-      });
-      input().dispatchEvent(event);
-      return event;
-    };
+    const toasts: string[] = [];
+    const off = subscribeRequestToast((toast) => toasts.push(toast.text));
+
+    const event = paste("https://www.bilibili.com/video/BV1xx411c7mD?p=2");
+
+    expect(event.defaultPrevented).toBe(true);
+    // 搜索栏不提交、不填词：这条链接的落点是「点播 P2」
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(input().value).toBe("");
+    // 走点播守卫 → 共用实现（`?p=` 一路带到平台层，搜索那条路不可能做到）
+    expect(playBilibiliLink).toHaveBeenCalledWith(
+      "https://www.bilibili.com/video/BV1xx411c7mD?p=2",
+      { requirePage: true },
+    );
+    // 报文发出即按手动点播收尾（成功提示），不是「什么都没发生」
+    noteMediaSent("&1|video");
+    await vi.waitFor(() => expect(toasts).toHaveLength(1));
+    expect(toasts[0]).toContain("已点播");
+    off();
+  });
+
+  it("粘贴不带分 P 的链接 / BV 号仍当搜索词提交", () => {
+    const { onSubmit } = draw();
 
     const bv = paste("BV1xx411c7mD");
     expect(bv.defaultPrevented).toBe(true);
     expect(onSubmit).toHaveBeenCalledWith("BV1xx411c7mD");
 
-    paste("看看这个 https://www.bilibili.com/video/BV1xx411c7mD?p=2");
+    paste("https://www.bilibili.com/video/BV1xx411c7mD");
     expect(onSubmit).toHaveBeenLastCalledWith("BV1xx411c7mD");
+    expect(playBilibiliLink).not.toHaveBeenCalled();
 
     // 普通文本照常粘贴，不抢提交
     const plain = paste("陈绮贞");
@@ -305,5 +341,40 @@ describe("视频目标识别", () => {
     );
     expect(detectVideoTarget("陈绮贞")).toBeNull();
     expect(detectVideoTarget("   ")).toBeNull();
+    // 没有词边界时这串里藏着 `bv` + 10 位，会抢走粘贴并变成视频搜索
+    expect(detectVideoTarget("xxabv1234567890yy")).toBeNull();
+    expect(
+      detectVideoTarget(
+        "看看这个 https://www.bilibili.com/video/BV1xx411c7mD?p=2",
+      ),
+    ).toBe("BV1xx411c7mD");
+  });
+
+  it("哔哩哔哩链接解析出视频号与 ?p=，短链 / 非视频链接返回 null", () => {
+    const link = parseBilibiliLink(
+      "https://www.bilibili.com/video/BV1xx411c7mD?p=2",
+    )!;
+    expect(link.videoId).toBe("BV1xx411c7mD");
+    expect(link.targetP).toBe(2);
+
+    // 没带分 P：解析得到视频号，targetP 为空
+    expect(
+      parseBilibiliLink("https://m.bilibili.com/video/av170001")?.targetP,
+    ).toBeUndefined();
+    expect(
+      parseBilibiliLink("https://www.bilibili.com/video/BV1xx411c7mD")?.videoId,
+    ).toBe("BV1xx411c7mD");
+    // 小写贴进来的 BV 前缀归一（id 本身区分大小写，保持原样）
+    expect(
+      parseBilibiliLink("https://www.bilibili.com/video/bv1xx411c7mD?p=3")
+        ?.videoId,
+    ).toBe("BV1xx411c7mD");
+
+    // 短链里没有视频号（要先展开）、普通文本、非哔哩哔哩站点都不认
+    expect(parseBilibiliLink("https://b23.tv/abcd")).toBeNull();
+    expect(parseBilibiliLink("陈绮贞")).toBeNull();
+    expect(
+      parseBilibiliLink("https://example.com/video/BV1xx411c7mD"),
+    ).toBeNull();
   });
 });
