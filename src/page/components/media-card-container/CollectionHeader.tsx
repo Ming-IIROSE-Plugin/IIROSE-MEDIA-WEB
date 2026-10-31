@@ -127,8 +127,9 @@ export function CollectionHeader({
           aria-haspopup="menu"
           aria-expanded={open}
           aria-disabled={!supported}
+          aria-label="全部播放"
           title={supported ? "按顺序点播整张" : "这个房间不支持点播"}
-          className={`flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-solid bg-transparent px-[14px] ${typeButtonSm} ${deskRule} ${deskInk2} ${deskFocusRing} max-[768px]:h-11 ${supported ? `${deskSendHoverSelf} ${deskPress}` : "opacity-40"} ${open ? deskHover : ""}`}
+          className={`flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-solid bg-transparent px-[14px] ${typeButtonSm} ${deskRule} ${deskInk2} ${deskFocusRing} max-[768px]:h-11 max-[768px]:w-11 max-[768px]:justify-center max-[768px]:px-0 ${supported ? `${deskSendHoverSelf} ${deskPress}` : "opacity-40"} ${open ? deskHover : ""}`}
           onClick={() => {
             if (!supported) {
               notifyRoomUnsupported();
@@ -138,7 +139,8 @@ export function CollectionHeader({
           }}
         >
           <DeskIcon name="play" size={16} />
-          全部播放
+          {/* 手机窄屏只留图标：右组（视图切换 + 分页 + 全部播放）挤不下会把按钮裁掉 */}
+          <span className="max-[768px]:hidden">全部播放</span>
         </button>
       </div>
 

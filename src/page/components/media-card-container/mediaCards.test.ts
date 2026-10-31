@@ -651,6 +651,30 @@ describe("专辑 / 歌单行与内页头", () => {
     expect(host.textContent).toContain("全部播放");
   });
 
+  it("内页头：「全部播放」手机只留图标，仍可按 aria-label 找到", async () => {
+    // 窄屏（400px）右组（视图切换 + 分页 + 全部播放）会挤掉文字甚至裁掉按钮，
+    // 所以文字在手机隐藏、按钮收成 44px 方钮；可访问名不能跟着丢。
+    await mount(
+      withCtx(
+        h(CollectionHeader, {
+          title: album.title,
+          trackCount: album.trackCount,
+          onBack: () => {},
+          onPlayAll: () => {},
+        }),
+      ),
+    );
+    const trigger = host.querySelector<HTMLElement>(
+      'button[aria-label="全部播放"]',
+    )!;
+    expect(trigger).not.toBeNull();
+    expect(trigger.getAttribute("class")).toContain("max-[768px]:w-11");
+    expect(trigger.textContent?.trim()).toBe("全部播放");
+    expect(trigger.querySelector("span")!.getAttribute("class")).toContain(
+      "max-[768px]:hidden",
+    );
+  });
+
   it("顺序菜单：正序 / 乱序；Esc 与点外侧只取消，不点播，也不碰 buildSelect2", async () => {
     const buildSelect = vi.spyOn(NetEasePlatform, "buildSelect");
     const onPlayAll = vi.fn();
