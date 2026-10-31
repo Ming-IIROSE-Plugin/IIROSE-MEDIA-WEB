@@ -45,6 +45,19 @@ export interface OpenEpisodePickerOptions {
   unit: string;
   /** 打开后取分集；失败留在面板里可重试（不点播）。 */
   load: () => Promise<EpisodePickEntry[]>;
+  /**
+   * 列表出来后的后台补充（如网易云大歌单的歌名）：`patch` 按 id 合并标题 / 副行 / 时长并刷新，
+   * `progress` 报进度；面板关闭（取消、确认、卸载）时 `signal` 触发中止，别再请求。
+   * 已点选的项不受影响（id 不变）。
+   */
+  enrich?: (
+    entries: readonly EpisodePickEntry[],
+    api: {
+      patch: (changes: Map<string, Partial<EpisodePickEntry>>) => void;
+      progress: (done: number, total: number) => void;
+      signal: AbortSignal;
+    },
+  ) => Promise<void>;
   /** 确认：按播放顺序排好的条目（正序 = 点选顺序，乱序 = 随机置换）。 */
   onConfirm: (entries: EpisodePickEntry[]) => void;
   onCancel?: () => void;
@@ -105,6 +118,9 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
   let selected: string[] = [];
   let order: EpisodePickOrder = "asc";
   let finished = false;
+  /** 后台补充的进度与中止控制（关面板即中止）。 */
+  let progress: { done: number; total: number } | null = null;
+  let enrichAbort: AbortController | null = null;
   let exitTimer: ReturnType<typeof setTimeout> | undefined;
   /** 层栈的注销函数（`Esc` / 返回键登记的那一层）。 */
   let releaseLayer: () => void = () => {};
@@ -115,6 +131,7 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
 
   const unmount = () => {
     clearTimeout(exitTimer);
+    enrichAbort?.abort();
     releaseLayer();
     if (finished) return;
     finished = true;
@@ -142,6 +159,7 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
   const close = () => {
     if (handle.closing) return false;
     handle.closing = true;
+    enrichAbort?.abort();
     render(view(true), root);
     exitTimer = setTimeout(unmount, EXIT_MS);
     return true;
@@ -167,6 +185,7 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
       entries = Array.isArray(list) ? list : [];
       selected = [];
       status = "ready";
+      startEnrich();
     } catch {
       if (finished || handle.closing) return;
       entries = [];
@@ -177,8 +196,43 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
     focusClose();
   };
 
+  /** 列表就绪后在后台补充（如歌名）；每一批到达就合并并刷新，已选不丢。 */
+  const startEnrich = () => {
+    if (!options.enrich) return;
+    enrichAbort?.abort();
+    const abort = new AbortController();
+    enrichAbort = abort;
+    void options
+      .enrich(entries, {
+        signal: abort.signal,
+        progress: (done, total) => {
+          if (abort.signal.aborted || finished) return;
+          progress = { done, total };
+          update();
+        },
+        patch: (changes) => {
+          if (abort.signal.aborted || finished || !changes.size) return;
+          entries = entries.map((entry) => {
+            const change = changes.get(entry.id);
+            return change ? { ...entry, ...change } : entry;
+          });
+          update();
+        },
+      })
+      .catch(() => {
+        /* 补不全就保持占位名，仍可选、可点播 */
+      })
+      .finally(() => {
+        if (abort.signal.aborted || finished) return;
+        progress = null;
+        update();
+      });
+  };
+
   const retry = () => {
     if (status === "loading") return;
+    enrichAbort?.abort();
+    progress = null;
     status = "loading";
     entries = [];
     selected = [];
@@ -194,6 +248,7 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
       selected={selected}
       order={order}
       exiting={exiting}
+      progress={progress}
       onToggle={(id) => {
         selected = toggleEpisode(selected, id);
         update();

@@ -294,31 +294,83 @@ describe("选集委托", () => {
 });
 
 describe("选集面板的歌单曲目", () => {
-  it("tracks 只给前几首时按 trackIds 补齐，顺序与数量跟歌单一致", async () => {
-    neteaseMusic.getNeteaseSongDetail.mockResolvedValue([
-      { id: 3, name: "三", artists: [{ name: "甲" }], duration: 180_000 },
-    ]);
-    const tracks = await NetEasePlatform.fullPlaylistTracks({
+  it("骨架：tracks 只给前几首时按 trackIds 补全，缺的只有 id、不发请求", () => {
+    neteaseMusic.getNeteaseSongDetail.mockClear();
+    const { tracks, missing } = NetEasePlatform.playlistSkeleton({
       tracks: [{ id: 1, name: "一" }],
       trackIds: [{ id: 1 }, { id: 2 }, { id: 3 }],
     });
-    expect(neteaseMusic.getNeteaseSongDetail).toHaveBeenCalledWith([2, 3]);
-    expect(tracks).toEqual([
-      { id: 1, name: "一" },
-      // 补取不到的仍按 id 列出（面板显示「曲目 N」，照样可选）
-      { id: 2 },
-      { id: 3, name: "三", ar: [{ name: "甲" }], duration: 180_000 },
-    ]);
+    expect(tracks).toEqual([{ id: 1, name: "一" }, { id: 2 }, { id: 3 }]);
+    expect(missing).toEqual([2, 3]);
+    expect(neteaseMusic.getNeteaseSongDetail).not.toHaveBeenCalled();
   });
 
-  it("tracks 已完整时不再请求", async () => {
-    neteaseMusic.getNeteaseSongDetail.mockClear();
-    const tracks = await NetEasePlatform.fullPlaylistTracks({
+  it("骨架：tracks 已完整时没有缺的", () => {
+    const { tracks, missing } = NetEasePlatform.playlistSkeleton({
       tracks: [{ id: 1 }, { id: 2 }],
       trackIds: [{ id: 1 }, { id: 2 }],
     });
     expect(tracks).toHaveLength(2);
-    expect(neteaseMusic.getNeteaseSongDetail).not.toHaveBeenCalled();
+    expect(missing).toEqual([]);
+  });
+
+  it("并发取详情：每批 100 个 id、最多 4 路同时、逐批回调并报进度", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        inFlight--;
+        return ids.map((id) => ({ id, name: `曲${id}` }));
+      },
+    );
+    const ids = Array.from({ length: 1000 }, (_, i) => i + 1);
+    const got: number[] = [];
+    const progress: number[] = [];
+    await NetEasePlatform.fetchSongDetailsPooled(ids, {
+      signal: new AbortController().signal,
+      onChunk: (songs) => got.push(songs.length),
+      onProgress: (done) => progress.push(done),
+    });
+    expect(got).toHaveLength(10);
+    expect(got.every((n) => n === 100)).toBe(true);
+    expect(peak).toBe(4);
+    expect(Math.max(...progress)).toBe(1000);
+  });
+
+  it("中止后不再请求新的批次", async () => {
+    const abort = new AbortController();
+    let calls = 0;
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => {
+        calls++;
+        abort.abort();
+        return ids.map((id) => ({ id, name: "x" }));
+      },
+    );
+    const ids = Array.from({ length: 2000 }, (_, i) => i + 1);
+    await NetEasePlatform.fetchSongDetailsPooled(ids, {
+      signal: abort.signal,
+      onChunk: () => {},
+    });
+    // 4 路各已发出第一批，之后全部停手（不会走完 20 批）
+    expect(calls).toBeLessThanOrEqual(4);
+  });
+
+  it("单批失败（null）跳过，其余照常补", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) =>
+        ids[0] === 1 ? null : ids.map((id) => ({ id, name: `曲${id}` })),
+    );
+    const ids = Array.from({ length: 300 }, (_, i) => i + 1);
+    const got: number[] = [];
+    await NetEasePlatform.fetchSongDetailsPooled(ids, {
+      signal: new AbortController().signal,
+      onChunk: (songs) => got.push(songs.length),
+    });
+    expect(got).toEqual([100, 100]);
   });
 });
 

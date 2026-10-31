@@ -4,7 +4,7 @@
 // 受控视图：加载状态、已选项与点选顺序、正序 / 乱序全由 `openEpisodePicker` 持有，
 // 这里只排版与派发。选中项左列是蔷薇红实底序号徽章（点选顺序 1、2、3…），
 // 未选是 20px 描边方块；标题行「全选」按列表顺序选中全部，全选后文案变「取消全选」。
-import { useRef } from "preact/hooks";
+import { useMemo, useRef, useState } from "preact/hooks";
 import { formatDuration } from "../media-card-container/mediaFormat";
 import {
   notifyRoomUnsupported,
@@ -122,7 +122,14 @@ export interface EpisodePickerProps {
   onRetry: () => void;
   onConfirm: () => void;
   onCancel: () => void;
+  /** 后台补歌名的进度（只在补取期间给出）：header 显示「歌名加载中 d / t」。 */
+  progress?: { done: number; total: number } | null;
 }
+
+/** 一次画多少行：大歌单（上万首）一次全画会卡死，滚到底再追加。 */
+export const RENDER_BATCH = 200;
+/** 距底部多少像素开始追加下一批。 */
+const LOAD_MORE_THRESHOLD_PX = 600;
 
 /** 加载中 / 加载失败 / 0 集：列表区的三种非就绪状态。 */
 function StateRow({
@@ -181,8 +188,26 @@ export function EpisodePicker({
   onRetry,
   onConfirm,
   onCancel,
+  progress = null,
 }: EpisodePickerProps) {
   const supported = roomSupportsRequest();
+  /** 已画出的行数：只增不减（换歌单 / 重试时随组件重建归位）。 */
+  const [visible, setVisible] = useState(RENDER_BATCH);
+  /** id → 点选序号：每行查序号别再 `indexOf`（上万行 × 全选 = 上亿次比较）。 */
+  const orderOf = useMemo(
+    () => new Map(selected.map((id, index) => [id, index])),
+    [selected],
+  );
+  const handleListScroll = (event: Event) => {
+    const list = event.currentTarget as HTMLElement;
+    if (
+      visible < entries.length &&
+      list.scrollHeight - list.scrollTop - list.clientHeight <
+        LOAD_MORE_THRESHOLD_PX
+    ) {
+      setVisible((count) => Math.min(count + RENDER_BATCH, entries.length));
+    }
+  };
   const ready = status === "ready" && entries.length > 0;
   const busy = status !== "ready" || entries.length === 0;
   const allSelected = ready && selected.length === entries.length;
@@ -237,6 +262,14 @@ export function EpisodePicker({
           <span className={`${typeMonoNum} ${deskInk3}`}>
             {status === "ready" ? `${entries.length} ${unit}` : `— ${unit}`}
           </span>
+          {progress && progress.done < progress.total && (
+            <span
+              className={`${typeMonoNumSm} ${deskInk3}`}
+              data-imw-episode-progress="true"
+            >
+              歌名加载中 {progress.done} / {progress.total}
+            </span>
+          )}
           <button
             type="button"
             className={`ml-auto ${textAction} disabled:cursor-default disabled:opacity-40`}
@@ -259,6 +292,7 @@ export function EpisodePicker({
         <div
           className="min-h-0 flex-1 overflow-y-auto"
           data-imw-episode-list="true"
+          onScroll={handleListScroll}
         >
           {status === "loading" && <SkeletonRows />}
           {status === "failed" && (
@@ -268,8 +302,8 @@ export function EpisodePicker({
             <StateRow message={EMPTY_TEXT[unit] ?? `没有可点播的${unit}`} />
           )}
           {ready &&
-            entries.map((entry) => {
-              const index = selected.indexOf(entry.id);
+            entries.slice(0, visible).map((entry) => {
+              const index = orderOf.get(entry.id) ?? -1;
               const checked = index !== -1;
               const duration = formatDuration(entry.duration);
               return (

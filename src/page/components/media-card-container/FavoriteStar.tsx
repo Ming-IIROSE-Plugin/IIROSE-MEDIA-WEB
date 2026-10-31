@@ -95,11 +95,14 @@ export function FavoriteStar({
         key={popKey}
         name={isFavorited ? "starf" : "star"}
         size={18}
-        className={
+        className={`${
+          // 手机行里的星放大到 24px（40px 按钮里原来 18px 偏小）；卡片里的紧凑星不变
+          compact ? "" : "max-[768px]:h-6 max-[768px]:w-6"
+        } ${
           popKey > 0 && isFavorited
             ? "animate-[imwPop_260ms_var(--imw-ease)] motion-reduce:animate-none"
             : ""
-        }
+        }`}
       />
     </button>
   );

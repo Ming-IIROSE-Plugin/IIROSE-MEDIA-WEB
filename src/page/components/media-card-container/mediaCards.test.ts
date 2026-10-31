@@ -1610,6 +1610,10 @@ describe("手机：没有操作条，收藏星与点播钮直接在行 / 卡上"
       "max-[768px]:hidden",
     );
     expect(star.getAttribute("class")).toContain("max-[768px]:h-10");
+    // 手机行里的星图标放大到 24px
+    expect(star.querySelector("svg")!.getAttribute("class")).toContain(
+      "max-[768px]:h-6",
+    );
     await act(async () => {
       row.querySelector<HTMLElement>('button[aria-label^="点播 "]')!.click();
     });

@@ -82,34 +82,64 @@ export class NetEasePlatform extends Platform {
    * 「整张点播」在收藏里只靠它。
    */
   /**
-   * 歌单的完整曲目（选集面板用）：`trackIds` 才是完整列表与顺序。部分网络 / 未登录时
-   * 详情接口的 `tracks` 只给前 10 首（用户反馈：千首歌单选集只出 10 首），
-   * 缺的曲目按 id 分批补取详情；补取失败的仍按「曲目 N」列出，照样可选。
+   * 歌单曲目骨架（选集面板用）：`trackIds` 才是完整列表与顺序，详情接口的 `tracks`
+   * 在部分网络 / 未登录时只给前 10 首（千首歌单曾只列出 10 首）。这里**不发请求**：
+   * 有详情的曲目带名字，其余只有 id，由 `fetchSongDetailsPooled` 在后台补；
+   * 上万首的歌单因此能立刻列出，不必等全部详情取回。
    */
-  public static fullPlaylistTracks = async (playlist: {
+  public static playlistSkeleton = (playlist: {
     tracks?: CollectionTrack[] | null;
     trackIds?: { id: number }[] | null;
-  }): Promise<CollectionTrack[]> => {
+  }): { tracks: CollectionTrack[]; missing: number[] } => {
     const tracks: CollectionTrack[] = playlist.tracks ?? [];
     const ids = (playlist.trackIds ?? []).map((item) => item.id);
-    if (ids.length <= tracks.length) return tracks.length ? tracks : [];
-
+    if (ids.length <= tracks.length) return { tracks, missing: [] };
     const known = new Map<number, CollectionTrack>(
       tracks.map((track) => [track.id, track]),
     );
-    const missing = ids.filter((id) => !known.has(id));
-    if (missing.length > 0) {
-      const details = await NeteaseMusicAPI.getNeteaseSongDetail(missing);
-      for (const song of details ?? []) {
-        known.set(song.id, {
-          id: song.id,
-          name: song.name,
-          ar: song.artists?.map((artist) => ({ name: artist.name })),
-          duration: song.duration,
-        });
+    const missing = [...new Set(ids.filter((id) => !known.has(id)))];
+    return { tracks: ids.map((id) => known.get(id) ?? { id }), missing };
+  };
+
+  /** 每批 100 个 id、同时进行的请求数：上万首要 100 批，串行要几分钟，并发 4 路约四分之一。 */
+  public static readonly DETAIL_CHUNK = 100;
+  public static readonly DETAIL_CONCURRENCY = 4;
+
+  /**
+   * 并发取歌曲详情：每批到达就回调 `onChunk`，随时可由 `signal` 中止（关面板即停）。
+   * 单批失败（`null`）跳过，对应曲目保留占位名；不抛错。
+   */
+  public static fetchSongDetailsPooled = async (
+    ids: number[],
+    options: {
+      signal: AbortSignal;
+      onChunk: (songs: SongDetailSong[]) => void;
+      onProgress?: (done: number, total: number) => void;
+    },
+  ): Promise<void> => {
+    const size = NetEasePlatform.DETAIL_CHUNK;
+    const chunks: number[][] = [];
+    for (let i = 0; i < ids.length; i += size)
+      chunks.push(ids.slice(i, i + size));
+    let next = 0;
+    let done = 0;
+    const worker = async () => {
+      while (!options.signal.aborted) {
+        const at = next++;
+        if (at >= chunks.length) return;
+        const songs = await NeteaseMusicAPI.getNeteaseSongDetail(chunks[at]);
+        if (options.signal.aborted) return;
+        if (songs) options.onChunk(songs);
+        done += chunks[at].length;
+        options.onProgress?.(done, ids.length);
       }
-    }
-    return ids.map((id) => known.get(id) ?? { id });
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.min(NetEasePlatform.DETAIL_CONCURRENCY, chunks.length) },
+        worker,
+      ),
+    );
   };
 
   public static selectEpisodes = (platformData: PlatformData) => {
@@ -143,8 +173,39 @@ export class NetEasePlatform extends Platform {
     const songIdOf = (entry: EpisodePickEntry) =>
       Number(entry.id.slice(entry.id.indexOf(":") + 1));
 
+    /** 骨架里还没有名字的曲目 id（歌单才有；由 `enrich` 在后台补）。 */
+    let missing: number[] = [];
+
     openEpisodePicker({
       unit: "首",
+      enrich: async (entries, { patch, progress, signal }) => {
+        if (!missing.length) return;
+        // 曲目 id → 它在列表里的所有行（同一首歌可重复出现）
+        const rowsOf = new Map<number, string[]>();
+        for (const entry of entries) {
+          const trackId = songIdOf(entry);
+          rowsOf.set(trackId, [...(rowsOf.get(trackId) ?? []), entry.id]);
+        }
+        progress(0, missing.length);
+        await NetEasePlatform.fetchSongDetailsPooled(missing, {
+          signal,
+          onProgress: progress,
+          onChunk: (songs) => {
+            const changes = new Map<string, Partial<EpisodePickEntry>>();
+            for (const song of songs) {
+              for (const rowId of rowsOf.get(song.id) ?? []) {
+                changes.set(rowId, {
+                  title: song.name,
+                  meta:
+                    song.artists?.map((artist) => artist.name).join("/") ?? "",
+                  duration: Math.round(song.duration / 1000),
+                });
+              }
+            }
+            patch(changes);
+          },
+        });
+      },
       load: async () => {
         if (isSongList) {
           const detail = await NeteaseMusicAPI.getSongListDetail(id);
@@ -154,7 +215,9 @@ export class NetEasePlatform extends Platform {
             title: playlist.name,
             description: playlist.description ?? "",
           };
-          return entriesOf(await NetEasePlatform.fullPlaylistTracks(playlist));
+          const skeleton = NetEasePlatform.playlistSkeleton(playlist);
+          missing = skeleton.missing;
+          return entriesOf(skeleton.tracks);
         }
 
         const detail = await NeteaseMusicAPI.getAlbumDetail(id);

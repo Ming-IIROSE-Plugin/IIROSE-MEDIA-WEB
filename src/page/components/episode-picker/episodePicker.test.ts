@@ -14,7 +14,7 @@ import {
   toggleEpisode,
   type EpisodePickerProps,
 } from "./EpisodePicker";
-import { EpisodePicker } from "./EpisodePicker";
+import { EpisodePicker, RENDER_BATCH } from "./EpisodePicker";
 import { h, render } from "preact";
 import episodePickerSrc from "./EpisodePicker.tsx?raw";
 import openEpisodePickerSrc from "./openEpisodePicker.tsx?raw";
@@ -225,6 +225,86 @@ describe("点选顺序徽章", () => {
     expect(badge.getAttribute("class")).toContain("w-5");
     expect(row("第 1 集").getAttribute("role")).toBe("checkbox");
     expect(row("第 1 集").getAttribute("aria-checked")).toBe("true");
+  });
+});
+
+describe("大歌单：分批渲染与后台补歌名", () => {
+  const list = () =>
+    layer()!.querySelector<HTMLElement>('[data-imw-episode-list="true"]')!;
+  const scrollNearBottom = () =>
+    act(() => {
+      const el = list();
+      Object.defineProperty(el, "scrollHeight", {
+        value: 10_000,
+        configurable: true,
+      });
+      Object.defineProperty(el, "clientHeight", {
+        value: 400,
+        configurable: true,
+      });
+      el.scrollTop = 9_500;
+      el.dispatchEvent(new Event("scroll"));
+    });
+
+  it("上万行只先画一批，滚到底再追加；全选仍选中全部", async () => {
+    await open(entries(10_000));
+    expect(rows()).toHaveLength(RENDER_BATCH);
+    expect(text()).toContain("10000 集");
+
+    scrollNearBottom();
+    expect(rows()).toHaveLength(RENDER_BATCH * 2);
+
+    // 全选作用于数据，不受已画行数限制
+    act(() => button("全选").click());
+    expect(text()).toContain("取消全选");
+    expect(rows()[0].getAttribute("aria-label")).toContain("第 1 个");
+  });
+
+  it("后台补歌名：逐批刷新标题与进度，已点选的项不丢；补完进度消失", async () => {
+    let apply!: (changes: Map<string, Partial<EpisodePickEntry>>) => void;
+    let report!: (done: number, total: number) => void;
+    let finish!: () => void;
+    await open(entries(3), {
+      enrich: (_entries, api) => {
+        apply = api.patch;
+        report = api.progress;
+        return new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    act(() => row("第 2 集").click()); // 先点选第 2 行
+    act(() => report(0, 3));
+    expect(
+      layer()!.querySelector("[data-imw-episode-progress]")!.textContent,
+    ).toContain("歌名加载中 0 / 3");
+
+    act(() => {
+      apply(new Map([["e2", { title: "晴天" }]]));
+      report(1, 3);
+    });
+    expect(text()).toContain("晴天");
+    expect(text()).toContain("歌名加载中 1 / 3");
+    // 已选仍是这一行（id 不变）
+    expect(byLabel("晴天，第 1 个")).toBeTruthy();
+
+    await act(async () => {
+      finish();
+    });
+    expect(layer()!.querySelector("[data-imw-episode-progress]")).toBeNull();
+  });
+
+  it("关闭面板时中止后台补充（不再请求）", async () => {
+    let signal!: AbortSignal;
+    await open(entries(3), {
+      enrich: (_entries, api) => {
+        signal = api.signal;
+        return new Promise<void>(() => {});
+      },
+    });
+    expect(signal.aborted).toBe(false);
+    act(() => byLabel("关闭选集").click());
+    expect(signal.aborted).toBe(true);
   });
 });
 
