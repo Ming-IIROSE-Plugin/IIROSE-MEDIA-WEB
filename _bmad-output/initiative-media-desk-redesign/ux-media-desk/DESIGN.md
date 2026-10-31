@@ -1,7 +1,7 @@
 ---
 name: 点歌台 Media Desk
 status: final
-updated: 2026-10-30T20:11:02+00:00
+updated: 2026-10-31T00:17:45+00:00
 description: 蔷薇花园（iirose.com）房间点歌台——嵌入宿站 iframe 的全幅叠加面板，以及与它同一套视觉的插件浮窗。暖纸色与墨色、细线分层、唯一识别色蔷薇红；平台色只做来源小圆点。
 sources:
   - .memlog.md
@@ -90,7 +90,7 @@ typography:
     fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif'
     fontSize: 14px
     fontWeight: '400'
-    note: '范围标签（未选中）、来源切换器（500）、操作条选项'
+    note: '范围标签（未选中）、来源切换器（500）、顺序菜单选项'
   row-title:
     fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif'
     fontSize: 15px
@@ -177,7 +177,7 @@ rounded:
   sm: 8px        # 手机/迷你条封面、分页按钮、底部条封面（原 8/9）
   md: 10px       # 来源切换器、搜索按钮、模式开关、视图分段控件、选集主按钮（原 10/11）
   lg: 12px       # 竖栏项、关闭按钮、视频缩略图、行悬停底、手机点播按钮、品牌标、设置组卡、关于卡、音乐网格封面
-  xl: 16px       # 搜索栏（桌面/手机，原 15/16）、迷你条、底部条（原 18）、浮窗、选集面板、操作条外框
+  xl: 16px       # 搜索栏（桌面/手机，原 15/16）、迷你条、底部条（原 18）、浮窗、选集面板、顺序菜单外框
   full: 9999px   # 桌面点播按钮、「点播到房间」胶囊、来源圆点
 spacing:
   '1': 4px
@@ -333,9 +333,12 @@ components:
     artist-suffix: '「· 房间正在播放」'
   tracklist-row-phone:
     height: 66px
-    columns: '48px 1fr auto 40px'
-    gap: 12px
+    columns: '48px 1fr auto 40px 40px'
+    gap: 8px
     cover: '48px，{rounded.sm}'
+    star: '{components.favorite-star}，40px（点击区 {spacing.touch-min}），点即切换收藏'
+    action: '{components.send-button-phone}，与收藏星并排；点即点播'
+    body: '点行的其他区域无操作（不再弹出任何菜单）'
   collection-row:
     columns: '同 tracklist-row（序号 · 封面 · 标题+作者 · 出处 · 曲目数 · 收藏星 · 查看）'
     count: '时长列改为曲目数（{typography.num}，{colors.ink2}，如「24 首」）；表头该列文案「曲目数」'
@@ -369,9 +372,9 @@ components:
     desktop: '同 {components.source-menu} 的浮层样式：宽 200px，内边距 6px，阴影 0 10px 30px {colors.menu-shadow}（深色 {colors.menu-shadow-dark}），贴「全部播放」下方 8px、右对齐，imwMenuIn 160ms 展开'
     option: '桌面：行高 ≥ 40px，{rounded.md}，内边距 0 12px，图标 18px（{colors.ink2}）+ {typography.label}（{colors.ink}），间距 10px，悬停底 {colors.hover}、按下底 {colors.thumb}，无分隔线。手机：整宽行 ≥ {spacing.touch-min} 高，图标 22px，行间 1px {colors.rule}'
     items: '「正序播放」（sort 图标）·「乱序播放」（shuffle 图标）'
-    phone: '底部操作条形态：sheet 底、顶边 1px {colors.rule}、{rounded.xl}；头部为专辑/歌单名（{typography.label-strong}）+ 曲目数（{typography.num-caption}，{colors.ink3}），底线 1px {colors.rule}；imwSheetRise 220ms 升起'
+    phone: '底部弹出形态：sheet 底、顶边 1px {colors.rule}、{rounded.xl}；头部为专辑/歌单名（{typography.label-strong}）+ 曲目数（{typography.num-caption}，{colors.ink3}），底线 1px {colors.rule}；imwSheetRise 220ms 升起'
     backdrop: '透明拦截层，点击 = 取消'
-    mount: '主面板内部最上层，同 action-sheet'
+    mount: '主面板内部最上层（随主面板出现），不另设 z-index 根'
   send-button:
     height: 32px
     padding: '0 14px'
@@ -401,7 +404,7 @@ components:
     border: '1px {colors.rule}'
     active-background: '{colors.rose}（深色 {colors.rose-fill-dark}）'
   favorite-star:
-    size: '18px（点击区 32×32px）'
+    size: '图标 18px。行内（tracklist-row、collection-row）：桌面 32px 方钮，手机 40px（点击区 {spacing.touch-min}）。卡内（music-tile、video-tile）：紧凑 32px，各尺寸一致，点击区 {spacing.touch-min}（窄的手机 3 列卡片保住标题与时长）'
     foreground: '{colors.ink3}'
     active-foreground: '{colors.star-on}（深色 {colors.star-on-dark}）'
     pop: '仅用户亲手点亮的那一下弹跳（imwPop 260ms，放大到 1.3 再回落）；加载出来就已收藏的星不弹；减少动态效果时不弹'
@@ -417,9 +420,11 @@ components:
     title: '{typography.video-title}（手机 {typography.video-title-phone}），两行截断'
     meta: '{typography.video-meta}（手机 {typography.video-meta-phone}），{colors.ink3}'
     grid: '桌面 4 列，间距 26px（行）× 22px（列）；手机 2 列，18px × 12px'
+    star: '{components.favorite-star}（紧凑 32px），桌面与手机都在缩略图右上角'
+    episodes: '仅 B 站课程卡：胶囊下方「选集」文字钮（{typography.label-strong}，{colors.on-rose}，下划线），桌面与手机都显示'
     note: 'MV 结果同样用本组件'
   video-tile-revealed:
-    note: '无悬停的宽屏设备首次点按后，或卡内获得键盘焦点（:focus-within）时：外观同 video-tile-hover（遮罩 + 「点播到房间」胶囊），缩略图外加 {components.focus-ring} 同款 2px {colors.ink} 描边表示「已选中」（仅点按选中时；键盘焦点时由焦点环承担）'
+    note: '手机与无悬停的宽屏设备首次点按后，或卡内获得键盘焦点（:focus-within）时：外观同 video-tile-hover（遮罩 + 「点播到房间」胶囊），缩略图外加 {components.focus-ring} 同款 2px {colors.ink} 描边表示「已选中」（仅点按选中时；键盘焦点时由焦点环承担）'
   live-badge:
     background: '{colors.rose}（深色 {colors.rose-fill-dark}）'
     foreground: '{colors.on-rose}'
@@ -435,8 +440,9 @@ components:
     title: '{typography.video-title}（手机 {typography.video-title-phone}），单行截断'
     meta: '{typography.video-meta}（手机 {typography.video-meta-phone}），{colors.ink3}；歌手 · 等宽时长'
     grid: '桌面 5 列，间距 22px × 22px；手机 3 列，16px × 12px'
-    star: '{components.favorite-star}，桌面放在标题行右端；手机不显示（收藏经操作条）'
+    star: '{components.favorite-star}（紧凑 32px，点击区 {spacing.touch-min}），桌面与手机都放在标题行右端'
     hover: '同 video-tile-hover（遮罩 + 「点播」胶囊，胶囊外观同「点播到房间」）'
+    phone: '手机同无悬停宽屏：首次点按只显示「点播」胶囊（同 video-tile-revealed，卡片保持选中），再点胶囊点播'
     pill-states: '同 video-tile-hover 的 pending / failed；收藏网格里的专辑/歌单卡胶囊文案为「查看」（进内页，不点播，房间不支持点播时也不灰化）'
     favorites-grid: '收藏的网格视图用本组件混排歌曲、视频、专辑/歌单（视频封面方形裁切）'
     now-playing: '封面左下角三根 3px 音柱（{colors.on-rose}，压在 {colors.duration-pill} 小底上），标题 {colors.rose}'
@@ -452,15 +458,6 @@ components:
     pending: '胶囊内 16px 转圈图标 +「点播中」，不响应点击；进行中与失败期间遮罩与胶囊保持可见（鼠标移开也看得到）'
     failed: '16px refresh 图标 +「重试」，左右轻晃一次（imwShake 360ms）'
     press: '按下缩到 96%（见 {components.motion}）'
-  action-sheet:
-    background: '{colors.sheet}'
-    border-top: '1px {colors.rule}'
-    radius: '{rounded.xl}（仅上两角）'
-    header: '被操作条目的封面 + 标题 + 副行，同 tracklist-row-phone'
-    option: '整行 ≥ {spacing.touch-min} 高，图标 22px + {typography.label}，{colors.ink}，行间 1px {colors.rule}'
-    primary-option: '「点播到房间」：图标与文字 {colors.rose}（深色 {colors.rose-dark}）'
-    backdrop: '覆盖主面板其余区域的透明拦截层（无颜色、无模糊），只用于「点外侧收起」'
-    mount: '主面板内部最上层（随主面板出现），不另设 z-index 根'
   episode-picker:
     background: '{colors.sheet}'
     border: '1px {colors.rule}'
@@ -619,7 +616,7 @@ components:
     easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)（--imw-ease，起步快、收尾柔）'
     baseline: '面板内元素默认只过渡 color、background-color、border-color、outline-color、opacity、box-shadow、scale，时长 fast；宽高与位置不在默认过渡里（布局变化不会被拖着「飘」），需要时组件显式声明'
     press: '小控件按下缩到 96%（active:scale-[.96]），松开回弹'
-    keyframes: 'imwRiseIn（从下方 8px 淡入，200ms）· imwMenuIn（从上方 4px 落下，160ms）· imwSheetRise / imwSheetFade（操作条、选集抽屉升起）· imwShake（失败晃动 ±3px，360ms）· imwPop（收藏星弹跳到 1.3，260ms）· imwIndeterminate（不确定进度，1.2s 循环）'
+    keyframes: 'imwRiseIn（从下方 8px 淡入，200ms）· imwMenuIn（从上方 4px 落下，160ms）· imwSheetRise / imwSheetFade（手机顺序菜单、选集抽屉升起）· imwShake（失败晃动 ±3px，360ms）· imwPop（收藏星弹跳到 1.3，260ms）· imwIndeterminate（不确定进度，1.2s 循环）'
     reduced-motion: 'prefers-reduced-motion 时去掉缩放与位移类动画，只保留淡入淡出'
 ---
 
@@ -629,7 +626,7 @@ components:
 
 唯一的识别色是**蔷薇红**，呼应站名「蔷薇花园」，只用来表示「点播」这个动作和「房间正在放」这个状态。平台品牌色退居为来源切换器里的一颗小圆点。
 
-插件的两个浮窗（播放进度、收藏随机选择）、选集面板、手机操作条、来源与顺序下拉菜单、面板提示条和批量点播进度卡，与主面板用同一套令牌，看起来出自同一处。动效克制：只在状态变化处出现，三档时长、同一条缓动曲线（`{components.motion}`）。
+插件的两个浮窗（播放进度、收藏随机选择）、选集面板、来源与顺序下拉菜单、面板提示条和批量点播进度卡，与主面板用同一套令牌，看起来出自同一处。动效克制：只在状态变化处出现，三档时长、同一条缓动曲线（`{components.motion}`）。
 
 本设计不受宿站现有风格约束（用户授权），也不得有抄袭感或 AI 模板感：不用渐变光斑、毛玻璃、紫色、emoji 图标，也不用千篇一律的白卡加大阴影。
 
@@ -643,10 +640,10 @@ components:
 
 - **Paper（`{colors.paper}` / `{colors.paper-dark}`）**：主内容区底色，暖纸色 / 暖炭黑。
 - **Rail（`{colors.rail}`）**：桌面竖栏底，比纸色深一档，靠这一档色差和一条细线与内容区分开。
-- **Sheet（`{colors.sheet}`）**：抬起的面——搜索栏、选中的竖栏项、视图分段控件的选中格、底部条与迷你条（两种主题）、浮窗、选集面板、操作条、下拉菜单、批量点播进度卡。
+- **Sheet（`{colors.sheet}`）**：抬起的面——搜索栏、选中的竖栏项、视图分段控件的选中格、底部条与迷你条（两种主题）、浮窗、选集面板、下拉菜单、批量点播进度卡。
 - **Ink / Ink2 / Ink3**：三级文字。Ink 用于标题与主文字；Ink2 用于歌手、时长、次要按钮字；Ink3 用于未选中导航、表头、出处、眉题等辅助信息。为满足 AA，Ink3 由设计稿值加深（浅 `#9A9187 → #6B655D`，深 `#6E665D → #8F887E`），paper、rail、sheet、hover 四种底色上全部 ≥ 4.5:1，**可承载任何文字**。代价是 Ink2 与 Ink3 明度更接近（浅色两者相差 1.22:1），层级更多依靠字号与位置区分。
 - **Rule（`{colors.rule}`）**：所有分隔线、描边。整套界面的层级主要靠它。
-- **Rose（`{colors.rose}` / `{colors.rose-dark}`）**：唯一强调色。用于：点播按钮的悬停/按下实心态、「点播到房间」胶囊、正在播放的序号音柱与标题、竖栏选中指示条、手机标签栏选中项、模式开关点亮态、进度填充、搜索栏光标、选集序号徽章、操作条首选项。**不用于**装饰、平台识别或错误提示。
+- **Rose（`{colors.rose}` / `{colors.rose-dark}`）**：唯一强调色。用于：点播按钮的悬停/按下实心态、「点播到房间」胶囊、正在播放的序号音柱与标题、竖栏选中指示条、手机标签栏选中项、模式开关点亮态、进度填充、搜索栏光标、选集序号徽章。**不用于**装饰、平台识别或错误提示。
 - **Rose fill dark（`{colors.rose-fill-dark}`）**：深色主题下**承载白字的蔷薇红实底**（点播实心态、模式开关点亮、「点播到房间」胶囊、选集序号徽章）。`rose-dark` 本身留给蔷薇红文字、指示条与进度填充——它在深色底上作文字是达标的，但白字压在它上面只有 3.41:1。浅色主题的 `rose` 两种用途都达标，不需要分开。
 - **Hover（`{colors.hover}`）**：行悬停底、来源切换器常态底。
 - **Thumb（`{colors.thumb}`）**：封面与缩略图加载前、加载失败时的占位底；无播放时底部条的封面位。占位图标用 ink2（thumb 上 5.34:1）；**thumb 上不放 ink3 文字**（4.39:1）。
@@ -708,7 +705,7 @@ components:
 
 **字体回退**：设计稿用思源黑体（Noto Sans SC）、思源宋体（Noto Serif SC）与 JetBrains Mono；插件内**不加载网络字体**，回退系统字体——黑体 `"PingFang SC", "Microsoft YaHei", sans-serif`，宋体 `"Songti SC", serif`，数字 `-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial` 再接黑体，等宽（仅字母标签）`ui-monospace, "SF Mono", monospace`。〔已确认 来自 memlog：不加载网络字体。〕Windows 上的宋体回退项 `SimSun` 是按「宋体」字面补的系统字体名。
 
-字号阶梯（设计稿原值，手机搜索词除外）：30 / 26（标题）· 17 / 16（搜索词；手机由设计稿 15.5 改为 16，防 iOS 聚焦放大）· 15（行标题、底部条标题）· 14（标签、按钮、视频标题、操作条选项）· 13（出处、点播按钮、模式开关、序号、时长）· 12.5 / 12（歌手、视频作者、进度时间）· 11.5 / 11 / 10（导航、表头、眉题、底部条标签）。
+字号阶梯（设计稿原值，手机搜索词除外）：30 / 26（标题）· 17 / 16（搜索词；手机由设计稿 15.5 改为 16，防 iOS 聚焦放大）· 15（行标题、底部条标题）· 14（标签、按钮、视频标题、顺序菜单选项）· 13（出处、点播按钮、模式开关、序号、时长）· 12.5 / 12（歌手、视频作者、进度时间）· 11.5 / 11 / 10（导航、表头、眉题、底部条标签）。
 
 规则：
 
@@ -732,9 +729,7 @@ components:
 
 → 参考：[frame-1.png](imports/mock-v1/frame-1.png)（桌面曲目表：七列、表头、悬停行、正在播放行）· [frame-2.png](imports/mock-v1/frame-2.png)（桌面视频 4 列网格）。
 
-**手机（≤ 768px，`max-[768px]`）**：单列纵向——页头 → 搜索栏 → 范围行（第一行为可横向滚动的标签区，第二行左为视图切换、右为分页）→ 列表（唯一滚动区）→ 迷你条 → 底部标签栏。搜索栏与列表左右 `{spacing.gutter-phone}`，页头与范围行 20px。曲目行四列 `48px 1fr auto 40px`：封面、标题+歌手、时长、点播按钮；手机端不显示序号、出处、收藏星（收藏经操作条）；点播按钮保留为一键点播，点行的其他区域弹出操作条。
-
-**操作条（手机）**：从视口底部升起，宽度占满，压在迷你条与标签栏之上；挂在主面板内部、作为面板内最上层。
+**手机（≤ 768px，`max-[768px]`）**：单列纵向——页头 → 搜索栏 → 范围行（第一行为可横向滚动的标签区，第二行左为视图切换、右为分页）→ 列表（唯一滚动区）→ 迷你条 → 底部标签栏。搜索栏与列表左右 `{spacing.gutter-phone}`，页头与范围行 20px。曲目行五列 `48px 1fr auto 40px 40px`（间距 8px）：封面、标题+歌手、时长、收藏星、点播按钮——收藏星与点播钮都是 40px、点击区 44px；手机端不显示序号与出处；点播钮一键点播、收藏星点即切换，点行的其他区域无操作。音乐/视频网格卡同无悬停宽屏：点一下显示胶囊，再点胶囊点播。
 
 **展开的底部条（手机）**：点迷你条主体后，迷你条原位向上展开为 `{components.room-deck-expanded}`，压在标签栏之上、列表之上。
 
@@ -756,7 +751,7 @@ components:
 - 封面与缩略图：`inset 0 0 0 1px {colors.cover-ring}`（深色取 `cover-ring-dark`），防止浅色封面与纸色融在一起。
 - 进度拖柄：3px `{colors.deck-thumb-ring}` 外环。
 
-浮层（浮窗、选集面板、操作条）也按此处理：sheet 底 + 1px rule 描边。
+浮层（浮窗、选集面板、下拉菜单）也按此处理：sheet 底 + 1px rule 描边。
 
 **唯一的投影例外**——浮在内容之上、会自行消失的临时浮层，需要一点投影才能和下面的内容分开：
 
@@ -783,7 +778,7 @@ components:
 
 所有图标为自包含内联 SVG（设计稿 `<symbol>`：note、film、radio、star、starf、gear、info、search、chev、left、right、play、send、list、grid、repeat、shuffle、close、mark，另补 check、spinner、refresh、sort 等），描边 1.6–1.9，`currentColor` 着色。
 
-**动效（`motion`）**：三档时长 fast 120ms / base 200ms / slow 280ms，统一缓动 `cubic-bezier(0.2, 0.8, 0.2, 1)`；默认只过渡颜色、透明度、阴影与缩放，宽高位置不过渡。小控件按下缩到 96%；范围标签共用一条下划线滑动；结果区换页 / 换范围 / 换视图 / 新结果到达时从下方 8px 淡入；收藏星只在用户点亮时弹跳；下拉菜单落下、操作条升起。减少动态效果时去掉缩放与位移。
+**动效（`motion`）**：三档时长 fast 120ms / base 200ms / slow 280ms，统一缓动 `cubic-bezier(0.2, 0.8, 0.2, 1)`；默认只过渡颜色、透明度、阴影与缩放，宽高位置不过渡。小控件按下缩到 96%；范围标签共用一条下划线滑动；结果区换页 / 换范围 / 换视图 / 新结果到达时从下方 8px 淡入；收藏星只在用户点亮时弹跳；下拉菜单落下、手机抽屉升起。减少动态效果时去掉缩放与位移。
 
 - **竖栏（`rail` / `rail-item` / `rail-item-active`）**：顶部品牌标（`brand-mark`，纯标识），下列音乐、视频、电台、收藏；弹性空白；底部设置、关于。选中项抬到 sheet 底加细线环，左缘一根蔷薇红竖条；选中项文字仍是 ink。
 - **页头（`page-header`）**：等宽眉题 + 宋体页标题（当前模式名）+ 右侧描边关闭按钮（`close-button`）。
@@ -798,15 +793,14 @@ components:
   - 悬停（`tracklist-row-hover`）：整行 hover 底、外扩、底线隐去；点播按钮转 `send-button-hover` 实心蔷薇红。
   - 房间正在播放（`tracklist-row-now-playing`）：序号换音柱，标题蔷薇红，歌手后缀文字。
   - 不可点播（`send-button-disabled`）：点播按钮 40% 不透明、无实心态。
-  - 手机（`tracklist-row-phone` + `send-button-phone`）：40px 圆角方钮只有箭头图标。
+  - 手机（`tracklist-row-phone` + `send-button-phone`）：40px 圆角方钮只有箭头图标，左侧并排 40px 收藏星；点行的其他区域无操作。
   - → 参考：[frame-1.png](imports/mock-v1/frame-1.png)（桌面）· [frame-3.png](imports/mock-v1/frame-3.png)（手机）。
-- **专辑 / 歌单行（`collection-row`）** 与 **专辑/歌单内页头（`collection-header`）**：同曲目行结构，时长列换曲目数，末列为「≡ 查看」描边胶囊（悬停只淡底、不转蔷薇红——它不是点播）；标题悬停下划线、封面可点。内页头：‹ 返回 + 名称 + 曲目数，右侧视图切换 → 分页 → 描边胶囊「全部播放」（`play-all-button`，只在自身悬停时转实心）；点后弹出 `order-menu`（正序播放 / 乱序播放），桌面为与来源菜单同款的落下浮层，手机为底部升起的操作条。
+- **专辑 / 歌单行（`collection-row`）** 与 **专辑/歌单内页头（`collection-header`）**：同曲目行结构，时长列换曲目数，末列为「≡ 查看」描边胶囊（悬停只淡底、不转蔷薇红——它不是点播）；标题悬停下划线、封面可点。内页头：‹ 返回 + 名称 + 曲目数，右侧视图切换 → 分页 → 描边胶囊「全部播放」（`play-all-button`，只在自身悬停时转实心）；点后弹出 `order-menu`（正序播放 / 乱序播放），桌面为与来源菜单同款的落下浮层，手机为从底部弹出的选项面板。
 - **音乐网格卡（`music-tile`）**：方形封面，无卡片框；悬停同视频卡遮罩，胶囊同样有点播中 / 重试态。收藏网格与内页网格也用它；收藏里的专辑/歌单卡胶囊为「查看」。设计稿未出此视图，按视频卡推导。
 - **收藏列表（`favorites-row`）**：歌曲与视频与曲目行同构，专辑与歌单用 `collection-row`；可切网格。出处列为「来源圆点 + 平台-类型」（如「网易云-歌单」），圆点不单独承载信息。
 - **电台行（`radio-station-row`）**：台标 + 台名 + 点播按钮，其余同曲目行。
-- **收藏星（`favorite-star`）**：空心星 ink3；已收藏为实心 star-on。只在用户亲手点亮时弹跳一下。
+- **收藏星（`favorite-star`）**：空心星 ink3；已收藏为实心 star-on。只在用户亲手点亮时弹跳一下。桌面与手机都显示：行内 32px（手机 40px），卡内紧凑 32px（点击区 44px）；视频卡的星在缩略图右上角。
 - **视频卡（`video-tile` / `duration-pill` / `video-tile-hover` / `video-tile-revealed`）**：无卡片框。16:9 缩略图右下角等宽时长胶囊；下方两行标题、一行 UP 主。悬停或被选中/聚焦时覆遮罩与居中「▶ 点播到房间」胶囊。MV 同此组件；直播卡把时长胶囊换成 `live-badge`。→ 参考：[frame-2.png](imports/mock-v1/frame-2.png)（桌面深色网格，含悬停态）· [frame-4.png](imports/mock-v1/frame-4.png)（手机 2 列）。
-- **操作条（`action-sheet`，手机）**：sheet 底、上两角圆角、顶部细线；顶部一行条目摘要，下列选项「点播到房间」（蔷薇红）、「收藏」/「取消收藏」、「选集」。外侧为透明拦截层。设计稿未出，按令牌推导。
 - **选集面板（`episode-picker`）**：插件自有浮层，sheet 底、细线描边。标题行（「选集」+ 集数 + 关闭）固定，列表行沿用曲目行结构；左列未选为描边方块、选中为蔷薇红实底序号徽章；标题行有「全选」文字钮；吸底底栏放「正序 / 乱序」与「点播所选」。手机为底部抽屉。设计稿未出，按令牌推导。
 - **底部条（`room-deck`，桌面）**：与面板同色的 60px 贴底细栏（sheet 底 + 顶边细线，无圆角无外边距）。三栏——左：40px 封面 + 标题 + 点播者；中：时间 · 3px 进度轨（拖柄悬停 / 聚焦时才出现）· 总时长；右：两个浅色描边模式开关。不显示 `Now in room` 标签。直播/电台流见 `room-deck-live`，空闲见 `room-deck-idle`。设置、关于两页桌面不显示。设计稿 frame-1/2 里的墨底悬浮卡为旧版，以本节与 frontmatter 为准。
 - **迷你条（`mini-deck`，手机）** 与 **展开的底部条（`room-deck-expanded`）**：迷你条贴底、sheet 底，顶边 3px 进度线兼作分隔（仅显示）、封面 + 标题 + 「某某 点播 · 01:38」、右侧两个纯图标模式钮；点主体展开为三行完整底部条（浅色底板，含拖柄常显的进度轨与带文字开关）。设计稿 frame-3/4 的迷你条为旧版悬浮卡；展开态设计稿未出。
@@ -837,7 +831,7 @@ components:
 | 图标用自包含内联 SVG | emoji 图标；借用宿站 `mdi-*` 类 |
 | 封面裁切填满、`http://` 升级 `https://`、失败回退 thumb 底 + 图标 | 黑边、破图 |
 | 手机端点击区 ≥ 44px（视觉可小于点击区） | 只按设计稿视觉尺寸做 30–40px 点击区 |
-| 浮窗、选集面板、操作条与主面板同一套令牌 | 浮窗保留天蓝强调色或另写一套配色 |
+| 浮窗、选集面板、下拉菜单与主面板同一套令牌 | 浮窗保留天蓝强调色或另写一套配色 |
 | 焦点环用 `components.focus-ring`（ink 外圈，实底加 paper 内环） | 蔷薇红焦点环压在蔷薇红实底上（1.0:1，看不见） |
 | 半透明值引用 `cover-ring`、`menu-shadow` 等令牌 | 组件里裸写 `rgba(...)` |
 | 样式写 Tailwind 类（任意值），深色用 `imw-dark:` | 新增 SCSS；硬写宿站主题色 |
