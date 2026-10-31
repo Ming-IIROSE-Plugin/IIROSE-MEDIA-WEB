@@ -909,6 +909,43 @@ describe("结果区状态机", () => {
     expect(rows[1].getAttribute("data-now-playing")).toBe("true");
   });
 
+  it("播放结束后宿站不清歌名：isShareMediaPlaying 为 false 时不再标「正在播放」", async () => {
+    vi.useFakeTimers();
+    const win = window as unknown as {
+      Utils?: { service?: { isShareMediaPlaying?: () => boolean } };
+    };
+    let playing = true;
+    win.Utils = { service: { isShareMediaPlaying: () => playing } };
+    try {
+      const name = document.createElement("div");
+      name.id = "shareMediaSongName";
+      name.textContent = "鱼";
+      document.body.append(name);
+      const songs = ready([song, secondSong]);
+      await mount(results({ ...resultsBase, mediaData: songs }), songs);
+      const rows = () => host.querySelectorAll("[data-imw-tracklist-row]");
+      expect(rows()[1].getAttribute("data-now-playing")).toBe("true");
+
+      // 放完了：歌名节点还在，但宿站说没在播
+      playing = false;
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(rows()[1].getAttribute("data-now-playing")).toBeNull();
+      expect(host.textContent).not.toContain("房间正在播放");
+
+      // 又开始放：恢复
+      playing = true;
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(rows()[1].getAttribute("data-now-playing")).toBe("true");
+    } finally {
+      delete win.Utils;
+      vi.useRealTimers();
+    }
+  });
+
   it("房间切歌后 1s 内跟着切换；卸载后停止轮询", async () => {
     vi.useFakeTimers();
     try {
