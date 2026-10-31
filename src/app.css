@@ -48,20 +48,6 @@
    其余全部样式已迁移到各组件的 Tailwind 类。
    ============================================================ */
 
-/* story 1 过渡：设置卡（story 7 前）仍引用 floatingPanel 的 themed* 类，
-   它们消费 --imw-accent / --imw-accent-ink。品牌强调色已退役、`accentVar` 已删除，
-   这里把两个变量固定为纸/墨令牌，让设置卡退成中性墨色而不是浏览器默认色。
-   story 7 完成后连同 themed* 一起删除。 */
-.IIROSE_MEDIA_CONTAINER {
-  --imw-accent: #6b655d;
-  --imw-accent-ink: #1c1916;
-}
-
-.IIROSE_MEDIA_CONTAINER[data-imw-theme="dark"] {
-  --imw-accent: #8f887e;
-  --imw-accent-ink: #ede7dd;
-}
-
 /* 独立进度浮窗与随机选择面板不在主面板内，需要自己的盒模型。 */
 #imw-media-progress-root,
 #imw-media-progress-root *,
