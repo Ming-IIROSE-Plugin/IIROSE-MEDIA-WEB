@@ -271,10 +271,12 @@ export class NetEasePlatform extends Platform {
   ): Promise<void> => {
     if (ids.length === 0) return Promise.resolve();
     if (ids.length === 1) {
-      // 单项：单曲播报窗口，卡片不被并行批量抑制吞掉
-      return Promise.resolve(
-        Announce.runSingleAnnounce(() => NetEasePlatform.finalODSONG(ids)),
-      ).catch((error) => Announce.showBatchItemError(error));
+      // 单项：单曲窗口只包发卡片那一小段（见 MOD 的同款说明）
+      return NetEasePlatform.finalODSONG(ids, undefined, {
+        singleWindow: true,
+      })
+        .then(() => undefined)
+        .catch((error) => Announce.showBatchItemError(error));
     }
     // 无 key 的调用点退回按标题判（旧行为），有 key 时标题改名也绕不过守卫
     if (isBatchActive(key ?? title)) {
@@ -1008,11 +1010,12 @@ export class NetEasePlatform extends Platform {
     try {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
-      // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
+      // 手动单曲点播：单曲窗口只包「发卡片」那一小段（不是整段点播），
+      // 否则并行批量的卡片会在网络请求期间被一并放行
       // 返回发送过程：点播守卫据此显示「点播中 / 已点播」
-      return Announce.runSingleAnnounce(() => this.finalODSONG([id])).catch(
-        (e) => Announce.showBatchItemError(e),
-      );
+      return this.finalODSONG([id], undefined, {
+        singleWindow: true,
+      }).catch((e) => Announce.showBatchItemError(e));
     } catch (error) {
       ShowMessage.show((error as Error).message);
     }
@@ -1077,9 +1080,10 @@ export class NetEasePlatform extends Platform {
   private static finalODSONG = async (
     songsID: number[],
     batch?: BatchHandle,
+    options?: { singleWindow?: boolean },
   ): Promise<BatchSendOutcome> => {
     try {
-      return await NetEasePlatform.sendSongs(songsID, batch);
+      return await NetEasePlatform.sendSongs(songsID, batch, options);
     } finally {
       batch?.finish();
     }
@@ -1093,6 +1097,7 @@ export class NetEasePlatform extends Platform {
   private static sendSongs = async (
     songsID: number[],
     batch?: BatchHandle,
+    options?: { singleWindow?: boolean },
   ): Promise<BatchSendOutcome> => {
     const media = new Media();
     const socket = new Socket();
@@ -1175,8 +1180,17 @@ export class NetEasePlatform extends Platform {
 
           // 取歌词期间用户点了「停止」：这一首也不再发
           if (batch?.cancelled) break;
-          Announce.sendMediaCard(socket, mediacard);
-          socket.send(mediaEvent);
+          // 单曲窗口只包发卡片这一小段：包住整段点播会让并行批量的逐卡发送
+          // 在整段网络请求期间一并放行（批量总结档下会漏出成批卡片）
+          if (options?.singleWindow)
+            await Announce.runSingleAnnounce(() => {
+              Announce.sendMediaCard(socket, mediacard);
+              socket.send(mediaEvent);
+            });
+          else {
+            Announce.sendMediaCard(socket, mediacard);
+            socket.send(mediaEvent);
+          }
           sent++;
         } catch (error) {
           // 单项失败：带曲名提示（同因 10 秒去重）后跳过，剩余曲目照播

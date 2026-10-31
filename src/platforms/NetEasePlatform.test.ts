@@ -259,11 +259,12 @@ describe("选集委托", () => {
     const entries = await lastOptions().load();
     lastOptions().onConfirm([entries[1]]);
 
-    expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
-    expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
-    const loop = announce.runSingleAnnounce.mock.lastCall?.[0] as () => void;
-    await loop();
+    // 单曲窗口改为在 sendSongs 内部只包「发卡片」那一段，不再包住整个点播动作
     expect(vi.mocked(finalODSONG).mock.lastCall?.[0]).toEqual([2]);
+    expect(vi.mocked(finalODSONG).mock.lastCall?.[2]).toEqual({
+      singleWindow: true,
+    });
+    expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
   });
 
   it("AOD 选集：走专辑端点，确认顺序保序", async () => {
@@ -908,12 +909,49 @@ describe("playSongIds（按给定顺序点播一组曲目）", () => {
     const { getBatches } = await import("../playback/BatchProgress");
     await NetEasePlatform.playSongIds([2], "冬日歌单");
 
-    expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
     expect(announce.runBatchAnnounce).not.toHaveBeenCalled();
     expect(getBatches()).toHaveLength(0);
-    const loop = announce.runSingleAnnounce.mock.lastCall?.[0] as () => void;
-    await loop();
     expect(vi.mocked(finalODSONG).mock.lastCall?.[0]).toEqual([2]);
+    expect(vi.mocked(finalODSONG).mock.lastCall?.[2]).toEqual({
+      singleWindow: true,
+    });
+  });
+
+  it("单曲窗口只包发卡片：详情请求还没回来时不放行并行批量的卡片", async () => {
+    // 真实发送循环 + 真实的 runSingleAnnounce：窗口开在 sendSongs 内部的发卡片处，
+    // 不是在 MOD 外层包住整段网络请求——否则总结档批量会在请求期间漏出成批卡片。
+    finalODSONG.mockRestore();
+    let release: (v: unknown) => void = () => {};
+    neteaseMusic.getNeteaseSongDetail.mockReturnValue(
+      new Promise((resolve) => (release = resolve)),
+    );
+    const detail = {
+      id: 7,
+      name: "曲7",
+      fee: 0,
+      duration: 1000,
+      artists: [{ name: "甲" }],
+      album: { picUrl: "" },
+    };
+    const pending = (
+      NetEasePlatform as never as {
+        MOD: (p: PlatformData) => Promise<unknown>;
+      }
+    ).MOD({
+      title: "曲7",
+      subtitle: "",
+      coverImg: "",
+      author: "甲",
+      websiteUrl: "https://music.163.com/#/song?id=7",
+      duration: 1,
+      neteaseMusic: { id: 7, fee: 0 },
+    } as PlatformData);
+    await Promise.resolve();
+    // 请求进行中：窗口还没开，并行批量的卡片仍被抑制
+    expect(announce.runSingleAnnounce).not.toHaveBeenCalled();
+    release([detail]);
+    await pending;
+    expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
   });
 
   it("重复曲目：同一首歌两条都发", async () => {
@@ -980,7 +1018,9 @@ describe("playSongIds（按给定顺序点播一组曲目）", () => {
 
     // 单曲路径不受守卫影响
     await NetEasePlatform.playSongIds([9], "冬日歌单", undefined, "7:list");
-    expect(announce.runSingleAnnounce).toHaveBeenCalledOnce();
+    expect(vi.mocked(finalODSONG).mock.lastCall?.[2]).toEqual({
+      singleWindow: true,
+    });
 
     show.mockRestore();
     void first;
