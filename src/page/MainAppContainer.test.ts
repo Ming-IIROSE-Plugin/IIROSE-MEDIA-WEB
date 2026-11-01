@@ -1046,6 +1046,109 @@ describe("专辑 / 歌单内页", () => {
     expect(root.querySelector('[role="tablist"]')).not.toBeNull();
   });
 
+  /** 多 P / 多集条目：`switchToMultiPage` 只对它置 `innerPageSource`，不设 `innerCollection`。 */
+  const multiPageItem = (title: string) =>
+    ({
+      title,
+      coverImg: "",
+      author: "",
+      websiteUrl: "",
+      bilibili: { bvid: "BV1" },
+    }) as unknown as PlatformData;
+
+  const enterMultiPage = async (
+    ref: { current: MainAppContainer | null },
+    item: PlatformData,
+  ) => {
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      controller.updateCurrentInMultiPageStatus(true);
+    });
+    await act(async () => {
+      await controller.switchToMultiPage(item);
+    });
+    return controller;
+  };
+
+  it("多 P 内页也给返回钮与名称（手机唯一出口），不给「全部播放」", async () => {
+    const { ref } = await mount(MODE.music);
+    await enterMultiPage(ref, multiPageItem("分 P 合集"));
+
+    const header = root.querySelector("[data-imw-collection-header]");
+    expect(header).not.toBeNull();
+    expect(header!.textContent).toContain("分 P 合集");
+    expect(header!.textContent).toContain("返回");
+    // 分 P 列表没有「整张点播」语义
+    expect(header!.textContent).not.toContain("全部播放");
+    expect(root.querySelector('[role="tablist"]')).toBeNull();
+
+    const back = [...header!.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("返回"),
+    );
+    expect(back).toBeTruthy();
+    await act(async () => {
+      back!.click();
+    });
+    expect(root.querySelector("[data-imw-collection-header]")).toBeNull();
+    expect(root.querySelector('[role="tablist"]')).not.toBeNull();
+  });
+
+  it("迟到的分 P 列表结果不覆盖后进的内页（A 进 → 返回 → B 进）", async () => {
+    let releaseA: (value: {
+      platformData: PlatformData[];
+      allPlatformData: PlatformData[];
+      totalPage: number;
+    }) => void = () => {};
+    // 默认桩的返回类型被推断成空数组，这里显式给出真实形状
+    const pendingA = new Promise<{
+      platformData: PlatformData[];
+      allPlatformData: PlatformData[];
+      totalPage: number;
+    }>((resolve) => (releaseA = resolve));
+    bilibiliPlatform.getMultiPageBasicsData
+      .mockImplementationOnce(() => pendingA as never)
+      .mockImplementationOnce(
+        async () =>
+          ({
+            platformData: [multiPageItem("B-P1")],
+            allPlatformData: [multiPageItem("B-P1")],
+            totalPage: 3,
+          }) as never,
+      );
+
+    const { ref } = await mount(MODE.music);
+    const controller = (ref.current as unknown as Harness).controller;
+    await act(async () => {
+      controller.updateCurrentInMultiPageStatus(true);
+    });
+    // A 进（列表仍挂着）→ 返回 → B 进
+    await act(async () => {
+      void controller.switchToMultiPage(multiPageItem("A 合集"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      controller.switchToOutFromMultiPage();
+    });
+    await enterMultiPage(ref, multiPageItem("B 合集"));
+
+    await act(async () => {
+      releaseA({
+        platformData: [multiPageItem("A-P1"), multiPageItem("A-P2")],
+        allPlatformData: [multiPageItem("A-P1"), multiPageItem("A-P2")],
+        totalPage: 99,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const state = (ref.current as unknown as Harness).state;
+    expect(state.totalPage).toBe(3);
+    expect(state.allMediaData).toHaveLength(1);
+    expect(state.isCurrentInMultiPage).toBe(true);
+    expect(
+      root.querySelector("[data-imw-collection-header]")!.textContent,
+    ).toContain("B 合集");
+  });
+
   it("Esc 在内页返回外层；顺序菜单开着时只关菜单", async () => {
     const { ref } = await mount(MODE.music);
     await enterInnerPage(ref);

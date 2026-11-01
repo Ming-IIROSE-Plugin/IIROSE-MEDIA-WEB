@@ -266,6 +266,12 @@ export class MainAppContainer extends Component<
   private releaseInner: (() => void) | null = null;
 
   /**
+   * 多 P / 多集内页的载入票号，与 `dropSegments` 的分段票号同源同义：进新内页、
+   * 返回外层时自增，迟到的分 P 列表结果不再改写 `totalPage` / `allMediaData`。
+   */
+  private multiPageTicket = 0;
+
+  /**
    * 内页登记为层级栈的一层（`Esc` / 宿站返回键先返回外层，再按一次才关面板）。
    * 没有外层现场就退不回去，此时不登记：`Esc` 交给下一层（面板）。
    */
@@ -424,9 +430,14 @@ export class MainAppContainer extends Component<
     };
 
     const innerCollection = this.state.innerCollection;
-    const showCollectionHeader =
-      !!innerCollection && this.state.isCurrentInMultiPage;
-    const selectionCount = showCollectionHeader
+    // 内页头通用于三类内页：专辑 / 歌单（曲目数 + 全部播放）与多 P / 多集
+    // （只有返回 + 名称 + 分页；手机没有键盘，返回钮是多 P 内页唯一的出口）。
+    const innerPage = this.state.isCurrentInMultiPage
+      ? (innerCollection ?? this.innerPageSource)
+      : null;
+    const isCollectionInner = !!innerCollection && !!innerPage;
+    const showInnerHeader = !!innerPage;
+    const selectionCount = isCollectionInner
       ? this.state.innerSelection.length
       : 0;
 
@@ -475,17 +486,21 @@ export class MainAppContainer extends Component<
               />
             )}
 
-            {showCollectionHeader ? (
+            {showInnerHeader ? (
               <CollectionHeader
-                title={innerCollection.title}
-                trackCount={innerCollection.trackCount}
+                title={innerPage.title}
+                trackCount={
+                  isCollectionInner ? innerPage.trackCount : undefined
+                }
                 viewMode={searchViewMode}
                 onToggleView={this.controller.toggleSearchViewMode}
                 currentPage={currentPage}
                 totalPage={totalPage}
                 onPageChange={this.controller.changecurrentPage}
                 onBack={this.controller.switchToOutFromMultiPage}
-                onPlayAll={this.playCollectionAll}
+                onPlayAll={
+                  isCollectionInner ? this.playCollectionAll : undefined
+                }
               />
             ) : (
               hasScopeRow(mode) &&
@@ -521,7 +536,7 @@ export class MainAppContainer extends Component<
                 onRetry={this.handleRetry}
                 onClearSearch={this.handleClearSearch}
                 selection={
-                  showCollectionHeader
+                  isCollectionInner
                     ? {
                         orderOf: this.selectionOrderOf,
                         onToggle: this.toggleSelection,
@@ -962,6 +977,8 @@ export class MainAppContainer extends Component<
     ) => {
       // 记住来源条目：内页加载失败时「重试」按它重载内页
       this.innerPageSource = platformData;
+      // 多 P / 多集与专辑 / 歌单共用这层票号：换内页后旧结果作废
+      const ticket = ++this.multiPageTicket;
       // 专辑 / 歌单的内页头（名称 + 曲目数 + 全部播放）；多 P / 多集仍用范围行
       const isCollection = isCollectionItem(platformData);
       // 换掉上一个内页：它未完成的段请求中止，迟到的详情丢弃
@@ -979,6 +996,8 @@ export class MainAppContainer extends Component<
         this.setState({ mediaData: data });
         this.setState({ currentOnDemandPlay: vod });
         data.then((res) => {
+          // 迟到结果：已换进别的内页或已返回外层（`isCurrentInMultiPage` 可能被下一个内页重新置真）
+          if (ticket !== this.multiPageTicket) return;
           if (!this.state.isCurrentInMultiPage) return;
           if (!res) return;
           this.setState({ totalPage: res.totalPage });
@@ -1009,6 +1028,8 @@ export class MainAppContainer extends Component<
       // 收尾先做：外层现场还没落地这一帧（内页已可见但 `oldItems` 尚未提交）按返回 / Esc
       // 退不回去，但分段请求与勾选必须照样停下来，不能挂在后台继续取段。
       this.innerPageSource = null;
+      // 离开内页：飞行中的分 P 列表结果作废
+      this.multiPageTicket += 1;
       this.dropSegments();
       this.setState({
         collectionSegments: null,
