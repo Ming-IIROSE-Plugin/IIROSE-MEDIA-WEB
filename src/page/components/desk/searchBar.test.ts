@@ -332,6 +332,23 @@ describe("搜索栏", () => {
     expect(input().getAttribute("class")).toContain("max-[768px]:text-[16px]");
   });
 
+  it("输入光标跟随当前来源的品牌色，没有来源色时退回蔷薇红", () => {
+    draw();
+    expect(input().getAttribute("class")).toContain("caret-[#D7371F]");
+    expect(input().getAttribute("class")).not.toContain("caret-[#B42F3E]");
+
+    render(null, host);
+    draw({
+      sources: [{ label: "哔哩哔哩", short: "B站", dot: "bilibili" }],
+    });
+    expect(input().getAttribute("class")).toContain("caret-[#E1608C]");
+
+    // 收藏的「全部」没有来源色：光标回到面板强调色
+    render(null, host);
+    draw({ sources: [{ label: "全部", short: "全部" }] });
+    expect(input().getAttribute("class")).toContain("caret-[#B42F3E]");
+  });
+
   it("手机来源切换器可点区 ≥44px", () => {
     draw();
     const source = host.querySelector('[aria-label^="来源："]')!;

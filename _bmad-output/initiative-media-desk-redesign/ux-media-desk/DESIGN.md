@@ -237,7 +237,7 @@ components:
     radius: '{rounded.xl}'
     background: '{colors.sheet}'
     border: '1px {colors.rule}'
-    caret: '{colors.rose}'
+    caret: '跟随当前来源：{colors.source-netease} / {colors.source-bilibili} / {colors.source-radio} / {colors.source-multi}（与来源圆点同色）；无来源色（收藏「全部」）时 {colors.rose}'
     typography: '{typography.search-query}'
     typography-phone: '{typography.search-query-phone}'
   source-switcher:
@@ -643,7 +643,7 @@ components:
 - **Sheet（`{colors.sheet}`）**：抬起的面——搜索栏、选中的竖栏项、视图分段控件的选中格、底部条与迷你条（两种主题）、浮窗、选集面板、下拉菜单、批量点播进度卡。
 - **Ink / Ink2 / Ink3**：三级文字。Ink 用于标题与主文字；Ink2 用于歌手、时长、次要按钮字；Ink3 用于未选中导航、表头、出处、眉题等辅助信息。为满足 AA，Ink3 由设计稿值加深（浅 `#9A9187 → #6B655D`，深 `#6E665D → #8F887E`），paper、rail、sheet、hover 四种底色上全部 ≥ 4.5:1，**可承载任何文字**。代价是 Ink2 与 Ink3 明度更接近（浅色两者相差 1.22:1），层级更多依靠字号与位置区分。
 - **Rule（`{colors.rule}`）**：所有分隔线、描边。整套界面的层级主要靠它。
-- **Rose（`{colors.rose}` / `{colors.rose-dark}`）**：唯一强调色。用于：点播按钮的悬停/按下实心态、「点播到房间」胶囊、正在播放的序号音柱与标题、竖栏选中指示条、手机标签栏选中项、模式开关点亮态、进度填充、搜索栏光标、选集序号徽章。**不用于**装饰、平台识别或错误提示。
+- **Rose（`{colors.rose}` / `{colors.rose-dark}`）**：唯一强调色。用于：点播按钮的悬停/按下实心态、「点播到房间」胶囊、正在播放的序号音柱与标题、竖栏选中指示条、手机标签栏选中项、模式开关点亮态、进度填充、选集序号徽章。**不用于**装饰、平台识别或错误提示。
 - **Rose fill dark（`{colors.rose-fill-dark}`）**：深色主题下**承载白字的蔷薇红实底**（点播实心态、模式开关点亮、「点播到房间」胶囊、选集序号徽章）。`rose-dark` 本身留给蔷薇红文字、指示条与进度填充——它在深色底上作文字是达标的，但白字压在它上面只有 3.41:1。浅色主题的 `rose` 两种用途都达标，不需要分开。
 - **Hover（`{colors.hover}`）**：行悬停底、来源切换器常态底。
 - **Thumb（`{colors.thumb}`）**：封面与缩略图加载前、加载失败时的占位底；无播放时底部条的封面位。占位图标用 ink2（thumb 上 5.34:1）；**thumb 上不放 ink3 文字**（4.39:1）。
@@ -652,7 +652,7 @@ components:
 - **Muted fill（`{colors.muted-fill}`）**：暗淡填充（= ink3），只用于已停止的批量点播进度条。
 - **Menu shadow / Toast shadow（`{colors.menu-shadow}`、`{colors.toast-shadow}`）**：浮在内容之上的临时浮层（下拉菜单、批量进度卡、面板提示条）的投影色，见 Elevation & Depth。
 - **Focus ring（`{colors.focus-ring}`）**：焦点环外圈，取 ink（深色 ink-dark）；用法见 `components.focus-ring`。
-- **平台来源点**：网易云 `{colors.source-netease}`、哔哩哔哩 `{colors.source-bilibili}`、电台 `{colors.source-radio}`、多源剧集 `{colors.source-multi}`（青绿，与红、粉、蓝区分）。只做 7px 圆点，**从不整片铺色**；深色主题同样不融入平台品牌色（沿用前轮用户结论）。
+- **平台来源点**：网易云 `{colors.source-netease}`、哔哩哔哩 `{colors.source-bilibili}`、电台 `{colors.source-radio}`、多源剧集 `{colors.source-multi}`（青绿，与红、粉、蓝区分）。只做 7px 圆点，**从不整片铺色**；深色主题同样不融入平台品牌色（沿用前轮用户结论）。唯一的例外是搜索栏输入光标：它跟随当前来源的品牌色（见 `search-bar`），因为光标直接属于「正在搜这个平台」的输入区，而不是整片铺色。
 - **Star-on**：已收藏的星标。浅色压暗为 `#A17822` 以达到图形 3:1；深色保持设计稿 `#C9962B`。
 - **Duration pill / Video scrim**：视频缩略图上的半透明黑底，保证白字在任何封面上可读。
 
@@ -782,7 +782,7 @@ components:
 
 - **竖栏（`rail` / `rail-item` / `rail-item-active`）**：顶部品牌标（`brand-mark`，纯标识），下列音乐、视频、电台、收藏；弹性空白；底部设置、关于。选中项抬到 sheet 底加细线环，左缘一根蔷薇红竖条；选中项文字仍是 ink。
 - **页头（`page-header`）**：等宽眉题 + 宋体页标题（当前模式名）+ 右侧描边关闭按钮（`close-button`）。
-- **搜索栏 + 来源切换器（`search-bar` / `source-switcher` / `search-submit` / `key-hint`）**：一个整体。左端来源切换器 → 竖分隔线 → 放大镜 + 输入区（光标蔷薇红）→ 键位提示 → 墨底「搜索」按钮。键位提示与「搜索」按钮之间留 10px，未聚焦显示 `/`、聚焦且为空不显示、有内容显示 `Enter`。手机端只保留来源切换器（简称）+ 输入区。
+- **搜索栏 + 来源切换器（`search-bar` / `source-switcher` / `search-submit` / `key-hint`）**：一个整体。左端来源切换器 → 竖分隔线 → 放大镜 + 输入区（光标跟随当前来源的品牌色：网易云 `{colors.source-netease}` / 哔哩哔哩 `{colors.source-bilibili}` / 电台 `{colors.source-radio}` / 多源剧集 `{colors.source-multi}`，与来源圆点同色；没有来源色时——收藏的「全部」——退回 `{colors.rose}` / `{colors.rose-dark}`）→ 键位提示 → 墨底「搜索」按钮。键位提示与「搜索」按钮之间留 10px，未聚焦显示 `/`、聚焦且为空不显示、有内容显示 `Enter`。手机端只保留来源切换器（简称）+ 输入区。
 - **来源菜单（`source-menu`）**：点来源切换器展开的插件自有下拉浮层（不用原生 select——其展开样式由系统决定，深色下是白底蓝条）。sheet 底、细线、`xl` 圆角、柔和投影；每项来源圆点 + 名称，当前项加粗并打勾，悬停淡底；展开时从上方 4px 落下，箭头翻转。
 - **范围标签（`scope-tab` / `scope-tab-active`）**：文字标签行，无底色；选中项墨色下划线压在行底线上（整行一条，切换时滑过去），可附结果数。电台模式此行为地区标签。进入专辑/歌单后此行替换为 `collection-header`。
 - **视图分段控件（`view-segmented`）** 与 **分页（`pager-button`）**：在范围行右侧（手机为范围行第二行）。视图切换常驻：只有一种视图时灰色锁定、不消失。内页头同样有视图切换。

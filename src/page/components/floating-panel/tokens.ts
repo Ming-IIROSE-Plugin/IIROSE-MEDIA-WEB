@@ -173,6 +173,20 @@ export const deskSourceDots = {
   multi: "bg-[#2E9A86]",
 } as const;
 
+/**
+ * 输入光标跟随来源品牌色（与 7px 圆点同色）：搜索栏的输入区属于当前来源，
+ * 光标是「现在在搜哪个平台」的最小提示；没有来源色（收藏的「全部」）时退回 `deskCaret`。
+ */
+export const deskSourceCarets: Record<
+  "netease" | "bilibili" | "radio" | "multi",
+  string
+> = {
+  netease: "caret-[#D7371F]",
+  bilibili: "caret-[#E1608C]",
+  radio: "caret-[#4F7FD6]",
+  multi: "caret-[#2E9A86]",
+};
+
 export type DeskSourceKey = keyof typeof deskSourceDots;
 
 // ---------------------------------------------------------------- 字号

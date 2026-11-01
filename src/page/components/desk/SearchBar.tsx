@@ -5,6 +5,7 @@ import { Component, createRef } from "preact";
 import {
   DeskIcon,
   deskCaret,
+  deskSourceCarets,
   deskFocusRing,
   deskFocusRingOnInk,
   deskHover,
@@ -221,6 +222,8 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
     const { sources, sourceIndex } = this.props;
     const source = sources[sourceIndex] ?? sources[0];
     const dot = source?.dot ? deskSourceDots[source.dot] : "";
+    // 光标跟来源走：搜索栏属于当前来源，搜哪个平台光标就是哪个颜色
+    const caret = source?.dot ? deskSourceCarets[source.dot] : deskCaret;
     // 有内容：提示按回车搜索；空且未聚焦：提示按 / 聚焦；空且已聚焦：不提示
     const hint = this.state.value.trim()
       ? "Enter"
@@ -290,7 +293,7 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
           type="text"
           enterKeyHint="search"
           aria-label="搜索"
-          className={`min-w-0 flex-1 border-0 bg-transparent px-2.5 py-0 outline-none ${typeSearchQuery} ${deskInk} ${deskCaret} ${deskPlaceholder}`}
+          className={`min-w-0 flex-1 border-0 bg-transparent px-2.5 py-0 outline-none ${typeSearchQuery} ${deskInk} ${caret} ${deskPlaceholder}`}
           placeholder={this.placeholder()}
           value={this.state.value}
           onInput={(event) => {
