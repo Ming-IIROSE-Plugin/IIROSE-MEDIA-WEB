@@ -87,6 +87,7 @@
 - **本地 HTTP 注入会被 CSP 拦**：`fetch("http://127.0.0.1:.../bundle.js")` 在 messages.html 里报 `Failed to fetch`。可行方式仍是把 bundle 源码内嵌进 Playwright 代码文件，在 `messages.html` frame 里 `new Function(src)()` 执行。
 - **房间的媒体能力不同**：`window.mediaShareRoom` 为 false 的房间（如「空间站」）发点播报文不起播；「练歌房」这类视频分享房可播，且对普通账号（`identity=0`/`rank=4`）开放。
 - **重播用缓存报文本身是有效的**：同曲重发 `m__4` 卡片 + `&1` 报文能让宿站重新起播（用户实测 + 本地复现）。报文缓存按房间落在 `sessionStorage` 的 `imwMediaPayload`，刷新后恢复；命中校验房间与 6 小时有效期。
+- **循环重播与收藏随机永不发卡片**（`_bmad-output/specs/spec-auto-playback-no-card/`）：卡片会抬高平台活跃度，无人值守的自动点播连发卡片会被当作刷活跃度。实现方式是显式 `cardless` 选项——`NetEasePlatform.MOD(data, { cardless: true })` / `BilibiliPlatform.VOD(data, 1, { cardless: true })` 逐层传到 `sendSongs` / `prepareAndSendMedia`，只发 `&1` 报文；`LoopIo` 已无 `sendCard`，不要再接回。不要用全局作用域或改 `announceMode` 实现：前者会被 `await` 打穿，后者会写盘污染用户选择。
 
 ## 提交纪律
 

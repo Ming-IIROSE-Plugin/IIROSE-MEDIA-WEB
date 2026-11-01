@@ -323,12 +323,14 @@ export class BilibiliPlatform extends Platform {
    */
   /**
    * Bilibili 播放指定单 P
+   * @param cardless 自动播放（收藏随机）：只发播放报文、不发点播卡片（CAP-2）。
    */
   public static async playBiliPage(
     basePlatformData: PlatformData,
     pageItem: { page: number; part: string; duration: number; cid: number },
     aid?: number,
     bvid?: string,
+    cardless?: boolean,
   ) {
     const bvSetting = new BiliBiliSettings().getBilibiliVideoSettings();
     const cid = pageItem.cid;
@@ -380,6 +382,7 @@ export class BilibiliPlatform extends Platform {
         res.data.timelength ||
           (pageItem.duration ? pageItem.duration * 1000 : 0),
         actuallyQn,
+        cardless,
       );
     } else {
       throw new Error("获取播放流失败");
@@ -390,7 +393,11 @@ export class BilibiliPlatform extends Platform {
    * Bilibili 点播逻辑
    * 支持指定 targetP 直达、多分 P 选集多选与正序/乱序二次流转
    */
-  public static async VOD(platformData: PlatformData, targetP?: number) {
+  public static async VOD(
+    platformData: PlatformData,
+    targetP?: number,
+    options?: { cardless?: boolean },
+  ) {
     try {
       if (!platformData.bilibili) throw new Error("没有 bilibili 数据");
       const { aid, bvid, course_id } = platformData.bilibili;
@@ -452,7 +459,13 @@ export class BilibiliPlatform extends Platform {
         if (targetPage) {
           // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
           await Announce.runSingleAnnounce(() =>
-            BilibiliPlatform.playBiliPage(platformData, targetPage, aid, bvid),
+            BilibiliPlatform.playBiliPage(
+              platformData,
+              targetPage,
+              aid,
+              bvid,
+              options?.cardless,
+            ),
           );
         } else {
           ShowMessage.show(`未找到分P: P${targetP}`);
@@ -595,6 +608,7 @@ export class BilibiliPlatform extends Platform {
     url: string,
     durationMs: number,
     qn: number,
+    cardless?: boolean,
   ) {
     const cover =
       typeof platformData.coverImg === "string"
@@ -617,7 +631,8 @@ export class BilibiliPlatform extends Platform {
     const media = new Media();
     const socket = new Socket();
 
-    Announce.sendMediaCard(socket, media.mediaCard(mediaData));
+    // 自动播放（收藏随机）只发播放报文：卡片会抬高平台活跃度（CAP-2）
+    if (!cardless) Announce.sendMediaCard(socket, media.mediaCard(mediaData));
     socket.send(media.mediaEvent(mediaData));
 
     console.log(`[VOD] 播放指令已下发: ${mediaData.name}`);

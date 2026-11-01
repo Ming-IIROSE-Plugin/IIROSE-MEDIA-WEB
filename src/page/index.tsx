@@ -29,7 +29,6 @@ import {
   releaseMediaSession,
 } from "../media-progress/MediaSession";
 import type { MediaSessionHandle } from "../media-progress/MediaSession";
-import { Announce } from "../iirose_func/Socket/Announce";
 import { Socket } from "../iirose_func/Socket";
 import {
   readMediaProgressPosition,
@@ -191,7 +190,6 @@ function initMediaProgress() {
     bridge,
     memory,
     {
-      sendCard: (card) => Announce.sendMediaCard(new Socket(), card),
       sendPayload: (payload) => new Socket().send(payload),
       localSeek: (seconds) => {
         const service = (

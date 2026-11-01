@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FavoriteRecord } from "../storage/FavoritesStorageService";
 import { NeteaseMusicAPI } from "../Api/NeteaseAPI/NeteaseMusic";
+import { NetEasePlatform } from "../platforms/NetEasePlatform";
+import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
 import { prepareShuffleTarget } from "./shuffleTargets";
 import { songKey } from "./ShuffleSelection";
 
@@ -144,6 +146,45 @@ describe("随机目标解析", () => {
       {
         key: songKey("bilibili", "BV1xx"),
       },
+    );
+  });
+
+  it("抽中目标的点播一律 cardless：自动点播不发卡片（CAP-2）", async () => {
+    api.getSongListDetail.mockResolvedValue({
+      playlist: { trackIds: [{ id: 9 }] },
+    });
+    api.getNeteaseSongDetail.mockResolvedValue([
+      { name: "曲9", album: {}, artists: [] },
+    ]);
+    const song = {
+      ...collection("album"),
+      id: "netease:song:5",
+      type: "song",
+    } as FavoriteRecord;
+    const video = {
+      ...collection("album"),
+      id: "bilibili:video:BV1xx",
+      platform: "bilibili",
+      type: "video",
+    } as FavoriteRecord;
+
+    const targets = await Promise.all([
+      prepareShuffleTarget(song, options()),
+      prepareShuffleTarget(video, options()),
+      prepareShuffleTarget(collection("playlist"), options()),
+    ]);
+    for (const target of targets) {
+      if (!target || target === "exhausted") throw new Error("目标解析失败");
+      target.play();
+    }
+
+    expect(vi.mocked(NetEasePlatform.MOD)).toHaveBeenCalledTimes(2);
+    for (const call of vi.mocked(NetEasePlatform.MOD).mock.calls)
+      expect(call[1]).toEqual({ cardless: true });
+    expect(vi.mocked(BilibiliPlatform.VOD)).toHaveBeenCalledWith(
+      expect.anything(),
+      1,
+      { cardless: true },
     );
   });
 

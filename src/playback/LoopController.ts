@@ -5,9 +5,12 @@ import { isSeekCommand, rewindCommand } from "../media-progress/model";
 import { endWindow, finiteNumber } from "./endWindow";
 import type { CutWatcher } from "./CutWatcher";
 
-/** 循环动作与宿站的唯一接口：卡片走播报档位，报文直发。 */
+/**
+ * 循环动作与宿站的唯一接口：只发播放报文，永不发卡片。
+ * 循环是无人值守的重复动作，连发卡片会被当作刷平台活跃度（CAP-1），
+ * 故接口层不给发卡能力——想加回来必须先改契约。
+ */
 export interface LoopIo {
-  sendCard(card: string): void;
   sendPayload(payload: string): void;
   /** 本人点播但无报文缓存时的兜底：只改本端播放，不广播。 */
   localSeek?: (seconds: number) => void;
@@ -293,7 +296,7 @@ export class LoopController {
       threshold,
       duration: finiteNumber(snapshot.duration) ? snapshot.duration : 0,
     };
-    if (hit.card) this.io.sendCard(hit.card);
+    // 只重发播放报文：循环永不发卡片（见 LoopIo 注释与 CAP-1）。
     this.io.sendPayload(hit.payload);
   }
 

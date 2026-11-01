@@ -182,6 +182,30 @@ describe("多 P 点播开选集面板", () => {
     expect(episodePicker.openEpisodePicker).not.toHaveBeenCalled();
     expect(playedPages()).toEqual([1]);
   });
+
+  it("cardless（收藏随机）随 VOD 传到播放单 P：只发播放报文，不发卡片", async () => {
+    // 走真实 playBiliPage：CAP-2 要求自动点播一张卡片都不发
+    playBiliPage.mockRestore();
+    const { Socket } = await import("../iirose_func/Socket");
+    const socketSend = vi
+      .spyOn(Socket.prototype, "send")
+      .mockImplementation(() => {});
+    videoApi.getBilibiliVideoStream.mockResolvedValue({
+      code: 0,
+      data: {
+        durl: [{ url: "https://x/1.m4s" }],
+        quality: 64,
+        timelength: 60_000,
+      },
+    });
+    await BilibiliPlatform.VOD(video, 1, { cardless: true });
+
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(
+      socketSend.mock.calls.map(([data]) => String(data).slice(0, 2)),
+    ).toEqual(["&1"]);
+    socketSend.mockRestore();
+  });
 });
 
 describe("宿站选择器的存量已删除", () => {

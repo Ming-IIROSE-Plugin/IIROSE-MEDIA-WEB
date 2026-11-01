@@ -51,6 +51,8 @@ function setup(cut = fakeCut()) {
     },
     send,
   };
+  // sendCard 探针：LoopIo 已不暴露发卡能力（CAP-1），留着它断言「永不发卡」，
+  // 防止以后有人把发卡通道接回循环重播。
   const io = { sendCard: vi.fn(), sendPayload: vi.fn(), localSeek: vi.fn() };
   let clock = 1_000_000;
   const memory = new MediaPayloadMemory(() => "fixture-room");
@@ -100,7 +102,7 @@ describe("单曲循环控制器", () => {
     expect(send).toHaveBeenCalledTimes(2);
   });
 
-  it("快退未生效时降级重播，命中缓存则发卡片与报文", () => {
+  it("快退未生效时降级重播：命中缓存只发报文，不发卡片", () => {
     const { mode, io, memory, push, light, advance } = setup();
     memory.record(PAYLOAD);
     memory.record(CARD);
@@ -109,8 +111,9 @@ describe("单曲循环控制器", () => {
     push({ current: 198.5 });
     advance(2100);
     push({ current: 198.5 });
-    expect(io.sendCard).toHaveBeenCalledExactlyOnceWith(CARD);
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
+    // 循环是无人值守的重复动作：缓存里即便有卡片也不重发（CAP-1）
+    expect(io.sendCard).not.toHaveBeenCalled();
 
     push({ current: 1 });
     expect(mode.mode).toBe("loop");
@@ -130,7 +133,7 @@ describe("单曲循环控制器", () => {
     expect(mode.mode).toBe("loop");
   });
 
-  it("无静默权限时在剩余 5 秒窗口内预发重播，5 秒内回读成功即保持点亮", () => {
+  it("无静默权限时在剩余 5 秒窗口内预发重播（只发报文），5 秒内回读成功即保持点亮", () => {
     const { mode, io, memory, push, light } = setup();
     memory.record(PAYLOAD);
     memory.record(CARD);
@@ -140,7 +143,7 @@ describe("单曲循环控制器", () => {
 
     push({ controlMode: "owner", current: 198.5 });
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
-    expect(io.sendCard).toHaveBeenCalledExactlyOnceWith(CARD);
+    expect(io.sendCard).not.toHaveBeenCalled();
 
     push({ controlMode: "owner", current: 0.6 });
     expect(mode.mode).toBe("loop");

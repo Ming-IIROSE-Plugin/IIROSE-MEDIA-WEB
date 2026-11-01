@@ -54,8 +54,9 @@ export async function prepareShuffleTarget(
       play: () =>
         record.platform === "bilibili"
           ? // 自动随机不能停下来等选集：多分 P 直接播第一集。
-            BilibiliPlatform.VOD(data, 1)
-          : NetEasePlatform.MOD(data),
+            // cardless：自动点播永不发卡片（CAP-2）
+            BilibiliPlatform.VOD(data, 1, { cardless: true })
+          : NetEasePlatform.MOD(data, { cardless: true }),
     };
   }
   const id = record.platformData.neteaseMusic?.id;
@@ -104,6 +105,7 @@ export async function prepareShuffleTarget(
   return {
     key: songKey("netease", String(trackId)),
     title,
-    play: () => NetEasePlatform.MOD(data),
+    // cardless：歌单/专辑里抽中的曲目同样是自动点播，不发卡片（CAP-2）
+    play: () => NetEasePlatform.MOD(data, { cardless: true }),
   };
 }

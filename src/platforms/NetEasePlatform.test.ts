@@ -631,6 +631,50 @@ describe("批量发送：即停与边取边发", () => {
     });
   });
 
+  it("cardless（收藏随机）：只发播放报文，一张卡片都不发", async () => {
+    // CAP-2：自动点播不发卡片。走真实发送循环，断言报文类型而不是只看计数。
+    neteaseMusic.getNeteaseSongDetail.mockImplementation(
+      async (ids: number[]) => ids.map(song),
+    );
+    const outcome = await (
+      NetEasePlatform as unknown as {
+        finalODSONG: (
+          ids: number[],
+          b?: Batch,
+          options?: { cardless?: boolean },
+        ) => Promise<{ sent: number }>;
+      }
+    ).finalODSONG([1, 2], undefined, { cardless: true });
+    expect(outcome.sent).toBe(2);
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(
+      socketSend.mock.calls.map((call: unknown[]) =>
+        String(call[0]).slice(0, 2),
+      ),
+    ).toEqual(["&1", "&1"]);
+  });
+
+  it("MOD 传 cardless 时同样只发播放报文（收藏随机的入口）", async () => {
+    neteaseMusic.getNeteaseSongDetail.mockResolvedValue([song(7)]);
+    await NetEasePlatform.MOD(
+      {
+        title: "曲7",
+        author: "甲",
+        coverImg: "",
+        websiteUrl: "https://music.163.com/#/song?id=7",
+        duration: 1,
+        neteaseMusic: { id: 7, fee: 0 },
+      } as PlatformData,
+      { cardless: true },
+    );
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(
+      socketSend.mock.calls.map((call: unknown[]) =>
+        String(call[0]).slice(0, 2),
+      ),
+    ).toEqual(["&1"]);
+  });
+
   it("发送中停止（200 首）：该歌词请求 abort，之后不再取详情 / 歌词，不再发卡", async () => {
     const { startBatch, stopBatch, getBatches } =
       await import("../playback/BatchProgress");

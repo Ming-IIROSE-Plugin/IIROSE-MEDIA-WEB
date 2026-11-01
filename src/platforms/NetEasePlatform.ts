@@ -33,6 +33,15 @@ interface CollectionTrack {
   duration?: number;
 }
 
+/**
+ * 点播发送选项。`cardless` 只由自动播放（收藏随机）传入：自动点播永不发卡片，
+ * 卡片会抬高平台活跃度、容易被当作刷活跃度（CAP-2）；手动入口一律不传。
+ */
+interface SendSongsOptions {
+  singleWindow?: boolean;
+  cardless?: boolean;
+}
+
 export class NetEasePlatform extends Platform {
   public static buildSelect = (action: (select: number) => Promise<void>) => {
     function cb(_t: HTMLElement, s: string) {
@@ -1005,8 +1014,13 @@ export class NetEasePlatform extends Platform {
   /**
    * @description 点播歌曲
    * @param platformData
+   * @param options.cardless 自动播放（收藏随机）用：只发播放报文、不发点播卡片。
+   *   卡片会抬高平台活跃度，无人值守的连续自动点播必须静默（CAP-2）。
    */
-  public static MOD = (platformData: PlatformData) => {
+  public static MOD = (
+    platformData: PlatformData,
+    options?: { cardless?: boolean },
+  ) => {
     try {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       const id = platformData.neteaseMusic.id;
@@ -1015,6 +1029,7 @@ export class NetEasePlatform extends Platform {
       // 返回发送过程：点播守卫据此显示「点播中 / 已点播」
       return this.finalODSONG([id], undefined, {
         singleWindow: true,
+        cardless: options?.cardless,
       }).catch((e) => Announce.showBatchItemError(e));
     } catch (error) {
       ShowMessage.show((error as Error).message);
@@ -1072,6 +1087,8 @@ export class NetEasePlatform extends Platform {
   };
 
   /**
+   * @param options.singleWindow 手动单曲窗口：卡片不被并行批量抑制吞掉。
+   * @param options.cardless 自动播放（收藏随机）：只发播放报文、不发卡片。
    * @param batch 批量点播进度句柄（整张播放 / 选集多选）：逐首上报，
    *   每首发送前检查「停止」；单曲点播不传。
    * @returns 实际发出的条数与结束原因（stopped / failed / completed）：
@@ -1080,7 +1097,7 @@ export class NetEasePlatform extends Platform {
   private static finalODSONG = async (
     songsID: number[],
     batch?: BatchHandle,
-    options?: { singleWindow?: boolean },
+    options?: SendSongsOptions,
   ): Promise<BatchSendOutcome> => {
     try {
       return await NetEasePlatform.sendSongs(songsID, batch, options);
@@ -1097,7 +1114,7 @@ export class NetEasePlatform extends Platform {
   private static sendSongs = async (
     songsID: number[],
     batch?: BatchHandle,
-    options?: { singleWindow?: boolean },
+    options?: SendSongsOptions,
   ): Promise<BatchSendOutcome> => {
     const media = new Media();
     const socket = new Socket();
@@ -1180,14 +1197,17 @@ export class NetEasePlatform extends Platform {
 
           // 取歌词期间用户点了「停止」：这一首也不再发
           if (batch?.cancelled) break;
-          // 单曲窗口只包发卡片这一小段：包住整段点播会让并行批量的逐卡发送
-          // 在整段网络请求期间一并放行（批量总结档下会漏出成批卡片）
-          if (options?.singleWindow)
+          if (options?.cardless) {
+            // 自动播放（收藏随机）只发播放报文：卡片会抬高平台活跃度（CAP-2）
+            socket.send(mediaEvent);
+          } else if (options?.singleWindow) {
+            // 单曲窗口只包发卡片这一小段：包住整段点播会让并行批量的逐卡发送
+            // 在整段网络请求期间一并放行（批量总结档下会漏出成批卡片）
             await Announce.runSingleAnnounce(() => {
               Announce.sendMediaCard(socket, mediacard);
               socket.send(mediaEvent);
             });
-          else {
+          } else {
             Announce.sendMediaCard(socket, mediacard);
             socket.send(mediaEvent);
           }
