@@ -24,9 +24,15 @@ const announce = vi.hoisted(() => ({
   sendMediaCard: vi.fn(),
 }));
 const episodePicker = vi.hoisted(() => ({ openEpisodePicker: vi.fn() }));
-
+const courseApi = vi.hoisted(() => ({
+  getBilibiliCoursePagesData: vi.fn(),
+  getBilibiliCourseStream: vi.fn(),
+}));
 vi.mock("../Api/BilibiliAPI/BiliBiliVideoAPI", () => ({
   BiliBiliVideoApi: videoApi,
+}));
+vi.mock("../Api/BilibiliAPI/bilibili-course/BiliBiliCourseApi", () => ({
+  BiliBiliCourseApi: courseApi,
 }));
 vi.mock("../iirose_func/Socket/Announce", () => ({ Announce: announce }));
 vi.mock(
@@ -171,6 +177,45 @@ describe("多 P 点播开选集面板", () => {
       "P1 开场",
     );
     expect(playedPages()).toEqual([1, 2]);
+  });
+
+  it("cardless（收藏随机）覆盖课程分支：播放课程也不发卡片", async () => {
+    // 复盘 B1：课程分支排在 targetP 之前 return，必须自己把 cardless 传下去。
+    // 这里断言第五个参数真的传到了发送点（prepareAndSendMedia 的第 5 参）。
+    const prepare = vi
+      .spyOn(
+        BilibiliPlatform as unknown as Record<
+          string,
+          (...args: unknown[]) => Promise<void>
+        >,
+        "prepareAndSendMedia",
+      )
+      .mockResolvedValue(undefined);
+    const { SendFetch } = await import("../Api");
+    vi.spyOn(SendFetch, "tryGetWhithXhr").mockResolvedValue(true);
+    courseApi.getBilibiliCourseStream.mockResolvedValue({
+      data: {
+        dash: {
+          video: [{ id: 64, codecid: 13, baseUrl: "https://v/1.m4s" }],
+          audio: [{ baseUrl: "https://a/1.m4s" }],
+        },
+        timelength: 60_000,
+      },
+    });
+    const course = {
+      title: "某课程",
+      author: "某 UP",
+      coverImg: "",
+      websiteUrl: "https://www.bilibili.com/cheese/play/ep1",
+      duration: 60,
+      bilibili: { bvid: "BV1", course_id: 9, cid: 101 },
+    } as unknown as PlatformData;
+
+    await BilibiliPlatform.VOD(course, 1, { cardless: true });
+
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(prepare.mock.calls[0][4]).toBe(true);
+    prepare.mockRestore();
   });
 
   it("单集视频仍直接点播，不开面板", async () => {

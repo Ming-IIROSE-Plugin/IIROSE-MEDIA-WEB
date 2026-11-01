@@ -51,6 +51,14 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
     - **空态渲染**:条件数据(如元信息、multiPage)为空时,确认不渲染占位空行/空块
 13. **清理**：删除注入用临时文件和调试快照；`npm i` 若产生 lockfile 副作用用 `git checkout --` 撤销。
 
+## 运行时取数的两个硬坑（2026-11 复盘）
+
+自动化脚本要判「有没有在播」「发了哪些报文」时，这两条错一次就会白跑整轮：
+
+- **播放状态只能问 `Utils.service.isShareMediaPlaying()`**。`window.isShareMediaPlaying` 在 `messages.html` 里**不存在**（插件读的就是 `Utils.service.isShareMediaPlaying?.()`，见 `HostMediaBridge.ts`）。写成 `!!window.isShareMediaPlaying?.()` 会恒得 `false`，于是「明明在播」被记成「没在播」，循环/随机的触发分支永远走不到。
+- **抓报文用 frame 内的 `window.socket.send` 包装，不要用 page 级 websocket 事件**。宿站的 `socket` 是全局变量（`Socket/index.ts` 直接调 `socket.send`），在 `messages.html` 里执行 `const orig = socket.send.bind(socket); socket.send = d => { window.__sent.push(d); return orig(d); }` 就能拿到**明文**报文；而 Playwright 的 `page.on("websocket").framesent` 拿到的是 permessage-deflate **压缩帧**，读不出 `m__4` / `&1`。
+- 附带一条：真机房间的媒体可能每 ~20 秒自行重启（本地播放器起不来时），此时「房间重新开始播放」**不能归因**给插件发的报文；要判定这一点，必须换一个媒体稳定、不会自行重启的房间，或让维护者人工确认。
+
 ## 人工调试（备选，改完即刷新）
 
 油猴脚本 `@match https://iirose.com/messages.html` + `@require file://<本地 dist/bundle.js 路径>`，改码 → build → 刷新页面。

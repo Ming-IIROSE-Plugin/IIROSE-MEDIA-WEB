@@ -434,6 +434,9 @@ export class BilibiliPlatform extends Platform {
                 playurl,
                 timelength,
                 qn,
+                // 课程分支排在 targetP 之前，必须自己把 cardless 传下去，
+                // 否则收藏随机抽到「B站-课程」收藏时仍会发卡（复盘 B1）
+                options?.cardless,
               ),
             );
             return;
