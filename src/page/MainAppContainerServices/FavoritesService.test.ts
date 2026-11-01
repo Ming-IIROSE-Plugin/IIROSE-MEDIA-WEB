@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const storage = vi.hoisted(() => ({
   query: vi.fn(),
   restorePlatformData: vi.fn(),
+  hasDirtyRecords: vi.fn(async () => false),
 }));
 
 vi.mock("../../storage/FavoritesStorageService", () => ({
@@ -69,6 +70,7 @@ function makeCtx(initial: Partial<MainAppContainerState> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  storage.hasDirtyRecords.mockResolvedValue(false);
   // 缓存是静态的：每个用例用新的主键，避免互相命中
   storage.restorePlatformData.mockImplementation((record: Record_) => ({
     ...record.platformData,
@@ -192,6 +194,32 @@ describe("收藏查询失败", () => {
     } finally {
       show.mockRestore();
     }
+  });
+});
+
+describe("云端落地后的重载", () => {
+  it("本地还有未上传改动时不刷新，行保留到改筛选 / 离开模式（DW-11）", async () => {
+    storage.query.mockResolvedValue([favorite("netease:song:11", "song")]);
+    const { ctx, state } = makeCtx();
+    await FavoritesService.loadFavorites(ctx, "all", "all", 10);
+    const firstPage = state().mediaData;
+    storage.query.mockClear();
+
+    // 用户刚取消收藏（本地墓碑尚未上传）：此刻按云端落地重载会把这一行提前摘掉
+    storage.hasDirtyRecords.mockResolvedValueOnce(true);
+    await FavoritesService.reloadLastQuery(ctx);
+    expect(storage.query).not.toHaveBeenCalled();
+    expect(state().mediaData).toBe(firstPage);
+  });
+
+  it("没有未上传改动时照常按上次条件重载", async () => {
+    storage.query.mockResolvedValue([favorite("netease:song:12", "song")]);
+    const { ctx } = makeCtx();
+    await FavoritesService.loadFavorites(ctx, "all", "all", 10);
+    storage.query.mockResolvedValue([favorite("netease:song:13", "song")]);
+    storage.query.mockClear();
+    await FavoritesService.reloadLastQuery(ctx);
+    expect(storage.query).toHaveBeenCalledTimes(1);
   });
 });
 

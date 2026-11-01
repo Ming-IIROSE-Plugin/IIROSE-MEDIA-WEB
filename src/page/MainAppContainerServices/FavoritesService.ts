@@ -51,6 +51,9 @@ export class FavoritesService {
   ): Promise<void> {
     const last = this.lastQuery;
     if (!last) return;
+    // 本地还有未上传的改动（例如刚取消收藏）：按云端落地刷新会把这一行提前摘掉。
+    // 行保留到用户离开收藏模式或改筛选——那时 `loadFavorites` 本来就会重读（DW-11）。
+    if (await FavoritesStorageService.hasDirtyRecords()) return;
     if (ctx.getState().isCurrentInMultiPage) {
       // 正在看选集/多集：现在刷新会覆盖当前列表，顺延一次再来（有上限，不无限轮询）
       if (attempt < 10) {
