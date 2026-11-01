@@ -252,10 +252,10 @@ describe("收藏随机控制器", () => {
     for (let round = 0; round < 5; round++) {
       push({ current: 196 });
       await settle();
-      // 上一首放完停下后，10 秒内仍未回读到新曲目才算一次失败。
+      // 上一首放完停下后，20 秒内仍未回读到新曲目才算一次失败。
       push({ playing: false, current: 200 });
       await settle();
-      advance(10_001);
+      advance(20_001);
       push({ playing: false, current: 200 });
       await settle();
     }
@@ -286,7 +286,29 @@ describe("收藏随机控制器", () => {
     expect(mode.mode).toBe("shuffle");
   });
 
-  it("旧歌停下后 10 秒内回读到新曲目即成功，不补发", async () => {
+  it("回读窗口 20 秒：15 秒时仍在等待，不误判失败、不补发第二首", async () => {
+    // 复盘 B2：窗口只有 10 秒时，队列还没切歌就会判失败并补发，房间连收两首。
+    const { mode, play, push, light, advance } = setup();
+    push();
+    await settle();
+    push();
+    light();
+    push({ current: 196 });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(1);
+    push({ playing: false, current: 200 });
+    await settle();
+    advance(15_000);
+    push({ playing: false, current: 200 });
+    await settle();
+    // 再推一帧：旧窗口（10 秒）会在这里补发第二首，20 秒窗口仍在等待
+    push({ playing: false, current: 200 });
+    await settle();
+    expect(play).toHaveBeenCalledTimes(1);
+    expect(mode.mode).toBe("shuffle");
+  });
+
+  it("旧歌停下后 20 秒内回读到新曲目即成功，不补发", async () => {
     const { play, push, light, advance } = setup();
     push();
     await settle();

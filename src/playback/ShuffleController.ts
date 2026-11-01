@@ -62,7 +62,9 @@ export const SHUFFLE_REASONS = {
 const PREFETCH_SECONDS = 20;
 const SEND_SECONDS = 5;
 /** 上一首停下后等新曲目回读的时长（与循环重播一致，留出宿站切歌与加载时间）。 */
-const VERIFY_MS = 10_000;
+// 队列切歌可能延迟到 20 秒左右（循环重播实测同一队列 ~20 秒）：窗口留够，
+// 否则会在宿站真正切歌前判失败并补发下一首（复盘 B2）。
+const VERIFY_MS = 20_000;
 const MAX_FAILURES = 5;
 const THRESHOLD_RATIO = 0.25;
 const MIN_THRESHOLD = 1;
