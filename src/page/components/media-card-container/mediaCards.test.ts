@@ -903,15 +903,27 @@ describe("结果区状态机", () => {
     expect(host.textContent).not.toContain("没有找到结果");
     expect(host.textContent).not.toContain("还没有点播记录");
 
-    // 网格形态同样走骨架瓦片
+    // 网格形态同样走骨架瓦片（有关键词、请求尚未落地时）
     render(null, host);
     await mount(
-      results({ ...resultsBase, mode: MODE.video, viewMode: "card" }),
+      results({
+        ...resultsBase,
+        mode: MODE.video,
+        viewMode: "card",
+        keyword: "foo",
+      }),
     );
     expect(
       host.querySelectorAll("[data-imw-skeleton-tile]").length,
     ).toBeGreaterThan(0);
     expect(host.textContent).not.toContain("没有找到结果");
+  });
+
+  it("视频模式未搜索（空关键词、无请求）显示搜索提示，不永远转骨架", async () => {
+    await mount(results({ ...resultsBase, mode: MODE.video }));
+    expect(host.querySelectorAll("[data-imw-skeleton-row]")).toHaveLength(0);
+    expect(host.querySelectorAll("[data-imw-skeleton-tile]")).toHaveLength(0);
+    expect(host.textContent).toContain("输入关键词或粘贴 BV 号");
   });
 
   it("音乐首屏（未搜索）显示空历史文案", async () => {

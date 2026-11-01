@@ -365,6 +365,25 @@ export function ResultsArea({
 
     // idle = 还没有任何数据承诺（首次进入某模式 / 恢复到 `mediaData: null` 的快照）：
     // 此时渲染骨架，不能落到空态——否则会闪一帧「没有找到结果」。
+    // 例外：空关键词的视频模式 / 音乐专辑·歌单·MV 范围不会自己发请求，idle 是常态，
+    // 骨架会永远转下去——这里给搜索提示。
+    if (
+      load.status === "idle" &&
+      !trimmedKeyword &&
+      !isInnerPage &&
+      (mode === MODE.video || (mode === MODE.music && scopeIndex !== 0))
+    ) {
+      return (
+        <StateMessage
+          message={
+            mode === MODE.video
+              ? "输入关键词或粘贴 BV 号，搜索视频。"
+              : "输入关键词开始搜索。"
+          }
+        />
+      );
+    }
+
     if (load.status === "idle" || load.status === "loading") {
       return shape === "tracklist" ||
         shape === "collections" ||
