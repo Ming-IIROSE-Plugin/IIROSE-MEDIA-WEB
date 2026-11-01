@@ -21,7 +21,7 @@ export const resetBase = "m-0 cursor-pointer p-0 font-[inherit]";
 export const resetButton = `${resetBase} ${focusRing}`;
 export const plainButton = `${resetButton} border-0 bg-transparent`;
 export const iconButton = `${plainButton} text-inherit flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${deskPressTone}`;
-export const textButton = `${plainButton} min-h-[44px] rounded-lg px-3 text-[13px] ${deskRose} ${deskPressTone}`;
+export const textButton = `${plainButton} min-h-[44px] rounded-lg px-3 text-[13px] ${deskRose} hov:hover:underline`;
 
 /** 面板底色、文字色与描边色（sheet 底、ink 字、rule 描边）。 */
 export const panelSurface = `${deskSheet} ${deskInk} ${deskRule}`;

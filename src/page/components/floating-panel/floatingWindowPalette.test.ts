@@ -419,13 +419,16 @@ describe("平台标签行、搜索框与占位件", () => {
     expect(classesOf(searchIcon)).not.toContain("opacity-55");
   });
 
-  it("文字钮与关闭钮：蔷薇红文字 + 按压底色，外框取 rule", async () => {
+  it("文字钮：蔷薇红文字 + 悬停下划线（不填底色）；关闭钮保留按压底色", async () => {
     await mountShuffle(true, { records: [favorite] });
     const bulk = Array.from(
       shuffleDialog().querySelectorAll<HTMLButtonElement>("button"),
     ).find((button) => button.textContent?.trim() === "全选")!;
-    for (const token of `${deskRose} ${deskPressTone}`.split(/\s+/))
+    for (const token of deskRose.split(/\s+/))
       expect(classesOf(bulk)).toContain(token);
+    // DESIGN components.text-button：无底色，悬停加下划线
+    expect(classesOf(bulk)).toContain("hov:hover:underline");
+    expect(classesOf(bulk)).not.toContain(deskPressTone);
     const close = shuffleDialog().querySelector<HTMLElement>(
       '[aria-label="关闭收藏随机"]',
     )!;

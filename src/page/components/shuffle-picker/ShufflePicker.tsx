@@ -68,6 +68,7 @@ import {
   deskInk,
   deskInk2,
   deskInk3,
+  deskInk3Border,
   deskOnRose,
   deskPlaceholder,
   deskPressTone,
@@ -217,7 +218,7 @@ function Checkbox({
       }}
     >
       <span
-        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 border-solid ${on ? `${deskRoseSolidBorder} ${deskRoseSolid} ${deskOnRose}` : "border-current/40 bg-transparent"}`}
+        className={`flex h-5 w-5 items-center justify-center rounded-md border-2 border-solid ${on ? `${deskRoseSolidBorder} ${deskRoseSolid} ${deskOnRose}` : `${deskInk3Border} bg-transparent`}`}
       >
         {check === "all" && (
           <Svg size={14} strokeWidth={3}>

@@ -250,7 +250,7 @@ export function MediaProgress({
       aria-labelledby="imw-media-progress-title"
       tabIndex={-1}
       data-imw-theme={themeAttr(media.dark)}
-      className={`fixed z-[90001] w-[320px] overflow-auto font-sans text-[14px] max-[768px]:w-[320px] ${panelFrame} ${panelSurface}`}
+      className={`fixed z-[90001] w-[320px] overflow-auto font-sans text-[14px] imw-dark:[color-scheme:dark] max-[768px]:w-[320px] ${panelFrame} ${panelSurface}`}
       style={{ left: position.x, top: position.y }}
       {...stopHostGestures}
       onKeyDown={(event) => {

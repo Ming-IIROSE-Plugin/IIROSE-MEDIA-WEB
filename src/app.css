@@ -78,10 +78,10 @@
 #imw-playback-controls {
   --imw-entry-bg: #fafafa;
   --imw-entry-fg: #475569;
-  --imw-entry-hover: rgba(59, 130, 246, 0.07);
-  --imw-entry-focus: #2563eb;
-  --imw-entry-accent: #2563eb;
-  --imw-entry-pressed: rgba(37, 99, 235, 0.12);
+  --imw-entry-hover: rgba(180, 47, 62, 0.07);
+  --imw-entry-focus: #b42f3e;
+  --imw-entry-accent: #b42f3e;
+  --imw-entry-pressed: rgba(180, 47, 62, 0.12);
   --imw-entry-divider: rgba(148, 163, 184, 0.18);
   /* 入口与开关行共用同一行高，避免两处字面量漂移。 */
   --imw-row-height: 56px;
@@ -97,10 +97,10 @@
 #imw-playback-controls[data-imw-theme="dark"] {
   --imw-entry-bg: #181818;
   --imw-entry-fg: #cbd5e1;
-  --imw-entry-hover: rgba(147, 197, 253, 0.08);
-  --imw-entry-focus: #93c5fd;
-  --imw-entry-accent: #93c5fd;
-  --imw-entry-pressed: rgba(147, 197, 253, 0.16);
+  --imw-entry-hover: rgba(227, 96, 108, 0.08);
+  --imw-entry-focus: #e3606c;
+  --imw-entry-accent: #e3606c;
+  --imw-entry-pressed: rgba(227, 96, 108, 0.16);
   --imw-entry-divider: rgba(148, 163, 184, 0.28);
 }
 

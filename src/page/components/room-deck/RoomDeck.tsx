@@ -221,7 +221,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
           className={`flex h-[60px] items-center gap-6 px-[36px] ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
           {...stopHostGestures}
         >
-          <div className="flex w-[280px] min-w-0 shrink-0 items-center gap-3">
+          <div className="flex w-[280px] min-w-0 shrink-0 items-center gap-3 max-[900px]:w-[190px]">
             <Cover
               src={cover}
               icon="note"
@@ -255,7 +255,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
             )}
           </div>
 
-          <div className="flex w-[260px] shrink-0 items-center justify-end gap-2">
+          <div className="flex w-[260px] shrink-0 items-center justify-end gap-2 max-[900px]:w-[210px]">
             {togglesFor(false)}
           </div>
 
