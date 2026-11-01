@@ -303,6 +303,27 @@ describe("单曲循环控制器", () => {
     expect(loopThreshold(0)).toBe(1);
   });
 
+  it("重播校验窗口 25 秒：20 秒内不判失败，超过才熄灯", () => {
+    const { mode, io, memory, push, light, advance } = setup();
+    memory.record(PAYLOAD);
+    push({ controlMode: "owner" });
+    light();
+    // 无静默权限：剩余 5 秒窗口内预发重播
+    push({ controlMode: "owner", current: 198.5 });
+    expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
+
+    // 队列还没推进：20 秒时仍在等待，不熄灯
+    advance(20_000);
+    push({ controlMode: "owner", current: 199, playing: false });
+    expect(mode.mode).toBe("loop");
+
+    // 超过 25 秒仍未回读到重新开始：判定失败并熄灯
+    advance(6_000);
+    push({ controlMode: "owner", current: 199, playing: false });
+    expect(mode.mode).toBe("none");
+    expect(mode.state.cleared?.reason).toBe(LOOP_REASONS.replayFailed);
+  });
+
   it("非有限时长或进度不触发任何发送", () => {
     const { send, io, push, light } = setup();
     light();

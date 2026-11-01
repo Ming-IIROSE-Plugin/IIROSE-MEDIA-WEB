@@ -37,8 +37,9 @@ export const loopThreshold = endWindow;
 /** 有静默权限时只在最后 2 秒回退，最接近「一次循环」的听感。 */
 const SEEK_WINDOW_SECONDS = 2;
 const SEEK_VERIFY_MS = 2000;
-// 自然播完后宿站要靠点播队列接上，实测有几秒延迟：窗口放宽到 10 秒再判失败。
-const REPLAY_VERIFY_MS = 10_000;
+// 自然播完后宿站要靠点播队列接上，实测延迟可达 20 秒左右：窗口放宽到 25 秒再判失败。
+// 窗口太短会在歌已经重新开始时把循环误判成失败并熄灯（真机 2026-11 复现过）。
+const REPLAY_VERIFY_MS = 25_000;
 const MANUAL_SEEK_GUARD_MS = 2000;
 const SHORT_TRACK_MAX_TRIGGERS = 2;
 const SHORT_TRACK_WINDOW_MS = 30_000;
