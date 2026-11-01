@@ -48,3 +48,8 @@
 3. 范围标签「单曲 / 专辑 / 歌单 / MV」28×30 → 手机 `min-h-11 min-w-11 px-2`，实测 44×44
 
 三条都有单测断言（`deskShell.test.ts` / `searchBar.test.ts` / `scopeRow.test.ts`）。
+
+另：真站 390×844 打开歌单内页时，内页头名称被右组（视图切换 + 分页 + 全部播放 = 294px）挤成 **0 宽**，
+整张歌单名看不到（`spec-collection-inner-batch` 复盘 Open question 4 的实测确认）。改为手机换行：
+返回钮 + 右组占第一行，名称 `order-last w-full` 占第二行 —— 实测名称 350px 宽、内页头 81px 高、
+无横向溢出，桌面布局不变。断言见 `mediaCards.test.ts`「内页头：手机名称换到第二行整行」。

@@ -677,6 +677,31 @@ describe("专辑 / 歌单行与内页头", () => {
     );
   });
 
+  it("内页头：手机名称换到第二行整行，不被右组挤成 0 宽", async () => {
+    // 真站 390×844：右组（视图切换 + 分页 + 全部播放）294px，名称原本只剩 0px
+    await mount(
+      withCtx(
+        h(CollectionHeader, {
+          title: album.title,
+          trackCount: album.trackCount,
+          currentPage: 1,
+          totalPage: 10,
+          onPageChange: () => {},
+          onBack: () => {},
+          onPlayAll: () => {},
+        }),
+      ),
+    );
+    const title = Array.from(host.querySelectorAll("span")).find(
+      (el) => el.textContent === "华丽的冒险",
+    )!;
+    expect(title.getAttribute("class")).toContain("max-[768px]:order-last");
+    expect(title.getAttribute("class")).toContain("max-[768px]:w-full");
+    expect(host.firstElementChild!.getAttribute("class")).toContain(
+      "max-[768px]:flex-wrap",
+    );
+  });
+
   it("顺序菜单：正序 / 乱序；Esc 与点外侧只取消，不点播，也不碰 buildSelect2", async () => {
     const buildSelect = vi.spyOn(NetEasePlatform, "buildSelect");
     const onPlayAll = vi.fn();

@@ -64,7 +64,7 @@ export function CollectionHeader({
 
   return (
     <div
-      className={`group mx-[36px] mt-[18px] flex items-center gap-2 border-b border-solid max-[768px]:mx-[20px] max-[768px]:mt-3 ${deskRule}`}
+      className={`group mx-[36px] mt-[18px] flex items-center gap-2 border-b border-solid max-[768px]:mx-[20px] max-[768px]:mt-3 max-[768px]:flex-wrap max-[768px]:gap-x-2 max-[768px]:pb-2 ${deskRule}`}
       data-imw-collection-header="true"
     >
       <button
@@ -76,8 +76,10 @@ export function CollectionHeader({
         返回
       </button>
 
+      {/* 手机：右组（视图切换 + 分页 + 全部播放）占满一行，名称换到第二行整行，
+          否则 390px 下名称被挤成 0 宽（真站实测） */}
       <span
-        className={`ml-1 min-w-0 truncate ${typeLabelStrong} ${deskInk}`}
+        className={`ml-1 min-w-0 truncate ${typeLabelStrong} ${deskInk} max-[768px]:order-last max-[768px]:ml-0 max-[768px]:w-full`}
         title={title}
       >
         {title}
