@@ -30,7 +30,6 @@ import { AllVideosService } from "./MainAppContainerServices/AllVideoService";
 import { AboutService } from "./MainAppContainerServices/AboutService";
 import { SettingsService } from "./MainAppContainerServices/SettingsService";
 import { NetEaseService } from "./MainAppContainerServices/NetEaseService";
-import { MediaContainerGesture } from "./MainAppContainerServices/MediaContainerGesture";
 import { RadioService } from "./MainAppContainerServices/RadioService";
 import {
   FavoritesService,
@@ -130,7 +129,6 @@ export class MainAppContainer extends Component<
       : this.itemsPerPage;
   }
   bilibiliRefreshCount = 1;
-  mediaContainerGesture = new MediaContainerGesture(this.props.ShowOrHideIMC);
 
   /** 切模式时待提交的关键词（粘贴视频链接要先切到视频模式）。 */
   private pendingSearch: string | null = null;
@@ -443,25 +441,7 @@ export class MainAppContainer extends Component<
 
     return (
       <Provider value={providerValue}>
-        <div
-          className="relative flex h-full min-h-0 w-full flex-col overflow-hidden"
-          onTouchStart={(e) =>
-            this.mediaContainerGesture.handleStart(
-              e,
-              currentPage,
-              totalPage,
-              this.controller.changecurrentPage,
-            )
-          }
-          onMouseDown={(e) =>
-            this.mediaContainerGesture.handleStart(
-              e,
-              currentPage,
-              totalPage,
-              this.controller.changecurrentPage,
-            )
-          }
-        >
+        <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden">
           <div
             className={`flex min-h-0 flex-1 flex-col ${deskPaper} ${deskInk}`}
           >
