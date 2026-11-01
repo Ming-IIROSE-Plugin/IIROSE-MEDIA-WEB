@@ -477,7 +477,7 @@ components:
     height: 60px
     padding: '0 {spacing.gutter-desktop}'
     gap: 24px
-    columns: '280px 1fr 260px'
+    columns: '280px 1fr 260px；视口 ≤900px 时左右收窄为 190px / 210px（中栏进度轨至少留出 250px，避免窄桌面视口把拖柄压到 0 宽）'
     background: '{colors.sheet}'
     foreground: '{colors.ink}'
     top-rule: '顶边 1px {colors.rule}（用 0 -1px 0 阴影画，不占布局）；无圆角、无外边距，贴住面板底边'
@@ -802,7 +802,7 @@ components:
 - **收藏星（`favorite-star`）**：空心星 ink3；已收藏为实心 star-on。只在用户亲手点亮时弹跳一下。桌面与手机都显示：行内 32px（手机 40px），卡内紧凑 32px（点击区 44px）；视频卡的星在缩略图右上角。
 - **视频卡（`video-tile` / `duration-pill` / `video-tile-hover` / `video-tile-revealed`）**：无卡片框。16:9 缩略图右下角等宽时长胶囊；下方两行标题、一行 UP 主。悬停或被选中/聚焦时覆遮罩与居中「▶ 点播到房间」胶囊。MV 同此组件；直播卡把时长胶囊换成 `live-badge`。→ 参考：[frame-2.png](imports/mock-v1/frame-2.png)（桌面深色网格，含悬停态）· [frame-4.png](imports/mock-v1/frame-4.png)（手机 2 列）。
 - **选集面板（`episode-picker`）**：插件自有浮层，sheet 底、细线描边。标题行（「选集」+ 集数 + 关闭）固定，列表行沿用曲目行结构；左列未选为描边方块、选中为蔷薇红实底序号徽章；标题行有「全选」文字钮；吸底底栏放「正序 / 乱序」与「点播所选」。手机为底部抽屉。设计稿未出，按令牌推导。
-- **底部条（`room-deck`，桌面）**：与面板同色的 60px 贴底细栏（sheet 底 + 顶边细线，无圆角无外边距）。三栏——左：40px 封面 + 标题 + 点播者；中：时间 · 3px 进度轨（拖柄悬停 / 聚焦时才出现）· 总时长；右：两个浅色描边模式开关。不显示 `Now in room` 标签。直播/电台流见 `room-deck-live`，空闲见 `room-deck-idle`。设置、关于两页桌面不显示。设计稿 frame-1/2 里的墨底悬浮卡为旧版，以本节与 frontmatter 为准。
+- **底部条（`room-deck`，桌面）**：与面板同色的 60px 贴底细栏（sheet 底 + 顶边细线，无圆角无外边距）。三栏——左：40px 封面 + 标题 + 点播者（宿站没有歌手字段，这一行只写「某某 点播」/「由你点播」，不拼「歌手 · 某某」）；中：时间 · 3px 进度轨（拖柄悬停 / 聚焦时才出现）· 总时长；右：两个浅色描边模式开关。左右栏在 ≤900px 视口收窄（190 / 210px），中栏始终留得下进度轨。不显示 `Now in room` 标签。直播/电台流见 `room-deck-live`，空闲见 `room-deck-idle`。设置、关于两页桌面不显示。设计稿 frame-1/2 里的墨底悬浮卡为旧版，以本节与 frontmatter 为准。
 - **迷你条（`mini-deck`，手机）** 与 **展开的底部条（`room-deck-expanded`）**：迷你条贴底、sheet 底，顶边 3px 进度线兼作分隔（仅显示）、封面 + 标题 + 「某某 点播 · 01:38」、右侧两个纯图标模式钮；点主体展开为三行完整底部条（浅色底板，含拖柄常显的进度轨与带文字开关）。设计稿 frame-3/4 的迷你条为旧版悬浮卡；展开态设计稿未出。
 - **模式开关（`mode-toggle` / `mode-toggle-on`）**：常态 rule 描边、ink2 字，悬停淡底；点亮为实心蔷薇红白字。
 - **底部标签栏（`bottom-tab-bar`，手机）**：五等分，图标 + 文字，ink3；选中项蔷薇红 600。→ 参考：[frame-3.png](imports/mock-v1/frame-3.png)。
