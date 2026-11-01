@@ -135,7 +135,7 @@ describe("点播播报模式设置", () => {
     expect(
       JSON.parse(localStorage.getItem("imwPluginSetting")!).announceMode,
     ).toBe("silent");
-    expect(changeActionTitleAction).toHaveBeenCalledWith("静默");
+    expect(changeActionTitleAction).toHaveBeenCalledWith("静默（仅不发卡片）");
 
     // 写路径同样过归一化：非法值落盘回退 card，文案同步回默认档
     setCb!(document.createElement("div"), "loud");
@@ -147,8 +147,34 @@ describe("点播播报模式设置", () => {
 
   it("三档展示文案与设置值一一对应", () => {
     expect(PluginSettings.parseAnnounceMode("card")).toBe("发卡片");
-    expect(PluginSettings.parseAnnounceMode("silent")).toBe("静默");
+    expect(PluginSettings.parseAnnounceMode("silent")).toBe(
+      "静默（仅不发卡片）",
+    );
     expect(PluginSettings.parseAnnounceMode("summary")).toBe("批量总结");
+  });
+
+  it("静默档的选项文案写清「只是不发卡片」，不会被读成什么都不播", () => {
+    let options: unknown[][] = [];
+    (window as unknown as Record<string, unknown>).Utils = {
+      buildSelect2: (_i: unknown, a: unknown[][]) => {
+        options = a;
+      },
+    };
+
+    PluginSettings.setAnnounceMode();
+
+    expect(options.map((option) => option[0])).toEqual([
+      "card",
+      "silent",
+      "summary",
+    ]);
+    expect(options.map((option) => option[1])).toEqual([
+      "发卡片",
+      "静默（不发卡片）",
+      "批量总结",
+    ]);
+    // 文案必须落在「不发卡片」这个真实行为上，光写「静默」就是这次要修的歧义
+    expect(String(options[1][1])).toContain("不发卡片");
   });
 
   it("已退役的随机包含专辑/歌单字段：读取时丢弃，不再出现在设置对象里", () => {

@@ -11,6 +11,40 @@ export interface BilibiliVideoSettings {
   api: "HK" | "Guangzhou" | "Dev";
 }
 
+export type BilibiliApiId = BilibiliVideoSettings["api"];
+
+/** 默认 API 节点：线上构建里未知值与不可用的节点都回落到它。 */
+export const DEFAULT_BILIBILI_API: BilibiliApiId = "Guangzhou";
+
+/**
+ * API 节点目录：id / 文案 / 图标**逐项绑定**，顺序即设置项展示顺序。
+ * 以前是两份按下标对齐的数组，隐藏其中一项就会把图标错位到别的行上。
+ */
+const BILIBILI_API_NODES: {
+  id: BilibiliApiId;
+  label: string;
+  icon: string;
+}[] = [
+  { id: "HK", label: "香港-海外优化", icon: "mdi-crosshairs-gps" },
+  { id: "Guangzhou", label: "广州-中国优化", icon: "mdi-crosshairs-gps" },
+  { id: "Dev", label: "开发者模式", icon: "mdi-dev-to" },
+];
+
+/**
+ * 「开发者模式」指向 localhost:9000 且没有兜底节点，只有开发构建才可能连得上；
+ * 线上构建既不提供该选项，也要把存档里残留的 Dev 归一化回默认节点。
+ */
+function isDevApiAvailable(): boolean {
+  return Boolean(import.meta.env.DEV);
+}
+
+/** 当前构建里可选的节点（线上构建不含 Dev）。 */
+function availableApiNodes() {
+  return BILIBILI_API_NODES.filter(
+    (node) => node.id !== "Dev" || isDevApiAvailable(),
+  );
+}
+
 export class BiliBiliSettings {
   public setAccount(changeActionTitleAction?: (actionTitle?: string) => void) {
     const login = (_t: HTMLElement, s: string) => {
@@ -348,7 +382,7 @@ export class BiliBiliSettings {
     changeActionTitleAction?: (actionTitle?: string) => void,
   ) {
     const set = (_t: HTMLElement, s: string) => {
-      const api = s as "HK" | "Guangzhou" | "Dev";
+      const api = this.normalizeBilibiliApi(s);
 
       const bilibiliSetting = localStorage.getItem("bilibiliSetting");
       if (bilibiliSetting) {
@@ -368,19 +402,14 @@ export class BiliBiliSettings {
       }
     };
 
-    const selectOption = [
-      ["HK", "香港-海外优化"],
-      ["Guangzhou", "广州-中国优化"],
-      ["Dev", "开发者模式"],
-    ];
-
-    const mdiClass = ["mdi-crosshairs-gps", "mdi-crosshairs-gps", "mdi-dev-to"];
-
-    selectOption.forEach((item, index) => {
-      item.push(
-        `<div class="${mdiClass[index]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
-      );
-    });
+    // 选项与图标一起由目录生成：隐藏 Dev 时剩下的行不会拿到别人的图标
+    const selectOption: (string | number)[][] = availableApiNodes().map(
+      (node) => [
+        node.id,
+        node.label,
+        `<div class="${node.icon}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
+      ],
+    );
 
     IIROSEUtils.buildSelect2(
       null,
@@ -404,19 +433,47 @@ export class BiliBiliSettings {
     }
   }
 
+  /**
+   * 读 B 站设置：`api` 过归一化。
+   * 线上构建里存档残留 `Dev` 会回退默认节点，并顺手写回存档——
+   * 请求层 `Api.getBilibiliCors` 直接读原始存档，不写回它还会打到 localhost。
+   */
   public getBilibiliVideoSettings(): BilibiliVideoSettings {
     const lsBiliBiliSetting = localStorage.getItem("bilibiliSetting");
     if (lsBiliBiliSetting) {
-      return JSON.parse(lsBiliBiliSetting) as BilibiliVideoSettings;
+      const parsed = JSON.parse(lsBiliBiliSetting) as BilibiliVideoSettings;
+      const api = this.normalizeBilibiliApi(parsed.api);
+      if (api !== parsed.api) {
+        parsed.api = api;
+        try {
+          localStorage.setItem("bilibiliSetting", JSON.stringify(parsed));
+        } catch {
+          // 存储不可用：本次会话内按归一化后的节点走，不打断交互
+        }
+      }
+      return parsed;
     } else {
       return {
         qn: 112,
         streamqn: 10000,
         streamSeconds: 43200,
         videoStreamFormat: 2,
-        api: "Guangzhou",
+        api: DEFAULT_BILIBILI_API,
       };
     }
+  }
+
+  /** 归一化：未知值与线上构建里的 `Dev` 一律回退默认节点。 */
+  public normalizeBilibiliApi(raw: unknown): BilibiliApiId {
+    const node = BILIBILI_API_NODES.find((item) => item.id === raw);
+    if (!node) return DEFAULT_BILIBILI_API;
+    if (node.id === "Dev" && !isDevApiAvailable()) return DEFAULT_BILIBILI_API;
+    return node.id;
+  }
+
+  /** 当前构建里可选的节点 id（设置项展示顺序，线上构建不含 `Dev`）。 */
+  public availableBilibiliApis(): BilibiliApiId[] {
+    return availableApiNodes().map((node) => node.id);
   }
 
   public parseBilibiliVideoQn(qn: number) {
@@ -480,16 +537,11 @@ export class BiliBiliSettings {
     }, {});
   }
 
-  public parseBilibiliApi(api: "HK" | "Guangzhou" | "Dev") {
-    const selectOption = [
-      ["HK", "香港-海外优化"],
-      ["Guangzhou", "广州-中国优化"],
-      ["Dev", "开发者模式"],
-    ];
-
-    const selectedOption = selectOption.find((option) => option[0] === api);
-    if (selectedOption) {
-      return selectedOption[1] as string;
+  /** 节点文案取自目录（含 Dev：开发构建里它仍是合法取值，线上构建由归一化先挡住）。 */
+  public parseBilibiliApi(api: BilibiliApiId) {
+    const node = BILIBILI_API_NODES.find((option) => option.id === api);
+    if (node) {
+      return node.label;
     } else {
       return "未知";
     }

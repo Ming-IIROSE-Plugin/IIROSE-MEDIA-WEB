@@ -62,6 +62,8 @@ export interface SearchBarProps {
   onSubmit: (keyword: string) => void;
   /** 输入即通知（收藏 / 电台的即时过滤）；Enter / 按钮提交仍走 `onSubmit`。 */
   onLiveInput?: (keyword: string) => void;
+  /** 面板是否打开：`/` 只在面板打开时抢焦点（单一来源，别去读 DOM class）。 */
+  active: boolean;
 }
 
 interface SearchBarState {
@@ -72,12 +74,8 @@ interface SearchBarState {
   menuOpen: boolean;
 }
 
-/** 主面板是否处于打开状态：`/` 只在面板打开时抢焦点。 */
-function panelVisible(): boolean {
-  return !!document
-    .getElementById("IIROSE_MEDIA_CONTAINER")
-    ?.classList.contains("ShowIIROSE_MEDIA_CONTAINER");
-}
+// `/` 的抢焦点条件走 `active` prop（面板可见性的单一来源）；早期版本读
+// `ShowIIROSE_MEDIA_CONTAINER` 类名，改类名或纯 CSS 隐藏会让快捷键静默失效。
 
 const TEXT_ENTRY = /^(INPUT|TEXTAREA|SELECT)$/;
 
@@ -132,7 +130,7 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
   private handleShortcut = (event: KeyboardEvent) => {
     if (event.key !== "/" || event.altKey || event.ctrlKey || event.metaKey)
       return;
-    if (!panelVisible()) return;
+    if (!this.props.active) return;
     // 输入框内的 `/` 照常输入
     const target = event.target as HTMLElement | null;
     if (target && (target.isContentEditable || TEXT_ENTRY.test(target.tagName)))

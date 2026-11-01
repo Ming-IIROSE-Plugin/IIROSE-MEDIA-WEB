@@ -363,84 +363,95 @@ export class SendFetch {
     let lastError: "risk" | "timeout" | "http" | "network" = "http";
     let lastStatus: number | undefined;
 
-    for (const node of nodes) {
-      if (signal?.aborted) return null;
-      // 每个节点独立判定，避免上一节点的状态码污染最终提示
-      lastStatus = undefined;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-      // 外部中止联动当前节点的请求（超时与外部中止共用这一个 controller）
-      const onAbort = () => controller.abort();
-      signal?.addEventListener("abort", onAbort);
-      try {
-        const response =
-          method === "GET"
-            ? await this.sendGet(
-                `${node}${url}`,
-                params as URLSearchParams,
-                headers,
-                false,
-                controller.signal,
-              )
-            : await this.sendPost(
-                `${node}${url}`,
-                params,
-                headers,
-                false,
-                controller.signal,
-              );
-
-        if (controller.signal.aborted) {
-          if (signal?.aborted) return null;
-          lastError = "timeout";
-          continue;
-        }
-
-        if (!response) {
-          lastError = "network";
-          continue;
-        }
-
-        if (!response.ok) {
-          // 433 为腾讯云函数网关执行超时，归入超时
-          lastStatus = response.status;
-          lastError =
-            response.status === 433 ||
-            response.status === 408 ||
-            response.status === 504
-              ? "timeout"
-              : "http";
-          continue;
-        }
-
-        let data: any;
-        try {
-          data = await response.json();
-        } catch {
-          // 读 body 期间被外部中止，不算节点失败
-          if (signal?.aborted) return null;
-          // 假 200：body 不是 JSON
-          lastError = "http";
-          continue;
-        }
-
-        if (data && data.code === 200) {
-          return data;
-        }
-
-        // 假 200：业务码失败（-462 / -460 / 460 为网易云风控）
-        lastStatus =
-          data && typeof data.code === "number" ? data.code : undefined;
-        lastError =
-          lastStatus === -462 || lastStatus === -460 || lastStatus === 460
-            ? "risk"
-            : "http";
-      } catch {
+    // 超时类失败（含 433 腾讯云函数网关超时）往往是节点瞬时拥塞：所有节点都超时后
+    // 再补一轮，间隔 600ms。风控 / HTTP / 网络类失败不补试，避免放大失败面。
+    const passes = 2;
+    const RETRY_DELAY_MS = 600;
+    for (let pass = 0; pass < passes; pass++) {
+      if (pass > 0) {
+        if (lastError !== "timeout") break;
         if (signal?.aborted) return null;
-        lastError = controller.signal.aborted ? "timeout" : "network";
-      } finally {
-        clearTimeout(timer);
-        signal?.removeEventListener("abort", onAbort);
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      }
+      for (const node of nodes) {
+        if (signal?.aborted) return null;
+        // 每个节点独立判定，避免上一节点的状态码污染最终提示
+        lastStatus = undefined;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+        // 外部中止联动当前节点的请求（超时与外部中止共用这一个 controller）
+        const onAbort = () => controller.abort();
+        signal?.addEventListener("abort", onAbort);
+        try {
+          const response =
+            method === "GET"
+              ? await this.sendGet(
+                  `${node}${url}`,
+                  params as URLSearchParams,
+                  headers,
+                  false,
+                  controller.signal,
+                )
+              : await this.sendPost(
+                  `${node}${url}`,
+                  params,
+                  headers,
+                  false,
+                  controller.signal,
+                );
+
+          if (controller.signal.aborted) {
+            if (signal?.aborted) return null;
+            lastError = "timeout";
+            continue;
+          }
+
+          if (!response) {
+            lastError = "network";
+            continue;
+          }
+
+          if (!response.ok) {
+            // 433 为腾讯云函数网关执行超时，归入超时
+            lastStatus = response.status;
+            lastError =
+              response.status === 433 ||
+              response.status === 408 ||
+              response.status === 504
+                ? "timeout"
+                : "http";
+            continue;
+          }
+
+          let data: any;
+          try {
+            data = await response.json();
+          } catch {
+            // 读 body 期间被外部中止，不算节点失败
+            if (signal?.aborted) return null;
+            // 假 200：body 不是 JSON
+            lastError = "http";
+            continue;
+          }
+
+          if (data && data.code === 200) {
+            return data;
+          }
+
+          // 假 200：业务码失败（-462 / -460 / 460 为网易云风控）
+          lastStatus =
+            data && typeof data.code === "number" ? data.code : undefined;
+          lastError =
+            lastStatus === -462 || lastStatus === -460 || lastStatus === 460
+              ? "risk"
+              : "http";
+        } catch {
+          if (signal?.aborted) return null;
+          lastError = controller.signal.aborted ? "timeout" : "network";
+        } finally {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", onAbort);
+        }
       }
     }
 

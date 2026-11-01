@@ -38,7 +38,10 @@ const DEFAULT_PAGE_ICONS: Record<DeskModeId, string> = {
 
 export type SearchViewMode = "card" | "list";
 
-/** 点播播报模式：card 逐个发卡片（默认/现状） / silent 静默 / summary 批量总结 */
+/**
+ * 点播播报模式：card 逐个发卡片（默认/现状） / silent 只不发卡片（点播与播放照常） /
+ * summary 批量总结
+ */
 export type AnnounceMode = "card" | "silent" | "summary";
 
 /** 云同步设置；口令**绝不**入此结构（只存内存，刷新即失锁） */
@@ -297,7 +300,9 @@ export class PluginSettings {
   }
 
   /**
-   * 点播播报模式设置入口：三选一选择框（发卡片 / 静默 / 批量总结）
+   * 点播播报模式设置入口：三选一选择框（发卡片 / 静默（不发卡片）/ 批量总结）。
+   * silent 只是不打点播卡片，点播与播放照常——选项文案要写清这一点，
+   * 「静默」单独出现会被读成「什么都不播」。
    */
   public static setAnnounceMode(
     changeActionTitleAction?: (actionTitle?: string) => void,
@@ -322,7 +327,7 @@ export class PluginSettings {
 
     const selectOption: (string | number)[][] = [
       ["card", "发卡片"],
-      ["silent", "静默"],
+      ["silent", "静默（不发卡片）"],
       ["summary", "批量总结"],
     ];
 
@@ -347,7 +352,7 @@ export class PluginSettings {
 
   public static parseAnnounceMode(mode: AnnounceMode): string {
     return mode === "silent"
-      ? "静默"
+      ? "静默（仅不发卡片）"
       : mode === "summary"
         ? "批量总结"
         : "发卡片";

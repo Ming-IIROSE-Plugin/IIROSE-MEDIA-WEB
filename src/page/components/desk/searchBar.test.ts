@@ -39,6 +39,7 @@ const draw = (props: Partial<SearchBarProps> = {}) => {
       sourceIndex: 0,
       onSelectSource: () => {},
       onSubmit,
+      active: true,
       ...props,
       ref,
     } as SearchBarProps),
@@ -52,11 +53,6 @@ beforeEach(() => {
   document.body.append(host);
   playBilibiliLink.mockClear();
   resetRequestGuard();
-  // `/` 只在面板打开时抢焦点
-  const panel = document.createElement("div");
-  panel.id = "IIROSE_MEDIA_CONTAINER";
-  panel.className = "ShowIIROSE_MEDIA_CONTAINER";
-  document.body.append(panel);
 });
 afterEach(() => {
   render(null, host);
@@ -310,6 +306,16 @@ describe("搜索栏", () => {
     (document.activeElement as HTMLElement).blur();
     act(() => ref.current!.focus());
     expect(document.activeElement).toBe(input());
+  });
+
+  it("面板未打开时 / 不抢焦点（active 是唯一判据，不再读 DOM class）", () => {
+    draw({ active: false });
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "/", bubbles: true }),
+      );
+    });
+    expect(document.activeElement).not.toBe(input());
   });
 
   it("手机端不显示键位提示与搜索按钮", () => {

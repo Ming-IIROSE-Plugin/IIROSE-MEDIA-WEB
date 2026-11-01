@@ -290,14 +290,17 @@ describe("neteaseRequest：全部节点失败", () => {
     expect(String(showMock.mock.calls[0][0])).toContain("风控");
   });
 
-  it("双节点 433 时返回 null 并按超时提示一次", async () => {
-    fetchMock
-      .mockResolvedValueOnce(httpStatus(433))
-      .mockResolvedValueOnce(httpStatus(433));
-
-    const data = await callNeteaseRequest();
+  it("双节点 433 时返回 null 并按超时提示一次（超时类失败会补一轮）", async () => {
+    // 433 是腾讯云函数网关超时，常见于瞬时拥塞：两个节点各试两轮，共 4 次
+    fetchMock.mockResolvedValue(httpStatus(433));
+    vi.useFakeTimers();
+    const pending = callNeteaseRequest();
+    await vi.advanceTimersByTimeAsync(1000);
+    const data = await pending;
+    vi.useRealTimers();
 
     expect(data).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(showMock).toHaveBeenCalledTimes(1);
     expect(String(showMock.mock.calls[0][0])).toContain("超时");
   });
@@ -315,17 +318,32 @@ describe("neteaseRequest：全部节点失败", () => {
     expect(String(showMock.mock.calls[0][0])).toContain("风控");
   });
 
-  it.each([408, 504])("双节点 HTTP %s 时按超时提示一次", async (status) => {
-    fetchMock
-      .mockResolvedValueOnce(httpStatus(status))
-      .mockResolvedValueOnce(httpStatus(status));
+  it.each([408, 504])(
+    "双节点 HTTP %s 时按超时提示一次（超时类失败补一轮，共 4 次）",
+    async (status) => {
+      fetchMock.mockResolvedValue(httpStatus(status));
+      vi.useFakeTimers();
+      const pending = callNeteaseRequest();
+      await vi.advanceTimersByTimeAsync(1000);
+      const data = await pending;
+      vi.useRealTimers();
 
-    const data = await callNeteaseRequest();
+      expect(data).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+      expect(showMock).toHaveBeenCalledTimes(1);
+      expect(String(showMock.mock.calls[0][0])).toContain("超时");
+    },
+  );
 
-    expect(data).toBeNull();
+  it("风控 / 其它 HTTP 失败不补试：只走两个节点各一次", async () => {
+    fetchMock.mockResolvedValue(json200({ code: -462 }));
+    expect(await callNeteaseRequest()).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(showMock).toHaveBeenCalledTimes(1);
-    expect(String(showMock.mock.calls[0][0])).toContain("超时");
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(httpStatus(500));
+    expect(await callNeteaseRequest()).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("双节点其它 HTTP 错误时按通用失败文案提示一次", async () => {

@@ -459,6 +459,7 @@ export class MainAppContainer extends Component<
             {hasSearchBar(mode) && (
               <SearchBar
                 ref={this.searchBarRef}
+                active={this.props.active}
                 keyword={searchKeyword}
                 placeholder={this.placeholderFor(mode)}
                 placeholderPhone={this.placeholderPhoneFor(mode)}
