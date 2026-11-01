@@ -175,5 +175,12 @@ describe("范围行", () => {
     expect(list.getAttribute("class")).toContain("overflow-x-auto");
     const cell = host.querySelector('[role="radiogroup"] [role="radio"]')!;
     expect(cell.getAttribute("class")).toContain("max-[768px]:w-11");
+    // 范围标签本身也要 ≥44px（真站 390 宽下原为 28×30）
+    for (const tab of Array.from(host.querySelectorAll('[role="tab"]'))) {
+      const cls = tab.getAttribute("class") ?? "";
+      expect(cls).toContain("max-[768px]:min-h-11");
+      expect(cls).toContain("max-[768px]:px-2");
+      expect(cls).toContain("max-[768px]:min-w-11");
+    }
   });
 });

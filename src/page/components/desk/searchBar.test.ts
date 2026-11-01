@@ -331,6 +331,12 @@ describe("搜索栏", () => {
     draw();
     expect(input().getAttribute("class")).toContain("max-[768px]:text-[16px]");
   });
+
+  it("手机来源切换器可点区 ≥44px", () => {
+    draw();
+    const source = host.querySelector('[aria-label^="来源："]')!;
+    expect(source.getAttribute("class")).toContain("max-[768px]:h-11");
+  });
 });
 
 describe("视频目标识别", () => {

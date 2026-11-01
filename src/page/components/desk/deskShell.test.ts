@@ -142,6 +142,8 @@ describe("页头", () => {
     expect(title).toContain("Songti_SC");
     const close = host.querySelector('[aria-label="关闭点歌台"]')!;
     expect(close.getAttribute("class")).toContain("w-10");
+    // 手机上关闭钮要够 44px（真站 390 宽下原为 40×40）
+    expect(close.getAttribute("class")).toContain("max-[768px]:h-11");
     (close as HTMLButtonElement).click();
     expect(onClose).toHaveBeenCalledOnce();
   });

@@ -125,7 +125,7 @@ export function ScopeRow({
               role="tab"
               aria-selected={active}
               tabIndex={active ? 0 : -1}
-              className={`relative shrink-0 cursor-pointer border-0 bg-transparent px-0 pb-3 ${typeLabel} ${deskFocusRing} ${deskPress} ${active ? `font-semibold ${deskInk}` : deskInk3}`}
+              className={`relative shrink-0 cursor-pointer border-0 bg-transparent px-0 pb-3 max-[768px]:flex max-[768px]:min-h-11 max-[768px]:min-w-11 max-[768px]:items-center max-[768px]:justify-center max-[768px]:px-2 max-[768px]:pb-0 ${typeLabel} ${deskFocusRing} ${deskPress} ${active ? `font-semibold ${deskInk}` : deskInk3}`}
               onClick={() => onChange(index)}
             >
               {item.title}

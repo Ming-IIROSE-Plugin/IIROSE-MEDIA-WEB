@@ -240,7 +240,7 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
             aria-label={`来源：${source?.label ?? ""}`}
             aria-haspopup="listbox"
             aria-expanded={this.state.menuOpen}
-            className={`flex h-[42px] cursor-pointer items-center gap-2 border-0 px-3 ${roundedMd} ${deskHover} ${deskInk} ${typeLabel} ${deskFocusRing} ${deskPress} max-[768px]:h-[38px] max-[768px]:gap-1.5 max-[768px]:px-2.5`}
+            className={`flex h-[42px] cursor-pointer items-center gap-2 border-0 px-3 ${roundedMd} ${deskHover} ${deskInk} ${typeLabel} ${deskFocusRing} ${deskPress} max-[768px]:h-11 max-[768px]:gap-1.5 max-[768px]:px-2.5`}
             onClick={() => this.setState({ menuOpen: !this.state.menuOpen })}
             onKeyDown={(event) => {
               if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
