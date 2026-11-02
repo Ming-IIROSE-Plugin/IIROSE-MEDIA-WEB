@@ -1,0 +1,66 @@
+- id: "1"
+  title: 删除生产环境的 react-scan 外部脚本注入
+  description: >-
+    移除 src/main.ts 中向 head 注入 unpkg react-scan 的代码，落实 CAP-2 的“加载后不引入外部脚本”。
+    B 站扫码等业务行为不变。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    只删创建 script、设置 src/crossOrigin、prepend 的那几行及为其写的注释；不要顺手改 APP.toString 的
+    iframe 注入逻辑，也不要新增调试开关（那是 SPEC 的 open question）。验证：构建后加载页面，
+    Network 中不再出现 unpkg.com 请求，且插件正常初始化。
+
+- id: "2"
+  title: 用 uqr 替换 qrcode 依赖链
+  description: >-
+    把仅供 B 站扫码登录使用的 qrcode 换成 uqr，去掉 qrcode/dijkstrajs/crypt/charenc/is-buffer 五包，
+    落实 CAP-1 的体积目标且保持二维码可扫。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    保持 SetBiliBili.generateQRCodeBase64 的 Promise<string> 契约不变，调用方零改动。uqr 输出 SVG，
+    转成 data:image/svg+xml 的 URL 时注意宿站 img 的尺寸限制，显式给二维码留安静区（margin）。
+    更新 package.json 与 package-lock.json，确认无残留间接依赖；跑 npm test 与 npm run build，
+    记录替换前后 bundle 与 gzip 大小写入提交信息。真机扫码登录按 .opencode/skills/iirose-plugin-verify 流程确认。
+
+- id: "3"
+  title: 收敛 Tailwind 扫描面到 src
+  description: >-
+    用 @source 限定 Tailwind 只能扫描 src 下的源码，消除 _bmad-output/specs 等 Markdown 误生成的
+    约 8.5 kB 无用 CSS。不改 important 配置（保留为 SPEC 的 open question）。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    在 src/app.css 里用 @source 显式声明扫描面（相对 app.css 的路径），不要改成 content 数组式的旧写法。
+    验收方式：分别构建改动前后，对比 CSS 规则数与体积；再从 src 中抽查 10 个 arbitrary value 类
+    （如 [grid-auto-rows:max-content]、max-[768px]:hidden）确认全部仍被生成；确认
+    .animate-[imwSheetRise…] 这类只存在于文档的规则消失。
+
+- id: "4"
+  title: 依赖与静态检查卫生
+  description: >-
+    去掉 md5 依赖链、移除零引用依赖、修正 vite 入口文件名、开启并清零 noUnusedLocals/noUnusedParameters，
+    落实 CAP-3。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    顺序：先把 md5 换成本仓内实现（放在 B 站 Crypto 目录旁，保持 WBI 签名输出逐字节一致，用现有
+    BilibiliPlatform/WBI 相关测试兜住）；再从 package.json 移除 jquery、canvas、html-entities；
+    把 vite.config.ts 的 lib.entry 从 src/main.js 改为 src/main.ts；最后在 tsconfig.app.json 开启
+    noUnusedLocals 与 noUnusedParameters，清理 14 处告警（只删未使用的导入/变量/参数，不改行为）。
+    若清理引发整文件重排，拆成独立的 style: 提交。app.css 与其它未触达文件不要跑 prettier --write。
+
+- id: "5"
+  title: 启动时序与轮询启停
+  description: >-
+    让 CORS 环境就绪可等待、ipinfo 探测按天缓存，并让 HostMediaBridge 在无人订阅时完全停表，
+    落实 CAP-2 的静置开销要求。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Environment 暴露一个可等待的就绪信号（例如 Environment.ready()），API 层首次出网请求先 await 它，
+    但要设超时：超时后按现有默认代理继续，不能让 UI 卡死。ipinfo 结果写 localStorage 并带日期，
+    命中缓存直接返回，缓存键与现有设置存储风格保持一致。HostMediaBridge 改为首个订阅者到达时
+    才 installHooks 与起定时器、最后一个订阅者离开就停表（已有 stop 逻辑，确认 close 时确实退订），
+    订阅期间的刷新频率维持现状，不要降频——避免进度条变卡。测试要覆盖“无订阅时无定时器”
+    和“退订后定时器被清掉”。
