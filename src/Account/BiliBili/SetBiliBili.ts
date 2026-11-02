@@ -3,7 +3,7 @@ import { ShowImage } from "../../iirose_func/ShowImg";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
 import { BilibiliACC } from "./BilibiliAccountInterface";
 
-import QRCode from "qrcode";
+import { renderQRCodeDataUrl } from "./qrCode";
 
 export class BiliBiliAccount {
   public setBiliBiliAccountDefaultCookie() {
@@ -173,14 +173,6 @@ export class BiliBiliAccount {
   }
 
   private generateQRCodeBase64(qrcodetext: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-      QRCode.toDataURL(qrcodetext, function (err, url) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(url);
-        }
-      });
-    });
+    return Promise.resolve(renderQRCodeDataUrl(qrcodetext));
   }
 }

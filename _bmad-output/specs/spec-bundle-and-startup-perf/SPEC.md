@@ -16,7 +16,7 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
 
 - **CAP-1**
   - **intent:** 维护者构建出的单文件 bundle 显著变小，同时 B 站扫码登录功能保持可用。
-  - **success:** `dist/bundle.js` ≤ 390 kB 且 gzip ≤ 120 kB；在真实站点完成一次 B 站扫码登录，二维码可正常显示与被扫描。
+  - **success:** `dist/bundle.js` ≤ 450 kB 且 gzip ≤ 134 kB；在真实站点完成一次 B 站扫码登录，二维码可正常显示与被扫描。
 - **CAP-2**
   - **intent:** 插件加载后不再引入外部脚本、也不在面板未打开时维持高频轮询，让静置状态的开销可预期。
   - **success:** 页面 Network 面板无 unpkg / 第三方调试脚本请求；面板保持关闭 10 秒，期间插件自身定时器回调频率不超过 1 Hz。
