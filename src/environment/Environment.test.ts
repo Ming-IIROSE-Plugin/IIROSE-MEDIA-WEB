@@ -70,13 +70,20 @@ describe("Environment", () => {
     expect(sendGet).toHaveBeenCalledTimes(3);
   });
 
-  it("测速只统计连通的代理", async () => {
+  it("测速按响应速度选代理，非 2xx 也算连通", async () => {
+    const seen: string[] = [];
     vi.spyOn(SendFetch, "sendGet").mockImplementation(async (url: string) => {
-      if (url.includes("ipinfo.io")) return corsResponse(false);
-      if (url.includes("cn-shenzhen")) return corsResponse(true);
+      seen.push(url);
+      if (url.includes("ipinfo.io")) return null;
+      // 代理根路径真实返回 400；能拿到响应就说明代理可达。
+      if (url.includes("cn-hongkong"))
+        return new Promise((resolve) =>
+          setTimeout(() => resolve(corsResponse(false)), 20),
+        );
       return corsResponse(false);
     });
     await Environment.setEnv();
+    expect(seen).toHaveLength(3);
     expect(window.iirosemedia?.cors).toContain("cn-shenzhen");
   });
 

@@ -101,7 +101,8 @@ export class Environment {
     if (!window.iirosemedia) return;
     const corss = [GLOBAL_CORS, CN_CORS];
 
-    // 只统计真正连通的代理：失败也计时会选中一个已知不可达的地址。
+    // 只排除连不上的代理：这些代理的根路径本来就会回 400（要求 ?url=），
+    // 拿 HTTP 状态判断可用性会把两边都判死，退回写死香港节点。
     const requestTimes: { cors: string; time: number }[] = [];
 
     for (const cors of corss) {
@@ -113,7 +114,7 @@ export class Environment {
           new Headers(),
           false,
         );
-        if (!res || !res.ok) continue;
+        if (!res) continue;
         requestTimes.push({ cors, time: performance.now() - startTime });
       } catch {
         /* 跳过不可用代理 */

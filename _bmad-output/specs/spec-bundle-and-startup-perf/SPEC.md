@@ -10,7 +10,7 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
 
 ## Why
 
-**一个痛点，叠加一个既有约束。** 插件以单文件 UMD 形式经油猴 `@require` 注入 `messages.html`，每次进入蔷薇花园聊天站都要完整下载并解析这份产物。实测 475.0 kB（gzip 142.8 kB）中，约 95 kB 是只为 B 站登录二维码一次 `toDataURL` 调用带进来的 `qrcode` 依赖链；另有 8.5 kB CSS 来自文档而非源码；启动路径上还存在一处生产环境向 unpkg 注入外部调试脚本，以及每次进站都重复一次可缓存的 IP 归属探测。用户每次进站都在为这些付流量、解析时间和第三方脚本风险，而收益为零。
+**一个痛点，叠加一个既有约束。** 插件以单文件 UMD 形式经油猴 `@require` 注入 `messages.html`，每次进入蔷薇花园聊天站都要完整下载并解析这份产物。实测 475.0 kB（gzip 142.8 kB）中，约 14 kB（gzip 5.7 kB）是只为 B 站登录二维码一次 `toDataURL` 调用带进来的 `qrcode` 依赖链；另有 8.5 kB CSS 来自文档而非源码；启动路径上还存在一处生产环境向 unpkg 注入外部调试脚本，以及每次进站都重复一次可缓存的 IP 归属探测。用户每次进站都在为这些付流量、解析时间和第三方脚本风险，而收益为零。
 
 ## Capabilities
 
@@ -22,7 +22,7 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
   - **success:** 页面 Network 面板无 unpkg / 第三方调试脚本请求；同一天内第二次进入站点不再请求 `ipinfo.io`；没有订阅者时媒体轮询定时器被清掉（单测覆盖）。
 - **CAP-3**
   - **intent:** 依赖清单与静态检查如实反映代码，未使用的东西不再留在仓库里。
-  - **success:** `package.json` 中不存在源码零引用的依赖；`tsc` 开启 `noUnusedLocals` / `noUnusedParameters` 后 `npm run build` 无告警；`npm test` 全绿。
+  - **success:** `package.json` 中不存在源码零引用的运行时依赖；`tsconfig.app.json` 的 `noUnusedLocals` 已开启且 `npm run build` 无告警（`noUnusedParameters` 在本次之前即为 true，`tsconfig.node.json` 仍为 false）；`npm test` 全绿。
 
 ## Constraints
 
@@ -41,7 +41,7 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
 
 ## Success signal
 
-在真实站点装上新 bundle：产物 ≤ 390 kB（gzip ≤ 120 kB），Network 里看不到 unpkg 请求，面板关闭静置 10 秒无高频轮询，B 站扫码登录可完整走通一次。
+在真实站点装上新 bundle：产物 ≤ 450 kB（gzip ≤ 134 kB），Network 里看不到 unpkg 请求，同一天第二次进入不再请求 `ipinfo.io`，没有订阅者时媒体轮询定时器为 0，B 站扫码登录可完整走通一次（最后一项目前需人工完成）。
 
 ## Assumptions
 

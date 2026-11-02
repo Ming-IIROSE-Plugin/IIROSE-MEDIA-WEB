@@ -31,3 +31,6 @@
 .bmad-loop/cache/
 .bmad-loop/policy.toml
 _bmad/render/
+
+# 体积分析产物（rollup-plugin-visualizer，已不再依赖）
+/stats.html

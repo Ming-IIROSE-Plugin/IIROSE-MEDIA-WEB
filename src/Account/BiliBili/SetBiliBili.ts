@@ -173,6 +173,7 @@ export class BiliBiliAccount {
   }
 
   private generateQRCodeBase64(qrcodetext: string): Promise<string> {
-    return Promise.resolve(renderQRCodeDataUrl(qrcodetext));
+    // 放到 then 里求值：生成失败要变成 rejection，而不是同步抛出。
+    return Promise.resolve().then(() => renderQRCodeDataUrl(qrcodetext));
   }
 }

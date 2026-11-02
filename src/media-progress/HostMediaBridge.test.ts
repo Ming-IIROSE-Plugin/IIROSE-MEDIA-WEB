@@ -416,10 +416,12 @@ describe("宿站桥接与交互生命周期", () => {
     }
   });
   it("没有订阅者时不轮询，退订后清掉定时器", () => {
-    const { bridge, session } = fixture();
-    session.dispose();
+    // 先装假定时器再建 fixture：否则 ProgressSession 的真实定时器不可观测。
     vi.useFakeTimers();
     try {
+      const { bridge, session } = fixture();
+      session.dispose();
+      expect(vi.getTimerCount()).toBe(0);
       const off = bridge.subscribe(() => {});
       expect(vi.getTimerCount()).toBe(1);
       off();
