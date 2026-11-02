@@ -62,20 +62,22 @@ headless: false
 
 ## Action Items
 
-| #   | 项                                                               | 证据    | 建议    |
-| --- | ---------------------------------------------------------------- | ------- | ------- |
-| A1  | `lib` 改为 `["ES2020","ES2022.Array","DOM","DOM.Iterable"]`      | F1      | fix now |
-| A2  | 测速只排除 `null`，非 2xx 视为连通；同步改测试 mock              | F2      | fix now |
-| A3  | SPEC 的 Success signal 与 Why 同步到实测结论                     | F3/F4   | fix now |
-| A4  | memlog 追加更正（`ready()` 已删除）                              | F5      | fix now |
-| A5  | 轮询用例把 fake timers 提前到 fixture 之前                       | F6      | fix now |
-| A6  | `qrCode` 返回 `Promise.resolve().then(...)`，保持 rejection 语义 | F7      | fix now |
-| A7  | CAP-3 措辞收窄为「app 工程开启 `noUnusedLocals`」                | F8      | fix now |
-| A8  | 删除 `stats.html`，必要时补 `.gitignore`                         | F9      | fix now |
-| A9  | 体积守门（build 后断言阈值，或 CI 步骤）                         | F11     | 提案    |
-| A10 | 二维码解码测试（引入开发期解码器）                               | F12     | 提案    |
-| A11 | `AGENTS.md` 托管块的校验戳与内容同步                             | F10     | 提案    |
-| A12 | 下一轮 spec 立项先跑一次构建取基线，再写体积目标                 | F13/F14 | 流程    |
+> 2026-11-02 复盘后经维护者批准执行了 A1–A8、A10、A11（提交 `419dd93`）；A9 未采用，A12 留给下一轮。
+
+| # | 项 | 证据 | 状态 |
+|---|---|---|---|
+| A1 | `lib` 改为 `["ES2020","ES2022.Array","DOM","DOM.Iterable"]` | F1 | 已修 |
+| A2 | 测速只排除 `null`，非 2xx 视为连通；同步改测试 mock | F2 | 已修 |
+| A3 | SPEC 的 Success signal 与 Why 同步到实测结论 | F3/F4 | 已修 |
+| A4 | memlog 追加更正（`ready()` 已删除） | F5 | 已修 |
+| A5 | 轮询用例把 fake timers 提前到 fixture 之前 | F6 | 已修 |
+| A6 | `qrCode` 返回 `Promise.resolve().then(...)`，保持 rejection 语义 | F7 | 已修 |
+| A7 | CAP-3 措辞收窄为「app 工程开启 `noUnusedLocals`」 | F8 | 已修 |
+| A8 | 删除 `stats.html`，必要时补 `.gitignore` | F9 | 已修（207 KB 出库，`.gitignore` 加 `/stats.html`） |
+| A9 | 体积守门（build 后断言阈值，或 CI 步骤） | F11 | 未采用 |
+| A10 | 二维码解码测试（引入开发期解码器） | F12 | 已做（`jsqr` 作 devDependency，从实际 SVG 还原像素解码） |
+| A11 | `AGENTS.md` 托管块的校验戳与内容同步 | F10 | 已做 |
+| A12 | 下一轮 spec 立项先跑一次构建取基线，再写体积目标 | F13/F14 | 流程，下一轮执行 |
 
 ---
 
@@ -83,10 +85,10 @@ headless: false
 
 **accepted-with-open-items**
 
-- CAP-1（≤450 kB / ≤134 kB）：达成（444.62 kB / 132,725 B gzip），但 Success signal 文案未同步（F3），且无自动守门（F11）。
+- CAP-1（≤450 kB / ≤134 kB）：达成（444.61 kB / gzip 133.60 kB）；Success signal 文案已同步（A3），自动守门仍未做（A9 未采用）。
 - CAP-2（无外部脚本、不重复探测、无订阅者停表）：达成并经真机验证；「≤1Hz」原判据已在 Non-goals 记为未实现（F14），属显式降级而非静默放弃。
-- CAP-3（依赖卫生、静态检查）：达成；措辞需收窄（F8），`stats.html` 遗留（F9）。
-- 两项高优先级回归（F1/F2）由本次 epic 引入，修复前不应视为完全干净。
+- CAP-3（依赖卫生、静态检查）：达成；措辞已收窄（A7，`tsconfig.node.json` 仍为 false 属已知边界），`stats.html` 已出库（A8）。
+- 两项高优先级回归（F1/F2）由本次 epic 引入，已于 `419dd93` 修复并重跑（69 文件 / 1253 用例）。剩余开放项只有 A9 与 A12。
 
 ## Assumptions
 
