@@ -12,7 +12,7 @@ import { SkeletonRows, SkeletonTiles } from "./Skeletons";
 import { StateMessage } from "./StateMessage";
 import { TracklistHeader, TracklistRow } from "./TracklistRow";
 import { VideoTile } from "./VideoTile";
-import { isCollectionItem, isPhoneLayout } from "./mediaFormat";
+import { isCollectionItem } from "./mediaFormat";
 import { isNowPlayingTitle, subscribeNowPlayingTitle } from "./nowPlaying";
 import { notifyRoomUnsupported, roomSupportsRequest } from "./roomSupport";
 

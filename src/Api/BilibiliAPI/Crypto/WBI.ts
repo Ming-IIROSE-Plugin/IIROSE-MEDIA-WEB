@@ -1,4 +1,4 @@
-import md5 from "md5";
+import { md5Hex } from "./md5";
 import { BiliBiliLoginApi } from "../LoginAPI";
 
 /**
@@ -93,7 +93,7 @@ export class WBI {
       })
       .join("&");
 
-    const wbi_sign = md5(query + mixin_key); // 计算 w_rid
+    const wbi_sign = md5Hex(query + mixin_key); // 计算 w_rid
 
     return query + "&w_rid=" + wbi_sign;
   }

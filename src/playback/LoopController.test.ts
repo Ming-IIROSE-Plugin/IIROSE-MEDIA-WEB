@@ -132,7 +132,7 @@ describe("单曲循环控制器", () => {
   });
 
   it("无静默权限时在剩余 5 秒窗口内预发重播（只发报文），5 秒内回读成功即保持点亮", () => {
-    const { mode, io, memory, push, light } = setup();
+    const { mode, io, memory, push } = setup();
     memory.record(PAYLOAD);
     push({ controlMode: "owner", ownMedia: true });
     mode.toggle("loop");

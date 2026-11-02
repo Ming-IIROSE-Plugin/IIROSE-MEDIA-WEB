@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite'
 import preact from '@preact/preset-vite'
 import cssInjectedByJsPlugin from "vite-plugin-css-injected-by-js";
-import { visualizer } from 'rollup-plugin-visualizer';
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
@@ -13,7 +12,7 @@ export default defineConfig({
   ],
   build: {
     lib: {
-      entry: 'src/main.js',
+      entry: 'src/main.ts',
       name: 'IIROSE-MEDIA-WEB',
       fileName: () => `bundle.js`, // 只生成 UMD 文件
       formats: ['umd'] // 仅输出 UMD 格式
@@ -25,12 +24,6 @@ export default defineConfig({
           preact: 'Preact'
         }
       },
-      plugins: [
-        // visualizer({
-        //   open: true, // 构建完成后自动打开分析报告
-        //   filename: 'stats.html', // 输出文件名
-        // })
-      ]
     }
   }
 })

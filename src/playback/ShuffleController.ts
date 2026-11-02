@@ -3,7 +3,7 @@ import type { FavoriteRecord } from "../storage/FavoritesStorageService";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import type { PlaybackMode } from "./PlaybackMode";
 import type { CutWatcher } from "./CutWatcher";
-import { endWindow, finiteNumber } from "./endWindow";
+import { finiteNumber } from "./endWindow";
 import {
   createShuffleRound,
   isSingle,

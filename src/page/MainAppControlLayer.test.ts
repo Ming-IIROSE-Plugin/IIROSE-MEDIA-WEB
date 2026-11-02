@@ -22,9 +22,6 @@ import {
 const Layer = MainAppControlLayer as unknown as ComponentType<object>;
 
 type ThemeWindow = Window & { theme?: unknown };
-type HostWindow = Window & {
-  Utils?: { backward?: (...args: unknown[]) => unknown };
-};
 let host: HTMLDivElement;
 const panel = () =>
   document.getElementById("IIROSE_MEDIA_CONTAINER") as HTMLElement;

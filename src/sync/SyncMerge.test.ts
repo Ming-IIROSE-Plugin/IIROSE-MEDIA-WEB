@@ -10,7 +10,6 @@ import {
   type SyncSnapshot,
 } from "./SyncMerge";
 
-const UID = "6e3f0a1b2c4d5";
 const NOW = 1_800_000_000_000;
 
 function record(

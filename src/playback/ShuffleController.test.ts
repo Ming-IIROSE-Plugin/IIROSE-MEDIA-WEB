@@ -381,7 +381,7 @@ describe("收藏随机控制器", () => {
   });
 
   it("没在播时开启随机也会立即点播一首，且只发一次", async () => {
-    const { mode, play, prepare, push, light } = setup();
+    const { mode, play, prepare, push } = setup();
     push();
     await settle();
     push();

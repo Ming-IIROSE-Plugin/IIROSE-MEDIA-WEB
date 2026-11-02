@@ -1,5 +1,4 @@
 import { setPanelFocus } from "../playback/PanelFocus";
-import { RADIO_MIN_PENDING_MS } from "./components/media-card-container/ResultsArea";
 import { DeskToast } from "./components/desk/DeskToast";
 import { guardedRequest, requestKey } from "../playback/RequestGuard";
 import { Component, createRef } from "preact";
@@ -18,7 +17,6 @@ import {
 import { BilibiliPlatform } from "../platforms/BilibiliPlatform";
 import { NetEasePlatform } from "../platforms/NetEasePlatform";
 import type { CollectionSegments } from "../platforms/CollectionSegments";
-import { AllVideosPlatform } from "../platforms/AllVideosPlatform";
 import { SendFetch } from "../Api";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import {
@@ -51,11 +49,7 @@ import { PageHeader } from "./components/desk/PageHeader";
 import { SearchBar, type SearchSource } from "./components/desk/SearchBar";
 import { ScopeRow, type ScopeItem } from "./components/desk/ScopeRow";
 import { RoomDeck } from "./components/room-deck/RoomDeck";
-import { restoreFocus } from "./components/desk/focusTrap";
-import {
-  closePanelTier,
-  pushOverlayLayer,
-} from "./components/desk/overlayLayers";
+import { pushOverlayLayer } from "./components/desk/overlayLayers";
 import { detectVideoTarget } from "./components/desk/searchIntent";
 import {
   MODE,
@@ -394,7 +388,6 @@ export class MainAppContainer extends Component<
     const {
       mode,
       PlatformIndex,
-      SubNavBarIndex,
       mediaData,
       settingsData,
       searchKeyword,

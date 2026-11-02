@@ -1,7 +1,7 @@
 export interface EapiResult {
   params: string;
 }
-let maxDigits, ZERO_ARRAY, bigZero: BigInt, bigOne: BigInt, dpl10, lr10;
+let maxDigits, ZERO_ARRAY, bigZero: BigInt, bigOne: BigInt;
 const highBitMasks = new Array(
   0,
   32768,
@@ -96,29 +96,12 @@ const hexatrigesimalToChar = new Array(
   "y",
   "z",
 );
-const biRadixBase = 2,
-  biRadixBits = 16,
+const biRadixBits = 16,
   bitsPerDigit = biRadixBits,
   biRadix = 65536,
   biHalfRadix = biRadix >>> 1,
   biRadixSquared = biRadix * biRadix,
-  maxDigitVal = biRadix - 1,
-  maxInteger = 9999999999999998;
-// const iv = CryptoJS.enc.Utf8.parse('0102030405060708');
-const iv = new TextEncoder().encode("0102030405060708");
-// const presetKey = CryptoJS.enc.Utf8.parse('0CoJUm6Qyw8W8jud');
-const presetKey = new TextEncoder().encode("0CoJUm6Qyw8W8jud");
-const base62 = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-// const linuxapiKey = CryptoJS.enc.Utf8.parse('rFgB&h#%2?^eDg:Q');
-const linuxapiKey = new TextEncoder().encode("rFgB&h#%2?^eDg:Q");
-const publicKey = `
------BEGIN PUBLIC KEY-----
-MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvaklV8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44oncaTWz7OBGLbCiK45wIDAQAB
------END PUBLIC KEY-----
-`;
-
-const eapiKey = "e82ckenh8dichen8";
-
+  maxDigitVal = biRadix - 1;
 function a(a: number) {
   let d,
     e,
@@ -162,12 +145,9 @@ async function b(a: string, b: string) {
   return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
 }
 function c(a: string, b: string, c: string) {
-  let d, e;
-  return (
-    setMaxDigits(131),
-    (d = new RSAKeyPair(b, "", c)),
-    (e = encryptedString(d, a))
-  );
+  setMaxDigits(131);
+  const d = new RSAKeyPair(b, "", c);
+  return encryptedString(d, a);
 }
 
 /**
@@ -235,21 +215,19 @@ class RSAKeyPair {
   }
 
   charToHex(a: number) {
-    let h,
-      b = 48,
+    let b = 48,
       c = b + 9,
       d = 97,
       e = d + 25,
       f = 65,
       g = 90;
-    return (h =
-      a >= b && c >= a
-        ? a - b
-        : a >= f && g >= a
-          ? 10 + a - f
-          : a >= d && e >= a
-            ? 10 + a - d
-            : 0);
+    return a >= b && c >= a
+      ? a - b
+      : a >= f && g >= a
+        ? 10 + a - f
+        : a >= d && e >= a
+          ? 10 + a - d
+          : 0;
   }
 }
 
@@ -596,7 +574,6 @@ function encryptedString(a: RSAKeyPair, b: string) {
   function biToString(a: BigInt, b: number) {
     let d, e;
     const c = new BigInt();
-    let digit: number;
     for (
       c.digits[0] = b,
         d = biDivideModulo(a, c),
@@ -604,7 +581,6 @@ function encryptedString(a: RSAKeyPair, b: string) {
       1 == biCompare(d[0], bigZero);
     )
       ((d = biDivideModulo(d[0], c)),
-        (digit = d[1].digits[0]),
         (e += hexatrigesimalToChar[d[1].digits[0]]));
     return (a.isNeg ? "-" : "") + reverseStr(e);
   }

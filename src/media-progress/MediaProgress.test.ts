@@ -1158,11 +1158,9 @@ describe("本地播放进度浮窗位置存储", () => {
     expect(readMediaProgressPosition()).toBeUndefined();
     getItem.mockRestore();
 
-    const setItem = vi
-      .spyOn(Storage.prototype, "setItem")
-      .mockImplementation(() => {
-        throw new DOMException("full", "QuotaExceededError");
-      });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
     expect(() => saveMediaProgressPosition({ x: 12, y: 34 })).not.toThrow();
   });
 });

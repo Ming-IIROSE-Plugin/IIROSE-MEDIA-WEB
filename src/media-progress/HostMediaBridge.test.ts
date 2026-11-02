@@ -416,7 +416,7 @@ describe("宿站桥接与交互生命周期", () => {
     }
   });
   it("绝对定位允许零秒，拒绝超过当前媒体时长", () => {
-    const { host, bridge, session, send } = fixture();
+    const { bridge, session, send } = fixture();
     try {
       expect(
         bridge.send('!16["0s"]', session.state.media.instance, "silent"),

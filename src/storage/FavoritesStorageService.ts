@@ -3,17 +3,13 @@ import {
   currentValidUid,
   deriveFavoriteId as deriveFavoriteIdImpl,
   inScope,
-  isUnowned,
-  logicalIdOf,
   storageId as toStorageId,
   normalizeRecord,
-  ownerOf,
   getCurrentOwnerUid as currentOwnerUid,
   toPublicRecord,
 } from "./favorites/recordUtils";
 import {
   STORE_NAME,
-  attributeUnowned as attributeUnownedImpl,
   dbState,
   ensureOwnerScope as ensureOwnerScopeImpl,
   openDatabase,
@@ -67,12 +63,8 @@ export interface FavoriteSyncItem {
   deletedAt: number | null;
 }
 
-/** 与后端 cloud/sync/logic.js 的 UID_PATTERN 对齐 */
-const UID_PATTERN = /^[0-9a-f]{8,32}$/;
 /** 归属分隔符：主键值 = `<ownerUid>|<逻辑主键>`（逻辑主键里不会出现 `|`） */
 const OWNER_SEPARATOR = "|";
-/** 无有效 uid 时的作用域标签：只用于比较，不会写进记录（见「延迟归属」） */
-const UNKNOWN_OWNER = "unknown";
 
 export class FavoritesStorageService {
   /** 墓碑保留期：满 30 天在**下一次写事务**中物理清除（仅限已同步上云的墓碑） */

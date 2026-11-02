@@ -1118,9 +1118,6 @@ export class NetEasePlatform extends Platform {
   ): Promise<BatchSendOutcome> => {
     const media = new Media();
     const socket = new Socket();
-    const neteaseSetting = NetEaseSettings.getNeteaseMusicSetting();
-
-    const quality = neteaseSetting.quality;
     const signal = batch?.signal;
     const size = NetEasePlatform.DETAIL_CHUNK;
 
@@ -1231,41 +1228,5 @@ export class NetEasePlatform extends Platform {
         ? "failed"
         : "completed";
     return { sent, reason };
-  };
-
-  private static convertQualityToReadable = (
-    quality: NeteaseSongQuality,
-  ): string => {
-    switch (quality) {
-      case "standard":
-        return "标准音质";
-
-      case "higher":
-        return "较高音质";
-
-      case "exhigh":
-        return "极高音质";
-
-      case "lossless":
-        return "无损音质";
-
-      case "hires":
-        return "Hi-Res";
-
-      case "jyeffect":
-        return "高清环绕声";
-
-      case "sky":
-        return "沉浸环绕声";
-
-      case "jymaster":
-        return "超清母带";
-
-      default: {
-        // 理论上不会执行到这里
-        const _exhaustive: never = quality;
-        return _exhaustive;
-      }
-    }
   };
 }

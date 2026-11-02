@@ -11,8 +11,6 @@ import {
   deskInk3,
   deskInkSurface,
   deskRule,
-  deskSheet,
-  roundedMd,
   roundedSm,
   typeLabel,
   typeMonoCaption,
