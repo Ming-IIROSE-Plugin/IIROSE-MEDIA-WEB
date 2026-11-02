@@ -10,7 +10,7 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
 
 ## Why
 
-**一个痛点，叠加一个既有约束。** 插件以单文件 UMD 形式经油猴 `@require` 注入 `messages.html`，每次进入蔷薇花园聊天站都要完整下载并解析这份产物。实测 475.0 kB（gzip 142.8 kB）中，约 95 kB 是只为 B 站登录二维码一次 `toDataURL` 调用带进来的 `qrcode` 依赖链；另有 8.5 kB CSS 来自文档而非源码；启动路径上还存在一处生产环境向 unpkg 注入外部调试脚本、以及面板从未打开也会持续 250 ms 轮询的开销。用户每次进站都在为这些付流量、解析时间和第三方脚本风险，而收益为零。
+**一个痛点，叠加一个既有约束。** 插件以单文件 UMD 形式经油猴 `@require` 注入 `messages.html`，每次进入蔷薇花园聊天站都要完整下载并解析这份产物。实测 475.0 kB（gzip 142.8 kB）中，约 95 kB 是只为 B 站登录二维码一次 `toDataURL` 调用带进来的 `qrcode` 依赖链；另有 8.5 kB CSS 来自文档而非源码；启动路径上还存在一处生产环境向 unpkg 注入外部调试脚本，以及每次进站都重复一次可缓存的 IP 归属探测。用户每次进站都在为这些付流量、解析时间和第三方脚本风险，而收益为零。
 
 ## Capabilities
 
@@ -18,8 +18,8 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
   - **intent:** 维护者构建出的单文件 bundle 显著变小，同时 B 站扫码登录功能保持可用。
   - **success:** `dist/bundle.js` ≤ 450 kB 且 gzip ≤ 134 kB；在真实站点完成一次 B 站扫码登录，二维码可正常显示与被扫描。
 - **CAP-2**
-  - **intent:** 插件加载后不再引入外部脚本、也不在面板未打开时维持高频轮询，让静置状态的开销可预期。
-  - **success:** 页面 Network 面板无 unpkg / 第三方调试脚本请求；面板保持关闭 10 秒，期间插件自身定时器回调频率不超过 1 Hz。
+  - **intent:** 插件加载后不再引入外部脚本、不重复做可缓存的归属探测，且媒体状态轮询在没有订阅者时停止。
+  - **success:** 页面 Network 面板无 unpkg / 第三方调试脚本请求；同一天内第二次进入站点不再请求 `ipinfo.io`；没有订阅者时媒体轮询定时器被清掉（单测覆盖）。
 - **CAP-3**
   - **intent:** 依赖清单与静态检查如实反映代码，未使用的东西不再留在仓库里。
   - **success:** `package.json` 中不存在源码零引用的依赖；`tsc` 开启 `noUnusedLocals` / `noUnusedParameters` 后 `npm run build` 无告警；`npm test` 全绿。
@@ -37,6 +37,7 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
 - 重写网络层或替换 CORS 代理方案。
 - 为减体积引入运行时按需加载、分包或 Service Worker 缓存。
 - 任何视觉、布局、交互设计的调整。
+- 按需订阅（循环 / 随机未点亮时退订媒体轮询）：未实现。常驻 250 ms 轮询是循环与随机判定的功能需求，改成点亮才订阅需要 `PlaybackMode` 先提供状态通知，留给后续轮次。
 
 ## Success signal
 

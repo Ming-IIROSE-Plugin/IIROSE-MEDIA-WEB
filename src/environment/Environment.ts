@@ -13,77 +13,115 @@ declare global {
     };
   }
 }
+
+const LOCATION_CACHE_KEY = "imwClientLocation";
+const LOCATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const CN_CORS = `https://cors-anywhere-cwimzudkuk.cn-shenzhen.fcapp.run/`;
+const GLOBAL_CORS = `https://cors-anywhere-cwimzudkuk.cn-hongkong.fcapp.run/`;
+
+type Location = "CN" | "Global";
+
 export class Environment {
-  public static async setEnv() {
+  public static setEnv(): Promise<void> {
     window.iirosemedia = {};
-    await this.setCors();
+    return this.setCors();
+  }
+
+  private static applyLocation(location: Location) {
+    if (!window.iirosemedia) return;
+    window.ClientLocation = location;
+    window.iirosemedia.cors = location === "CN" ? CN_CORS : GLOBAL_CORS;
+  }
+
+  private static readCachedLocation(): Location | null {
+    try {
+      const raw = localStorage.getItem(LOCATION_CACHE_KEY);
+      if (!raw) return null;
+      const cached = JSON.parse(raw) as { location?: string; at?: number };
+      if (typeof cached.at !== "number") return null;
+      if (Date.now() - cached.at > LOCATION_CACHE_TTL_MS) return null;
+      return cached.location === "CN" || cached.location === "Global"
+        ? cached.location
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static writeCachedLocation(location: Location) {
+    try {
+      localStorage.setItem(
+        LOCATION_CACHE_KEY,
+        JSON.stringify({ location, at: Date.now() }),
+      );
+    } catch {
+      /* 存储不可用时下次再探测 */
+    }
   }
 
   private static async setCors() {
-    // const ua = navigator.userAgent;
-    // const device = window.device;
-    // if (device === 7)
-    // {
-    //     if(window.iirosemedia)
-    //     window.iirosemedia.cors = ``;
-    //     return;
-    // }
-    // if (ua.includes('IIROSE'))
-    // {
-    //     if(window.iirosemedia)
-    //     window.iirosemedia.cors = ``;
-    //     return;
-    // } else {
-    //     this.selectCorsBySpeed();
-    // }
+    // 每次进站都跨域问一次 ipinfo.io 没有必要：归属在一天内不会变。
+    const cached = this.readCachedLocation();
+    if (cached) {
+      this.applyLocation(cached);
+      return;
+    }
+
     const res = await SendFetch.sendGet(
       `https://ipinfo.io/json`,
       new URLSearchParams(),
       new Headers(),
+      false,
     );
 
-    if (res) {
-      const data: ipinfo = await res.json();
-      if (!window.iirosemedia) return;
-
-      if (data.country === "CN") {
-        window.ClientLocation = "CN";
-        window.iirosemedia.cors = `https://cors-anywhere-cwimzudkuk.cn-shenzhen.fcapp.run/`;
-      } else {
-        window.ClientLocation = "Global";
-        window.iirosemedia.cors = `https://cors-anywhere-cwimzudkuk.cn-hongkong.fcapp.run/`;
-      }
-    } else {
-      this.selectCorsBySpeed();
+    // 非 2xx、非 JSON、缺 country 都算探测失败：宁可重测，也不要把
+    // 一次坏应答钉死一天。
+    if (!res || !res.ok) {
+      await this.selectCorsBySpeed();
+      return;
     }
+
+    let data: ipinfo | null = null;
+    try {
+      data = (await res.json()) as ipinfo;
+    } catch {
+      data = null;
+    }
+    if (!data || typeof data.country !== "string") {
+      await this.selectCorsBySpeed();
+      return;
+    }
+
+    const location: Location = data.country === "CN" ? "CN" : "Global";
+    this.writeCachedLocation(location);
+    this.applyLocation(location);
   }
 
   private static async selectCorsBySpeed() {
     if (!window.iirosemedia) return;
-    const corss = [
-      "https://cors-anywhere-cwimzudkuk.cn-hongkong.fcapp.run/",
-      "https://cors-anywhere-cwimzudkuk.cn-shenzhen.fcapp.run/",
-    ];
+    const corss = [GLOBAL_CORS, CN_CORS];
 
-    // 存储每个请求的时间
-    const requestTimes = [];
+    // 只统计真正连通的代理：失败也计时会选中一个已知不可达的地址。
+    const requestTimes: { cors: string; time: number }[] = [];
 
-    // 循环发送请求
     for (const cors of corss) {
+      const startTime = performance.now();
       try {
-        const startTime = performance.now(); // 获取当前时间戳
-        await SendFetch.sendGet(cors, new URLSearchParams(), new Headers());
-        const endTime = performance.now(); // 获取请求结束时间戳
-        const elapsedTime = endTime - startTime; // 计算请求时间
-        requestTimes.push({ cors, time: elapsedTime }); // 存储请求时间
-      } catch (error) {
-        console.error("请求出错:", error);
+        const res = await SendFetch.sendGet(
+          cors,
+          new URLSearchParams(),
+          new Headers(),
+          false,
+        );
+        if (!res || !res.ok) continue;
+        requestTimes.push({ cors, time: performance.now() - startTime });
+      } catch {
+        /* 跳过不可用代理 */
       }
     }
-    // 根据时间排序，找到最快的 CORS 代理
+
     requestTimes.sort((a, b) => a.time - b.time);
-    // 最快的 CORS 代理
-    const fastestCors = requestTimes[0].cors;
-    window.iirosemedia.cors = fastestCors;
+    // 全部不可用时给一个确定的兜底值，避免后续拼出 `undefinedhttps://...`。
+    window.iirosemedia.cors = requestTimes[0]?.cors ?? GLOBAL_CORS;
   }
 }

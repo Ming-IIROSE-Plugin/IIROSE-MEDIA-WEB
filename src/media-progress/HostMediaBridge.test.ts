@@ -415,6 +415,20 @@ describe("宿站桥接与交互生命周期", () => {
       defaultBridge.dispose();
     }
   });
+  it("没有订阅者时不轮询，退订后清掉定时器", () => {
+    const { bridge, session } = fixture();
+    session.dispose();
+    vi.useFakeTimers();
+    try {
+      const off = bridge.subscribe(() => {});
+      expect(vi.getTimerCount()).toBe(1);
+      off();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("绝对定位允许零秒，拒绝超过当前媒体时长", () => {
     const { bridge, session, send } = fixture();
     try {
