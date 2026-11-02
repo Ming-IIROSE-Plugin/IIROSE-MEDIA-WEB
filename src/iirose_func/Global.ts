@@ -1,3 +1,15 @@
+/**
+ * 宿站页面上的 jQuery 对象。这里只声明插件实际调用的方法：
+ * 引入 @types/jquery 会连带把宿站 DOM 的所有假定写进类型面，收益不值这个体积。
+ */
+interface HostJQuery {
+  /** jQuery 对象可按下标取到 DOM 元素（宿站侧栏关闭逻辑依赖这一点）。 */
+  [index: number]: HTMLElement;
+  stop(): HostJQuery;
+  fadeOut(duration?: number, complete?: () => void): HostJQuery;
+  css(property: string, value: string): HostJQuery;
+}
+
 declare global {
   interface Window {
     _alert?: (message: string) => void;
@@ -92,9 +104,9 @@ declare global {
 
     Objs?: {
       repertory: {
-        albumShowHolder: JQuery<HTMLElement>;
+        albumShowHolder: HostJQuery;
         albumShow: AlbumShow;
-        albumShowHolderAnimate: JQuery<HTMLElement>;
+        albumShowHolderAnimate: HostJQuery;
       };
 
       mapHolder: {
@@ -115,8 +127,8 @@ declare global {
       functionHolderAnimate: number;
     };
 
-    functionHolder: JQuery;
-    functionHolderDarker: JQuery;
+    functionHolder: HostJQuery;
+    functionHolderDarker: HostJQuery;
     functionHolderP: number;
     isMobile: boolean;
     functionHolderSlider: HTMLDivElement;
