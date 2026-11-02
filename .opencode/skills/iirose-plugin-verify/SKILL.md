@@ -59,6 +59,16 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
 - **抓报文用 frame 内的 `window.socket.send` 包装，不要用 page 级 websocket 事件**。宿站的 `socket` 是全局变量（`Socket/index.ts` 直接调 `socket.send`），在 `messages.html` 里执行 `const orig = socket.send.bind(socket); socket.send = d => { window.__sent.push(d); return orig(d); }` 就能拿到**明文**报文；而 Playwright 的 `page.on("websocket").framesent` 拿到的是 permessage-deflate **压缩帧**，读不出 `m__4` / `&1`。
 - 附带一条：真机房间的媒体可能每 ~20 秒自行重启（本地播放器起不来时），此时「房间重新开始播放」**不能归因**给插件发的报文；要判定这一点，必须换一个媒体稳定、不会自行重启的房间，或让维护者人工确认。
 
+## 切宿站深色主题（验证深色配色时用）
+
+宿站自己有主题开关，**不要**用「把 `window.theme` 置空」来模拟——那样插件会变深色，但宿站整页仍是浅色，看不出真实并排效果。
+
+- 路径：左侧功能栏 **设置**（`.functionButton` 文本为「设置」，`functionBtnDo(82)`）→ **主题**（`Objs.setupHolder.function.panelEnter('mainBox', 0)`）→ 四个选项：白天 / 夜晚 / 随从时间 / 随从系统。
+- 点选方式：选项标签本身不可点，要点头像框里的单选圆点——`#setupHolder .commonBox` 里文本以「夜晚」开头的那一块，取其中的 `.mdi-radiobox-blank` 并 `click()`。点完宿站会 `Cookie('theme', 0)` 并 `location._reload()` 整页重载。
+- 直接写 `document.cookie = "theme=0"` **不可靠**（实测重载后 `window.theme` 仍是 `"theme/"`），走上面的 radio 才生效。
+- 验证：`window.theme` 变为空串即深色（`hostIsDark()` 为 true）；插件容器应带 `data-imw-theme="dark"`，浮窗底色 `rgb(28,26,24)`。切回「白天」后恢复 `theme="theme/"`。
+- 注意：切主题会整页重载，注入的 bundle 会消失，**要重新注入一次**；此时若已开着浮窗，它会挡住后面的点击（先把浮窗关掉再操作设置面板）。
+
 ## 人工调试（备选，改完即刷新）
 
 油猴脚本 `@match https://iirose.com/messages.html` + `@require file://<本地 dist/bundle.js 路径>`，改码 → build → 刷新页面。
