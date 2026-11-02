@@ -4,16 +4,16 @@
 
 本规格依据原用户提供的三段宿站HTML、功能描述，以及2026-10-21追加的静默控制授权、真实宿站权限取证与实现记录。HTML中的歌曲标题、用户昵称和图片URL均为样本，不是固定内容或定位依据。
 
-| 位置 | 事实与用途 |
-| --- | --- |
-| src/main.ts、src/page/index.tsx | 插件在包含 mainContainer 的 messages.html 上下文挂载 Preact UI |
+| 位置                                  | 事实与用途                                                                 |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| src/main.ts、src/page/index.tsx       | 插件在包含 mainContainer 的 messages.html 上下文挂载 Preact UI             |
 | src/media-progress/HostMediaBridge.ts | 默认发送器直接使用host.socket.send并保留接收者；严格白名单、连接与权限复核 |
-| src/media-progress/model.ts | seekCommand生成独立15控制报文；权限状态与不可用原因 |
-| src/media-progress/ProgressSession.ts | 单次提交、边界收敛、真实回读、失权/换房/换曲取消与5秒未确认超时 |
-| src/iirose_func/CloseSideBar.ts | 已有关闭侧栏逻辑；关闭侧栏不应卸载浮窗 |
-| 用户提供的 functionButtonGroup | 包含 mdi-inbox、functionBtnFont「盒子」及 functionBtnDo('*',this) 展开行为 |
-| 用户提供的 radioHolder | 旧豆瓣电台卡片，外壳是 functionButton functionButtonExt pointer |
-| 用户提供的 shareMediaBox | 当前房间媒体卡片，含封面、标题、进度、时间与点播者 |
+| src/media-progress/model.ts           | seekCommand生成独立15控制报文；权限状态与不可用原因                        |
+| src/media-progress/ProgressSession.ts | 单次提交、边界收敛、真实回读、失权/换房/换曲取消与5秒未确认超时            |
+| src/iirose_func/CloseSideBar.ts       | 已有关闭侧栏逻辑；关闭侧栏不应卸载浮窗                                     |
+| 用户提供的 functionButtonGroup        | 包含 mdi-inbox、functionBtnFont「盒子」及 functionBtnDo('*',this) 展开行为 |
+| 用户提供的 radioHolder                | 旧豆瓣电台卡片，外壳是 functionButton functionButtonExt pointer            |
+| 用户提供的 shareMediaBox              | 当前房间媒体卡片，含封面、标题、进度、时间与点播者                         |
 
 侧栏选择器源于用户提供的DOM，仍需按原验收要求在宿站核实；本轮权限验证不代替侧栏与电台依赖验收。
 
@@ -40,13 +40,13 @@
 
 权限规则来自真实 `Init.movePanel` 中的 `shellHolder`，不是根据身份标签顺序推测：`Assets.adminAuthority` 为rank首字符1/5/3/6/7/a提供组`1`；`function.lib(1)`为房间身份数值1/2/3补充组`1`；`manageCommand`按命令首字符校验authority，并有rank首字符7例外。媒体命令15属于组`1`。`mapHolder.function.lib(5/12)`映射房主1、星标2、普通成员3、其他0；`commandDo`的15/16路径没有本人点播例外。
 
-| 数据 | 正确来源与用途 |
-| --- | --- |
-| 房间身份 | `Info.room.identity`，必须为数值；1/2/3允许媒体管理 |
+| 数据     | 正确来源与用途                                                 |
+| -------- | -------------------------------------------------------------- |
+| 房间身份 | `Info.room.identity`，必须为数值；1/2/3允许媒体管理            |
 | 全局角色 | `window.rank[0]`，1/5/3/6/7/a允许媒体管理；rank不在Info.room下 |
-| 房间标识 | `window.roomnFull`，不在Info.room下；换房取消预览和等待 |
-| 点播者 | DOM `#shareMediaUserName.title`，纯文本读取 |
-| 本人名称 | `window.myself`；与点播者比较只用于解释，不参与allow |
+| 房间标识 | `window.roomnFull`，不在Info.room下；换房取消预览和等待        |
+| 点播者   | DOM `#shareMediaUserName.title`，纯文本读取                    |
+| 本人名称 | `window.myself`；与点播者比较只用于解释，不参与allow           |
 
 任一已确认允许角色即可放行；已知普通身份且无全局媒体角色为denied。身份缺失或非法、且无可确认全局角色时为unknown，提示权限信息未就绪，不误报确定无权。不将身份字符串、模糊truthy或本人点播作为权限证据；本人点播且identity=0、rank='4'仍不得放行。denied/unknown即时禁用时间轴和四按钮、零发送零等待；快照持续更新权限，发送前再次核验。权限恢复清旧提示，失权或换房取消旧预览与等待。
 
@@ -57,7 +57,7 @@
 - 控制路径禁止调用 `moveinputDo`、`msgfetch`、`getcontents`、`Socket.sendMessage`；禁止附带m/mc/i聊天负载，不进入输入发送流程，不改聊天草稿与选区。失败无聊天fallback。
 - 发送前检查权限、连接状态、是否媒体房间及socket.send可用性；缺少send视为控制不可用。服务端拒绝或抛错保留真实值并提示失败；有权但2秒无回执时提示未确认，不自动重发，也不武断认定为权限失败。
 - 有权且发送中同步收到真实定位回调时立即解除等待、恢复UI，不能被发送返回后的状态写入重新锁住；失权/换房后的旧回调不得覆盖新状态。
-- 点击、拖动及四个步进按钮均按提交时的真实进度计算相对差值，使用15；16为绝对位置协议，参数未知，本轮未实现，待参数证据和后续规格更新，不推测其格式。
+- 点击、拖动及四个步进按钮均按提交时的真实进度计算相对差值，使用15；**有静默权限时拖动进度条改用 `!16` 绝对位置协议**（`!16["<整数秒>s"]`，0 到时长内、含 0，超过时长拒绝），无静默权限或点步进按钮时仍用 15。两种报文各有独立白名单（`isSeekCommand` / `isAbsoluteSeekCommand`），互不放宽。
 - 用户主动媒体控制不受点歌公告模式误抑制；不混入公告或聊天前后缀。控制发送不能被解释为公聊，也不允许以公聊达到控制效果。
 - 定位成功必须有真实宿站回读；发送日志、受控快照与截获报文仅证明客户端路径。聊天静默验证同时检查广播调用与聊天DOM，不能只看控制台。
 
@@ -65,4 +65,4 @@
 
 客户端权限规则已从真实宿站源码取证，不能据此宣称服务端授权成功。热推房间6aad05e28be5e曾观察他人播放ほたる、identity=0与rank='4'；最终bundle是在另一真实房间普通身份且无媒体时确认全禁用和socket.send计数0，两者不能合并成最终bundle有媒体实证。unknown权限实站覆盖、授权身份定位成功与可靠回读、服务端任意正整数参数支持及限频仍待验证。完整历史与本轮证据边界见 progress-interaction.md。
 
-可靠媒体身份和时间源、电台停止与DOM依赖保留原验证范围。16参数缺失明确阻止本轮实现绝对位置协议；获得证据后再更新契约。未验证行为显示不可用或明确未确认，不编造宿站API，也不承诺所有房间均可控制。
+可靠媒体身份和时间源、电台停止与DOM依赖保留原验证范围。绝对位置协议（`!16["Ns"]`）已在有静默权限的拖动路径落地并有单测覆盖（0 秒允许、超过时长拒绝、白名单严格匹配）；服务端对 `!16` 的接受度仍需真机确认，未验证行为显示不可用或明确未确认，不编造宿站API，也不承诺所有房间均可控制。
