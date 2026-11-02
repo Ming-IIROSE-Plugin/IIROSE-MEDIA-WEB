@@ -1,7 +1,10 @@
 @layer theme, base, components;
-@import "tailwindcss/utilities.css";
+@import "tailwindcss/utilities.css" source(none);
 @import "tailwindcss/theme.css" layer(theme);
 @config "../tailwind.config.js";
+
+/* 只扫源码：v4 的自动检测会把 _bmad-output/specs 下 Markdown 里举例的类也生成出来 */
+@source "../src";
 
 /* 触屏设备无真 hover：hov: 变体仅在支持 hover 的指针下生效，避免粘滞高亮 */
 @custom-variant hov (@media (hover: hover));
