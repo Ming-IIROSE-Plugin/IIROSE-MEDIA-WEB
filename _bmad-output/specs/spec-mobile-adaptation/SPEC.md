@@ -71,10 +71,4 @@ sources: []
 - 图标字形继续取自 `@mdi/font` 7.3.67 并沿用自包含注册方式。
 - 真机凭据可用（`.secrets/iirose-test-account.txt` 已存在），UX 评审可在本轮规划内完成。
 
-## Open Questions（已由 Sally 在 companions 中定案收口）
-
-- [已裁决 - 见 EXPERIENCE.md] 安卓实机上插件容器（iframe）实际 CSS 宽度：实测 390~430px 设备下 iframe 呈现 465~486px，大屏极易突破 490px；断点必须脱钩 490px，统一上调为 768px 或容器级判断，且按钮必须彻底移除汉字文字节点。
-- [已裁决 - 见 DESIGN.md / EXPERIENCE.md] 第三栏平台名与第四栏子分类：第三栏平台名在窄屏隐藏文字，保留 32px 彩色品牌图标胶囊；第四栏子分类采用紧凑胶囊标签并配合右侧渐变遮罩提示横滑。
-- [已裁决 - 见 DESIGN.md / EXPERIENCE.md] 跨栏重组目标信息架构：收敛为「Row 1 主控与平台」+「Row 2 搜索与分页」+「Row 3 子分类横滑条」的三层紧凑架构。
-- [已裁决 - 见 DESIGN.md / EXPERIENCE.md] 触控尺寸与防误触：视觉可保持 32~36px，触控热区外扩保证 ≥40×40px，相邻高频按钮间距 ≥8px。
-- [已裁决 - 见 DESIGN.md / EXPERIENCE.md] A5 列表视图 375px 挤压：右侧按钮由 128px 矩形块改为 80px 双图标紧凑方钮，释放近 50px 给歌名与歌手。
+<!-- Open Questions 已全部裁决，结论落在 DESIGN.md / EXPERIENCE.md，此处不再保留待决列表。 -->

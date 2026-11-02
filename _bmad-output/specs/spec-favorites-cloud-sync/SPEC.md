@@ -90,16 +90,12 @@ sources: []
 
 - 假定 `window.uid` 在 `messages.html` 上下文长期可读，能扛住宿站前端迭代（用户已确认；实测：可在该上下文直接读取，且账号级稳定）。
 - 假定单用户收藏规模在数千条以内，512KB 信封足够（用户已确认；按条目平均约 150–300B 密文估算；若真超限则走 CAP-6 提示）。
-- 假定维护者已开通 COS 且桶与函数同地域（用户已确认：ap-guangzhou）。
+- 假定维护者已开通 COS 且桶与函数同地域：桶 `iirose-media-sync-1309510434`、地域 `ap-guangzhou`（见 `docs/deployment/tencent-cloud-functions.md`）；版本控制、生命周期与最小权限角色按该文档与 `backend-architecture.md` 第 7 节清单在控制台开启。
 - 假定用户使用强度不构成滥用，因而频率上限设置宽松、以提示代替硬拦截。
 - 假定腾讯云账号已过 SCF 三个月免费期，因此**按量计费而非零成本**；目标上限为「每月几元以内」，出网流量是主成本项。
 
-## Open Questions
-
-- COS 桶名与地域是什么？（版本控制与生命周期规则将按 `backend-architecture.md` 第 7 节清单在控制台或 API 开启；四大项：私有读写、版本控制、生命周期、最小权限角色）
-
-<!-- 已裁定，不再待决：
-     - SCF 免费期 → 用户确认已过，按量计费（见 Assumptions 与 backend-architecture.md 第 5 节）
-     - 「联系铭」形式 → 用户裁定为纯文本昵称（见 CAP-6）
-     - 记住同步口令 → 用户裁定不提供（见 Constraints）
--->
+<!-- 已裁定，不再待决： -->
+<!-- - SCF 免费期 → 用户确认已过，按量计费（见 Assumptions 与 backend-architecture.md 第 5 节） -->
+<!-- - 「联系铭」形式 → 用户裁定为纯文本昵称（见 CAP-6） -->
+<!-- - 记住同步口令 → 用户裁定不提供（见 Constraints） -->
+<!-- - COS 桶名与地域 → 桶 iirose-media-sync-1309510434、地域 ap-guangzhou（见 docs/deployment/tencent-cloud-functions.md） -->
