@@ -1,0 +1,23 @@
+- id: "1"
+  title: 批量点播即停与边取边发
+  description: >-
+    停止后中止该批次全部网络请求并修停止标记 1.4 秒后被清除导致循环复活的隐患；批量发送改为每 100 首边取详情边发（SPEC CAP-3、CAP-4）。
+  invoke_dev_with: >-
+    neteaseRequest 加可选外部 AbortSignal：外部中止不换节点、不提示、返回 null，与 5s 超时区分。
+    BatchHandle 暴露 signal 或等价物，停止标记对句柄永久有效，与 BatchProgress.remove 解耦。
+    单测覆盖准备中停止与发送中停止，断言停止后不再调用详情/歌词请求。
+- id: "2"
+  title: 歌单/专辑内页分段加载
+  description: >-
+    进内页只取首段 100 首详情即显示，总页数按 trackIds 计算，翻到已取范围末页预取下一段、跳页按需取段（SPEC CAP-2）。
+  invoke_dev_with: >-
+    复用 playlistSkeleton 出骨架；保持每页 10 首、页码、视图切换、内页头曲目数不变。
+    同段去重，失败页可重试，退出内页 abort 未完成的段请求（用 story 1 的 neteaseRequest signal）。
+- id: "3"
+  title: 内页勾选多选点播
+  description: >-
+    歌单/专辑内页每行与网格卡前加勾选框，点选序号跨页保留，已选时选择条取代底部条/迷你条，按点选顺序点播（SPEC CAP-1）。
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    点播包 guardedRequest；单首 runSingleAnnounce，多首 startBatch + finalODSONG + runBatchAnnounce；不走 buildSelect2。
+    只拼 tokens.ts 令牌；手机勾选框可点区 ≥44px、点勾选框不触发行点播、标题仍单行。选择条不新增浮层层级。

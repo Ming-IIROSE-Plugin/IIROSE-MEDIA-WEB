@@ -1,0 +1,64 @@
+---
+id: SPEC-favorites-system
+companions:
+  - navigation-and-ia.md
+  - storage-schema.md
+  - interaction-specs.md
+sources: []
+---
+
+> **Canonical contract.** This SPEC and the files in `companions:` are the complete, preservation-validated contract for what to build, test, and validate. Source documents listed in frontmatter are for traceability — consult them only if you need narrative rationale or prose color this contract intentionally omits.
+
+# 媒体收藏系统规格说明书 (Favorites System Spec)
+
+## Why
+
+蔷薇花园聊天室插件用户在点播音乐与视频时，缺乏个人资产管理机制。好听的歌曲（网易云、JOOX）、优质的专辑与歌单、以及有趣的 Bilibili 视频在点播或浏览后难以留存，每次想听想看都必须重新搜索。为提供跨平台个人媒体库体验，同时**严格保留插件原有的「音乐 vs 视频」纯粹媒介分离**，需要构建一套基于 IndexedDB 本地持久化、在 Row 2 工具栏提供「点亮/点暗」双态切换的收藏系统。
+
+## Capabilities
+
+- **CAP-1**
+  - **intent:** 系统基于浏览器端 IndexedDB 异步持久化存储并维护媒体收藏条目，摆脱 LocalStorage 5MB 配额限制。
+  - **success:** 收藏数据在浏览器刷新与重载后完整保留，复合主键保证数据无覆盖碰撞，读写平均延迟 < 20ms。
+
+- **CAP-2**
+  - **intent:** 用户可在网易云（单曲、专辑、歌单）、JOOX（单曲）、哔哩哔哩（视频）的卡片与列表行上，一键点击 ⭐ 图标完成添加或取消收藏。
+  - **success:** 点击星标后界面零延迟乐观切换空心/实心高亮状态并弹出提示，同一资源在任何视图中的收藏标记状态完全同步。
+
+- **CAP-3**
+  - **intent:** 用户通过 Row 2 工具栏中的 ⭐ 收藏模式按钮进行「点亮（激活收藏模式）」与「点暗（正常发现模式）」切换，Row 2 水平序列严格排列为：`[卡片/列表] [⭐收藏模式] [🔍 搜索] [xx/xx] [上一页] [下一页]`，同时保持 Row 1 原有「音乐 vs 视频」顶级大类绝对隔离。
+  - **success:** 点击 Row 2 星标按钮可自由点亮/点暗，点亮时图标高亮变为金色实心星且下方内容切换为收藏库；点暗时恢复空心星且展示在线搜索/推荐；Row 1 顶栏布局零改变。
+
+- **CAP-4**
+  - **intent:** 当收藏模式点亮时，Row 3 平台栏与 Row 4 子分类标签自动联动为收藏类型过滤器（网易云：全部/单曲/专辑/歌单；JOOX：单曲；B站：视频），Row 2 搜索框支持对当前已收藏项目进行 0 延迟本地关键词过滤。
+  - **success:** 在收藏模式下切换平台与类型标签可准确展示匹配的已收藏数据；搜索框输入关键词后无需发起网络请求即可在当前视图即时过滤；卡片与列表双模视图切换顺畅。
+
+- **CAP-5**
+  - **intent:** 用户在收藏列表中可直接触发单曲点播，或拉取歌单、专辑、多分 P 视频的原生选集交互。
+  - **success:** 在收藏项上点击播放可直接下发点播包，点击选集可唤起带序号徽章与吸底确定的有序多选弹窗，行为与原生搜索结果完全一致。
+
+## Constraints
+
+- 存储必须完全基于客户端原生 IndexedDB（数据库名 `IIROSE_MEDIA_DB`，仓库名 `favorites`），无任何外部云端账号依赖。
+- 严格遵循移动端（≤768px）触控与排版规范：Row 2 各按钮保持 44×44px 紧凑方块，分页按钮保持 48×44px 药丸形态，严禁因新增按钮挤压导致搜索栏或分页错位。
+- 图标方案完全自包含：星标图标（`\F04CE` 与 `\F04CF`）全部由 `src/app.css` 定义于 `@mdi/font`，严禁引用宿站未知样式类。
+- 封面图片必须升级 HTTPS 协议（`src.replace(/^http:\/\//, 'https://')`），并挂载 `onerror` 平滑回退至自包含图标，杜绝 Mixed Content 拦截。
+
+## Non-goals
+
+- 不支持多设备/跨浏览器的云端账户数据同步（当前纯本地存储）。
+- 不支持用户自定义创建任意层级的多层文件夹或自定义分组歌单（仅使用平台与媒体形态两级维度分类）。
+- 不支持本地音视频媒体文件二进制离线下载（仅持久化媒体元数据与直链解析标识）。
+
+## Success signal
+
+- 用户在任意搜索结果中点击网易云歌曲/专辑/歌单、JOOX 歌曲、B 站视频的 ⭐ 图标，即可将其加入收藏；在 Row 2 工具栏点击 ⭐ 按钮点亮收藏模式后，能在音乐/视频各自对应的平台及类型标签下完整浏览、快速搜索并直接点播或选集播放。
+
+## Assumptions
+
+- 假定用户所使用的运行环境（主流现代浏览器桌面端与移动端）均已原生支持标准 IndexedDB API。
+- 假定单个用户收藏数量在数千条级别以内，全量 ID 集合与内存过滤不会对移动设备造成显著内存压力。
+
+## Open Questions
+
+<!-- All critical UX, layout, and storage questions resolved. -->

@@ -1,0 +1,10 @@
+[
+  {"lens":"adversarial","location":"src/media-progress/model.ts:102; HostMediaBridge.ts:190","trigger_condition":"小数时长300.8秒的末尾定位四舍五入到301秒","guard_snippet":"统一整数目标生成、pending和发送校验的合法边界","potential_consequence":"合法末尾操作零发送并提示连接或权限失败"},
+  {"lens":"adversarial","location":"src/page/components/media-progress/MediaProgress.tsx:353","trigger_condition":"键盘或指针操作完成后辅助技术仅派发change","guard_snippet":"限定inputSource到当前手势生命周期并精确去重尾随事件","potential_consequence":"新操作静默丢弃"},
+  {"lens":"adversarial","location":"src/media-progress/ProgressSession.ts:74","trigger_condition":"相对+60操作在3秒后收到143秒定位回调但pending目标为140","guard_snippet":"相对命令考虑请求期间播放推进，绝对命令继续固定目标验证","potential_consequence":"真实时间已更新但超时报未确认"},
+  {"lens":"edge-case-hunter","location":"src/media-progress/model.ts:102","trigger_condition":"300.8秒末尾生成301秒","guard_snippet":"舍入后再次限制在合法整秒范围","potential_consequence":"发送边界拒绝"},
+  {"lens":"edge-case-hunter","location":"src/page/components/media-progress/MediaProgress.tsx:353","trigger_condition":"键盘取消后重新聚焦并仅派发change","guard_snippet":"清理完成手势的来源标记，保留迟到事件去重","potential_consequence":"合法后续输入被忽略"},
+  {"lens":"edge-case-hunter","location":"src/media-progress/SidebarMediaEntry.ts:79","trigger_condition":"反复重建侧栏","guard_snippet":"清理恢复记录中isConnected=false的旧节点","potential_consequence":"Map和Set持续强引用脱离文档的节点"},
+  {"lens":"verification-gap","location":"src/media-progress/ProgressSession.ts:131","trigger_condition":"管理滑块走新增!16通道","guard_snippet":"补有权限真实服务器目标/0秒/末尾/他端同步验收","potential_consequence":"格式单测无法证明服务端接受","gap_shape":"regression-gap"},
+  {"lens":"verification-gap","location":"src/media-progress/SidebarMediaEntry.ts:45","trigger_condition":"隐藏电台再次触发不冒泡play事件","guard_snippet":"使用audio#radioPlayer触发真实事件阶段，验证停止及dispose清理","potential_consequence":"捕获监听回归不能被现有结构适配测试发现","gap_shape":"regression-gap"}
+]

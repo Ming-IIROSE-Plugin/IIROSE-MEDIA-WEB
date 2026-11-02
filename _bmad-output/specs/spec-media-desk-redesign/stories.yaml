@@ -1,0 +1,57 @@
+- id: "1"
+  title: 新令牌、面板外壳、导航、搜索栏与范围行，同轮改写 AGENTS.md
+  description: >-
+    在 floating-panel 模块落地纸/墨/蔷薇红令牌并退役 themed* 与 accent.ts，主面板改为竖栏/底部标签栏 + 页头 + 搜索栏 + 范围行，
+    同一提交改写 AGENTS.md（SPEC CAP-1、CAP-2、CAP-3、CAP-4、CAP-13，CAP-14 的 Alt+S、/、Esc 部分）。
+  spec_checkpoint: true
+  done_checkpoint: true
+  invoke_dev_with: >-
+    AGENTS.md 改写（删 themed* 与 Row1–4 约定，写新令牌来源与新布局）必须与本 story 代码同一提交。
+    结果区暂可保留旧卡片外观，由 story 2 重写。完成后在真站 1280×720 与 400×800、浅/深色验证并停下等用户确认方向。
+- id: "2"
+  title: 结果区：曲目表、音乐网格、视频卡、专辑/歌单内页与状态
+  description: >-
+    重写结果呈现（曲目表、music-tile、video-tile 含 MV/直播、collection-row/header 含「全部播放」顺序菜单）与加载/空/失败状态
+    （SPEC CAP-5，CAP-14 Tab 顺序）。
+  invoke_dev_with: >-
+    悬停一律 hov:；无悬停宽屏点按选中、:focus-within 显示按钮。钻取沿用 switchToMultiPage。
+    「全部播放」复用 MLOD/AOD 整单批量逻辑，顺序菜单为插件自有（不走 buildSelect2）。改写 mediaCards.test.ts。
+- id: "3"
+  title: 底部条、迷你条与展开的底部条
+  description: >-
+    面板内房间正在播放：桌面 room-deck、手机 mini-deck 与 room-deck-expanded，含跳转、直播态、空闲态与模式开关（SPEC CAP-6）。
+  invoke_dev_with: >-
+    跳转复用 src/media-progress 现有逻辑与权限判定，模式状态复用 PlaybackMode；不得新增第二个自动播放控制器。直播/电台流不可跳转。
+- id: "4"
+  title: 手机操作条与逐层关闭
+  description: >-
+    手机 action-sheet 与 Esc/宿站返回键逐层关闭、浮层焦点循环与归还（SPEC CAP-7、CAP-14）。
+  invoke_dev_with: >-
+    Utils.backward 接管照 openShufflePicker 的做法；操作条挂在主面板内部、不另设 z-index 根；与展开的底部条、「全部播放」顺序菜单互斥。
+- id: "5"
+  title: 选集面板替代宿站 buildSelect2
+  description: >-
+    插件自有选集面板（点选顺序徽章、全选、正序/乱序、点播所选），接入 B 站多 P、多源剧集与网易云歌单/专辑选集（SPEC CAP-8）。
+  spec_checkpoint: true
+  invoke_dev_with: >-
+    点选顺序 = 播放顺序；全选按列表顺序。单项走 Announce.runSingleAnnounce，多项走 runBatchAnnounce。
+    移除 IIROSEUtils 中有序多选接管代码与跨弹窗 setTimeout(300)。层级 z-[90010]。
+- id: "6"
+  title: 收藏与电台模式、最近点播
+  description: >-
+    收藏与电台升为一级模式（来源筛选、类型范围、本地过滤），新增 localStorage 最近点播并在音乐首屏展示（SPEC CAP-9、CAP-10）。
+  invoke_dev_with: >-
+    历史写入点收在点播报文发出处，覆盖 @ 链接拦截；键名 imwRequestHistory；不进云同步。收藏模式取消收藏的行保留到离开或改筛选。
+- id: "7"
+  title: 设置与关于换新外观
+  description: >-
+    settings-group / settings-row / settings-switch 与 about-card，保留全部现有设置项与关于动作（SPEC CAP-11）。
+  invoke_dev_with: >-
+    取值类沿用宿站选择弹窗；开关 role="switch"，云同步启用在流程完成后才显示为开；关于页 emoji 换外链图标。
+- id: "8"
+  title: 两个浮窗换新配色与总验收
+  description: >-
+    播放进度浮窗与收藏随机选择面板改用新令牌与焦点环，结构与行为不变；全量真站验收（SPEC CAP-12、Success signal）。
+  done_checkpoint: true
+  invoke_dev_with: >-
+    只改配色，既有行为测试必须通过。总验收跑 J1–J5 × 1280×720/400×800 × 浅/深色，点播成功以聊天区 div.msgholderBox DOM 判定。

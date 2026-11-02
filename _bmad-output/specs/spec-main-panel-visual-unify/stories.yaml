@@ -1,0 +1,16 @@
+- id: "1"
+  title: 设计底座、主面板表面与顶部四行
+  description: >-
+    扩展共享视觉令牌与主题变体，主面板改为跟随宿站主题的实色表面，顶部导航、工具栏、平台行、分类行
+    改为浮窗风格，AGENTS.md 布局约定不变（SPEC CAP-1、CAP-2，visual-language.md）。
+  done_checkpoint: true
+- id: "2"
+  title: 落实柔灰视觉（E）与卡片、列表、加载空状态
+  description: >-
+    浅色主题落实用户选定的原型 E（品牌强调、柔灰底、顶部光晕、白卡片、封面裁切与时长胶囊），深色主题中性天蓝；
+    清除原型切换机制（SPEC CAP-2、CAP-3，visual-language.md）。
+- id: "3"
+  title: 设置、关于与其余页面
+  description: >-
+    设置卡与开关、关于页、B 站等其余平台页面与收藏视图统一，清除剩余品牌色整条底（SPEC CAP-4）。
+  done_checkpoint: true

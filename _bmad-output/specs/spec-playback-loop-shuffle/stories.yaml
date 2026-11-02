@@ -1,0 +1,63 @@
+- id: "1"
+  title: 侧栏开关行与点亮态
+  description: >-
+    在宿站侧栏 IIROSE-MEDIA-WEB 分组内新增一行点亮式开关（单曲循环、收藏随机），
+    含互斥单选、禁用态与原因、幂等重建与卸载清理（SPEC CAP-1，sidebar-controls.md）。
+  done_checkpoint: true
+- id: "2"
+  title: 点播归属守卫与生命周期
+  description: >-
+    以点播者字段判定本人点播，他人或未知时零动作待命；补齐换房、断线、媒体消失、
+    刷新、重复注入的停止与单实例语义（SPEC CAP-5、CAP-6，ownership-and-lifecycle.md）。
+- id: "3"
+  title: 单曲循环：静默快退与预发重播
+  description: >-
+    有媒体权限时剩余阈值内快退回 0；无权限时剩余 2 秒预发缓存的播放报文以抢在
+    宿站自动续播之前，含失败判定、迟发兜底与不抢占约束（SPEC CAP-2、CAP-3，loop-mechanics.md）。
+  done_checkpoint: true
+- id: "4"
+  title: 收藏随机与专辑歌单设置项
+  description: >-
+    按面板 focus 平台从收藏抽曲，预取、去重、失败换曲与播报档位，并新增
+    「专辑/歌单参与随机」设置项（SPEC CAP-4、CAP-7，shuffle-mechanics.md）。
+- id: "5"
+  title: 随机范围与权重数据层
+  description: >-
+    随机只在面板确认的选择范围内抽取，支持按条目/按歌曲两种权重与按单首去重，选择按账号与平台存本机，
+    并退役「专辑/歌单参与随机」设置项（SPEC CAP-4、CAP-7、CAP-9、CAP-10，shuffle-mechanics.md）。
+- id: "6"
+  title: 随机选择面板
+  description: >-
+    插件自有 Preact 面板：收藏列表、三态勾选与展开加载、搜索、权重切换、吸底摘要与确认，桌面卡片/移动抽屉（story 11 起移动端改为上半部浮动卡片）
+    与深浅主题（SPEC CAP-8，shuffle-picker-panel.md）。
+  done_checkpoint: true
+- id: "7"
+  title: 侧栏随机按钮接入选择面板
+  description: >-
+    熄灭态点随机弹面板、确认才点亮、取消不变，面板单例与重复注入接管、关闭后焦点归还侧栏按钮，
+    并让移动端系统返回关闭面板（SPEC CAP-1、CAP-8，sidebar-controls.md、shuffle-picker-panel.md）。
+  done_checkpoint: true
+- id: "8"
+  title: 面板内切换随机平台
+  description: >-
+    选择面板顶部加入网易云/B站标签，首次按插件启动默认页面、之后按上次确认的平台打开；确认时保存改动过的平台选择
+    并记下随机平台，控制器改读这份记录而不跟随主插件焦点（SPEC CAP-11，shuffle-mechanics.md、shuffle-picker-panel.md）。
+  done_checkpoint: true
+- id: "9"
+  title: 平台标签随数量自适应
+  description: >-
+    面板只显示有收藏的平台（另加已存随机平台），只剩一个时隐藏标签行；1～3 个等宽分段、4 个及以上可横向滑动的胶囊标签，
+    圆角按首尾自动处理（SPEC CAP-12，shuffle-picker-panel.md「平台标签」）。
+  done_checkpoint: true
+- id: "10"
+  title: 选择面板可拖动并记住位置
+  description: >-
+    按住面板头部拖动，位置存本机并在刷新后恢复，始终约束在视口内；复用播放进度浮窗的拖动约束与缩放换算
+    （SPEC CAP-13，shuffle-picker-panel.md「拖动与位置记忆」）。
+  done_checkpoint: true
+- id: "11"
+  title: 选择面板非模态化
+  description: >-
+    去掉遮罩与点外部取消，面板打开期间宿站可正常操作（回消息、点按钮、滚动）；不锁 Tab、Esc 仅在焦点于面板内时关闭；
+    手机首次打开不挡底部输入栏（SPEC CAP-14，shuffle-picker-panel.md）。
+  done_checkpoint: true
