@@ -252,10 +252,8 @@ export const roundedTrackCover = `${roundedXs} max-[768px]:rounded-[8px]`;
 export const roundedRequestButton = "rounded-full max-[768px]:rounded-[12px]";
 
 // ---------------------------------------------------------------- 间距
-/** 桌面页头 / 搜索栏 / 范围行 / 内容区左右边距。 */
+/** 结果区与设置页的左右边距（页头与范围行各自写死 36 / 20px）。 */
 export const deskGutter = "px-[36px] max-[768px]:px-[16px]";
-/** 手机页头与范围行的左右边距（20px）。 */
-export const deskGutterWide = "px-[36px] max-[768px]:px-[20px]";
 /** 竖栏宽度。 */
 export const deskRailWidth = "w-[84px]";
 /** 手机端所有可点目标的最小点击区。 */

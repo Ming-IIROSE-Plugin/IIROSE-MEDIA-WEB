@@ -671,10 +671,6 @@ export class BilibiliPlatform extends Platform {
 
         if (!testResult) throw new Error("获取直播流失败");
 
-        // const imageTools = new ImageTools();
-
-        // const hex = await imageTools.getAverageColorFromImageUrl(platformData.coverImg);
-
         const br = res.data.current_qn;
 
         const mediaData: MediaData = {

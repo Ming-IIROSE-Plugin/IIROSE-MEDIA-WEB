@@ -71,9 +71,3 @@ export function parseBilibiliLink(text: string): BilibiliLinkTarget | null {
     url,
   };
 }
-
-/** 提交前统一收口：去首尾空白，空串返回 null。 */
-export function normalizeKeyword(text: string): string | null {
-  const value = text.trim();
-  return value ? value : null;
-}
