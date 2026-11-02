@@ -46,8 +46,4 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
 
 - `uqr` 生成的二维码可转成 `img` 可用的 data URL，在宿站弹窗内的展示效果与现有 `QRCode.toDataURL` 一致。
 - `ipinfo.io` 的国家判定结果可按天缓存；缓存命中时跳过一次网络探测不会改变代理选择的正确性。
-
-## Open Questions
-
-- 删除 `react-scan` 注入后，是否需要一个显式的、默认关闭的本地调试开关来恢复类似能力？
-- 全局 `important: true`（`tailwind.config.js`）让每条 Tailwind 规则都带 `!important`，在减小 CSS 体积与降低覆盖冲突上是候选改动，但需要真机验证宿站样式覆盖关系；是否纳入后续轮次？
+- `tailwind.config.js` 的 `important: true` 保留：宿站全局样式可能覆盖插件样式，稳定优先于 CSS 体积；实测仅作记录。
