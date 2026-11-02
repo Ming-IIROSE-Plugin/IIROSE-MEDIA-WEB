@@ -13,6 +13,7 @@ import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { BiliBiliSettings } from "../settings/bilibiliSettings/BiliBiliSettings";
 import { Platform } from "./Platform";
+import type { AutoPlayOptions } from "./Platform";
 
 /** B 站分 P（`BiliBiliVideoApi.getBilibiliVideoData` 的 `pages` 项）。 */
 type BiliPage = {
@@ -323,14 +324,14 @@ export class BilibiliPlatform extends Platform {
    */
   /**
    * Bilibili 播放指定单 P
-   * @param cardless 自动播放（收藏随机）：只发播放报文、不发点播卡片（CAP-2）。
+   * @param options.cardless 自动播放（收藏随机）：只发播放报文、不发点播卡片（CAP-2）。
    */
   public static async playBiliPage(
     basePlatformData: PlatformData,
     pageItem: { page: number; part: string; duration: number; cid: number },
     aid?: number,
     bvid?: string,
-    cardless?: boolean,
+    options?: AutoPlayOptions,
   ) {
     const bvSetting = new BiliBiliSettings().getBilibiliVideoSettings();
     const cid = pageItem.cid;
@@ -382,7 +383,7 @@ export class BilibiliPlatform extends Platform {
         res.data.timelength ||
           (pageItem.duration ? pageItem.duration * 1000 : 0),
         actuallyQn,
-        cardless,
+        options,
       );
     } else {
       throw new Error("获取播放流失败");
@@ -396,7 +397,7 @@ export class BilibiliPlatform extends Platform {
   public static async VOD(
     platformData: PlatformData,
     targetP?: number,
-    options?: { cardless?: boolean },
+    options?: AutoPlayOptions,
   ) {
     try {
       if (!platformData.bilibili) throw new Error("没有 bilibili 数据");
@@ -436,7 +437,7 @@ export class BilibiliPlatform extends Platform {
                 qn,
                 // 课程分支排在 targetP 之前，必须自己把 cardless 传下去，
                 // 否则收藏随机抽到「B站-课程」收藏时仍会发卡（复盘 B1）
-                options?.cardless,
+                options,
               ),
             );
             return;
@@ -467,7 +468,7 @@ export class BilibiliPlatform extends Platform {
               targetPage,
               aid,
               bvid,
-              options?.cardless,
+              options,
             ),
           );
         } else {
@@ -611,7 +612,7 @@ export class BilibiliPlatform extends Platform {
     url: string,
     durationMs: number,
     qn: number,
-    cardless?: boolean,
+    options?: AutoPlayOptions,
   ) {
     const cover =
       typeof platformData.coverImg === "string"
@@ -635,7 +636,8 @@ export class BilibiliPlatform extends Platform {
     const socket = new Socket();
 
     // 自动播放（收藏随机）只发播放报文：卡片会抬高平台活跃度（CAP-2）
-    if (!cardless) Announce.sendMediaCard(socket, media.mediaCard(mediaData));
+    if (!options?.cardless)
+      Announce.sendMediaCard(socket, media.mediaCard(mediaData));
     socket.send(media.mediaEvent(mediaData));
 
     console.log(`[VOD] 播放指令已下发: ${mediaData.name}`);

@@ -21,6 +21,7 @@ import {
 import { Media } from "../iirose_func/Socket/Media";
 import { NetEaseSettings } from "../settings/neteaseSettings/NetEaseSettings";
 import { Platform } from "./Platform";
+import type { AutoPlayOptions } from "./Platform";
 import { CollectionSegments } from "./CollectionSegments";
 
 /** 歌单 / 专辑详情里的曲目（两套端点返回同一形状的 song 对象，只取用到的字段）。 */
@@ -37,9 +38,8 @@ interface CollectionTrack {
  * 点播发送选项。`cardless` 只由自动播放（收藏随机）传入：自动点播永不发卡片，
  * 卡片会抬高平台活跃度、容易被当作刷活跃度（CAP-2）；手动入口一律不传。
  */
-interface SendSongsOptions {
+interface SendSongsOptions extends AutoPlayOptions {
   singleWindow?: boolean;
-  cardless?: boolean;
 }
 
 export class NetEasePlatform extends Platform {
@@ -1019,7 +1019,7 @@ export class NetEasePlatform extends Platform {
    */
   public static MOD = (
     platformData: PlatformData,
-    options?: { cardless?: boolean },
+    options?: AutoPlayOptions,
   ) => {
     try {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");

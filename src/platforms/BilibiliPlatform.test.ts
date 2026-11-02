@@ -214,7 +214,7 @@ describe("多 P 点播开选集面板", () => {
     await BilibiliPlatform.VOD(course, 1, { cardless: true });
 
     expect(prepare).toHaveBeenCalledOnce();
-    expect(prepare.mock.calls[0][4]).toBe(true);
+    expect(prepare.mock.calls[0][4]).toEqual({ cardless: true });
     prepare.mockRestore();
   });
 

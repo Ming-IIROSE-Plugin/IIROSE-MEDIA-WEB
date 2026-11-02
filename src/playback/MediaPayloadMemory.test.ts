@@ -25,36 +25,16 @@ const card = (title: string) =>
   });
 
 describe("播放报文缓存", () => {
-  it("卡片先到也能绑定（各平台先发卡片再发报文）", () => {
+  it("只缓存播放报文；同曲再记录会覆盖成最新一条", () => {
     const memory = new MediaPayloadMemory(() => "room-a");
-    memory.record(card("甲"));
     memory.record(payload("甲"));
-    expect(memory.hit("room-a", "甲")).toEqual({
-      card: card("甲"),
-      payload: payload("甲"),
-    });
+    expect(memory.hit("room-a", "甲")).toEqual({ payload: payload("甲") });
   });
 
-  it("报文先到、卡片后到同样绑定", () => {
+  it("卡片报文不进缓存（循环重播从不发卡片）", () => {
     const memory = new MediaPayloadMemory(() => "room-a");
-    memory.record(payload("甲"));
-    expect(memory.hit("room-a", "甲")?.card).toBeNull();
     memory.record(card("甲"));
-    expect(memory.hit("room-a", "甲")).toEqual({
-      card: card("甲"),
-      payload: payload("甲"),
-    });
-  });
-
-  it("卡片标题与报文不一致时不返回卡片，避免发错曲目卡片", () => {
-    const memory = new MediaPayloadMemory(() => "room-a");
-    memory.record(payload("甲"));
-    memory.record(card("甲"));
-    memory.record(payload("乙"));
-    expect(memory.hit("room-a", "乙")).toEqual({
-      card: null,
-      payload: payload("乙"),
-    });
+    expect(memory.hit("room-a", "甲")).toBeNull();
   });
 
   it("换房间清空缓存，之后重新记录才可命中", () => {
@@ -88,15 +68,6 @@ describe("播放报文缓存", () => {
     expect(memory.hit("room-a", "任意")).toBeNull();
   });
 
-  it("卡片解析不依赖 JSON 键序", () => {
-    const memory = new MediaPayloadMemory(() => "room-a");
-    memory.record(payload("甲"));
-    memory.record(
-      JSON.stringify({ mc: "000000", i: "1", m: "m__4@0>甲>歌手" }),
-    );
-    expect(memory.hit("room-a", "甲")?.card).toContain("m__4");
-  });
-
   it("超过有效期的报文不再命中", () => {
     let clock = 1_000_000;
     const memory = new MediaPayloadMemory(
@@ -116,6 +87,13 @@ describe("播放报文缓存", () => {
     memory.clear();
     expect(memory.hit("room-a", "甲")).toBeNull();
   });
+
+  it("last 不看标题：cut 之后歌名被清空也能取到上一条", () => {
+    const memory = new MediaPayloadMemory(() => "room-a");
+    memory.record(payload("甲"));
+    expect(memory.last("room-a")?.payload).toBe(payload("甲"));
+    expect(memory.hit("room-a", "")).toBeNull();
+  });
 });
 
 function memoryStore(): Storage {
@@ -133,14 +111,13 @@ function memoryStore(): Storage {
 }
 
 describe("刷新后恢复报文缓存", () => {
-  it("新实例读到上一页留下的报文与卡片", () => {
+  it("新实例读到上一页留下的报文", () => {
     const store = memoryStore();
     const first = new MediaPayloadMemory(
       () => "room-a",
       () => 1000,
       store,
     );
-    first.record(card("甲"));
     first.record(payload("甲"));
 
     const second = new MediaPayloadMemory(
@@ -148,10 +125,26 @@ describe("刷新后恢复报文缓存", () => {
       () => 2000,
       store,
     );
-    expect(second.hit("room-a", "甲")).toEqual({
-      card: card("甲"),
-      payload: payload("甲"),
-    });
+    expect(second.hit("room-a", "甲")).toEqual({ payload: payload("甲") });
+  });
+
+  it("旧存档里的 card 字段被忽略，不影响报文命中", () => {
+    const store = memoryStore();
+    store.setItem(
+      "imwMediaPayload",
+      JSON.stringify({
+        version: 1,
+        roomKey: "room-a",
+        payload: { text: payload("甲"), title: "甲", at: 1000 },
+        card: { text: card("甲"), title: "甲" },
+      }),
+    );
+    const memory = new MediaPayloadMemory(
+      () => "room-a",
+      () => 2000,
+      store,
+    );
+    expect(memory.hit("room-a", "甲")).toEqual({ payload: payload("甲") });
   });
 
   it("换房间后存档不再命中，新房间重新记录才生效", () => {

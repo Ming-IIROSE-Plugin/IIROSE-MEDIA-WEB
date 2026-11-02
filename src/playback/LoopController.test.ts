@@ -11,7 +11,6 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-const CARD = '{"m":"m__4@0>测试曲目>歌手>x>000000>320","mc":"000000","i":"1"}';
 const PAYLOAD = `&1${JSON.stringify({
   s: "https://a/b.mp3",
   d: 200,
@@ -105,14 +104,13 @@ describe("单曲循环控制器", () => {
   it("快退未生效时降级重播：命中缓存只发报文，不发卡片", () => {
     const { mode, io, memory, push, light, advance } = setup();
     memory.record(PAYLOAD);
-    memory.record(CARD);
     light();
 
     push({ current: 198.5 });
     advance(2100);
     push({ current: 198.5 });
     expect(io.sendPayload).toHaveBeenCalledExactlyOnceWith(PAYLOAD);
-    // 循环是无人值守的重复动作：缓存里即便有卡片也不重发（CAP-1）
+    // 循环是无人值守的重复动作：永不发卡片（CAP-1）
     expect(io.sendCard).not.toHaveBeenCalled();
 
     push({ current: 1 });
@@ -136,7 +134,6 @@ describe("单曲循环控制器", () => {
   it("无静默权限时在剩余 5 秒窗口内预发重播（只发报文），5 秒内回读成功即保持点亮", () => {
     const { mode, io, memory, push, light } = setup();
     memory.record(PAYLOAD);
-    memory.record(CARD);
     push({ controlMode: "owner", ownMedia: true });
     mode.toggle("loop");
     expect(mode.mode).toBe("loop");
