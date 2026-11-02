@@ -1,0 +1,58 @@
+- id: "1"
+  title: 删除零引用死代码
+  description: >-
+    删除 src/tools/ImageTools.ts、src/Api/NeteaseAPI/NeteaseSearch/AlbumInterface.ts、
+    tokens.deskGutterWide 与 searchIntent.normalizeKeyword，落实 CAP-2。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    先逐个确认确无引用（含测试与字符串用法）再删；AlbumInterface.ts 删除前检查同目录 index 是否
+    通过其它名字间接使用其类型。删除后跑 npx tsc -p tsconfig.app.json --noEmit 与全量测试，
+    确认没有类型悬空。不要顺手删 `.d.ts`（非目标）。单次提交，提交信息用 chore: 前缀。
+
+- id: "2"
+  title: 拆分 MainAppContainer
+  description: >-
+    把 1285 行的 MainAppContainer.tsx 按模式状态机、控制器接线、视图组装拆开，对外导出保持不变。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    先读全文件与 src/page/MainAppContainer.test.ts，按现有职责切：模式快照/切换、内页与分页、
+    选集与批量点播接线、控制器字典、渲染。抽出的纯逻辑优先放同目录的纯函数文件（可单测），
+    class 内的 setState 流程不要改成 hooks。每拆一块跑一次 npm test，保证增量可回退；
+    完成后确认每个文件 ≤400 行，对外导出仍从 MainAppContainer.tsx 可得。
+
+- id: "3"
+  title: 拆分 NetEasePlatform
+  description: >-
+    把 1232 行的 NetEasePlatform.ts 按端点族拆成模块，平台类保留编排职责，对外静态方法不变。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    端点必须继续走 SendFetch.neteaseRequest（节点切换、超时、失败提示的唯一入口），不要因为
+    搬家改成直连 fetch。建议按搜索 / 歌曲详情与播放地址 / 歌单与专辑详情 / 点播发送分组；
+    批量相关的 cardless 选项与 BatchProgress 接线原样保留。拆完确认 BilibiliPlatform 与
+    page 层的调用点未改，且每个文件 ≤400 行。
+
+- id: "4"
+  title: 拆分 ShufflePicker
+  description: >-
+    把 1068 行的 ShufflePicker.tsx 拆成面板外壳、列表与虚拟分页、拖拽与定位、数据加载四块，
+    对外入口 openShufflePicker 与面板行为不变。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    拖拽/定位已有 pickerPosition.ts 与测试，新的拆分不要复制它们的逻辑；RENDER_BATCH 分批渲染
+    与轨道缓存（trackLoader）必须保持现有行为。拆分后手动核对手机抽屉与桌面卡片两种形态，
+    确认层级登记（overlayLayers 的 order 层）仍只登记一次，每个文件 ≤400 行。
+
+- id: "5"
+  title: 拆分 BiliBiliVideoAPI
+  description: >-
+    把 1050 行的 BiliBiliVideoAPI/index.ts 按端点拆成模块并保留原有静态方法导出，落实 CAP-1。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    请求继续复用现有 SendFetch 与 WBI 签名路径，不要新起一套 HTTP 封装；把 getBilibiliVideoData、
+    分 P 解析、直播与课程相关调用按用途分文件，index.ts 只做再导出。拆完确认
+    src/platforms/BilibiliPlatform.ts 的调用点零改动，npx tsc 与全量测试全绿，每个文件 ≤400 行。
