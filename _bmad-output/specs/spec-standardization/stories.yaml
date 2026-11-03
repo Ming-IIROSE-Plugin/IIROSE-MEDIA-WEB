@@ -1,53 +1,39 @@
-- id: "1"
+- id: '1'
   title: 存储访问收敛
-  description: >-
-    把生产代码里约 50 处 localStorage 直连收敛到一个入口（读/写/删 + 编解码 + 异常兜底），
-    key 与数据格式保持不变，落实 CAP-1。
+  description: 把生产代码里约 50 处 localStorage 直连收敛到一个入口（读/写/删 + 编解码 + 异常兜底）， key 与数据格式保持不变，落实
+    CAP-1。
   spec_checkpoint: false
   done_checkpoint: false
-  invoke_dev_with: >-
-    先盘点现有 key 与值形态（JSON 字符串 / 纯字符串两种都要管），再设计入口：建议一个
-    `storage` 模块，按「键常量表 + get/set/remove + 默认值合并」组织，读写失败一律吞掉并返回默认，
-    与现在各处的 try/catch 行为一致。**不要改 key 名、不要改已存数据格式**，老用户升级后必须能直接读。
-    迁移顺序按使用者分批：settings → history/playback 位置 → 收藏选择 → 账号缓存，每批跑一次全量测试。
-    不要动 `.test.ts` 里对 localStorage 的断言（它们验证的是落盘格式，正是本次要保持不变的部分）。
-
-- id: "2"
+  invoke_dev_with: 先盘点现有 key 与值形态（JSON 字符串 / 纯字符串两种都要管），再设计入口：建议一个 `storage` 模块，按「键常量表
+    + get/set/remove + 默认值合并」组织，读写失败一律吞掉并返回默认， 与现在各处的 try/catch 行为一致。**不要改 key 名、不要改已存数据格式**，老用户升级后必须能直接读。
+    迁移顺序按使用者分批：settings → history/playback 位置 → 收藏选择 → 账号缓存，每批跑一次全量测试。 不要动 `.test.ts`
+    里对 localStorage 的断言（它们验证的是落盘格式，正是本次要保持不变的部分）。
+- id: '2'
   title: 分页加载器
-  description: >-
-    用一个分页加载器替掉 7 个 Service 里重复的 mediaData Promise 包装，并把两份 splitByPage
-    合并为一处，落实 CAP-2。
+  description: 用一个分页加载器替掉 7 个 Service 里重复的 mediaData Promise 包装，并把两份 splitByPage 合并为一处，落实
+    CAP-2。
   spec_checkpoint: false
   done_checkpoint: false
-  invoke_dev_with: >-
-    先对比 7 处包装的差异（NetEase/Bilibili/Radio/Favorites/Recent/AllVideo/InnerPage）：有的是
-    一次取完整列表再切页，有的是逐页累加，有的失败返回空数组——这些差异必须保留，加载器只抽
-    「什么时候 setState、失败怎么回、总数怎么给」这部分。splitByPage 合并到共享工具后，
-    bilibili 与 netease 各留一行转发，别让两个平台互相 import 对方的目录。
-    新增测试覆盖「首屏 / 翻页 / 缓存命中 / 失败重试」四种路径。
-
-- id: "3"
-  title: 平台检索接口类型化
-  description: >-
-    为四个平台定义同一组检索接口（类型层面），四家实现它；不引入运行时分支、不改调用点，
-    落实 CAP-3。
+  invoke_dev_with: 先对比 7 处包装的差异（NetEase/Bilibili/Radio/Favorites/Recent/AllVideo/InnerPage）：有的是
+    一次取完整列表再切页，有的是逐页累加，有的失败返回空数组——这些差异必须保留，加载器只抽 「什么时候 setState、失败怎么回、总数怎么给」这部分。splitByPage
+    合并到共享工具后， bilibili 与 netease 各留一行转发，别让两个平台互相 import 对方的目录。 新增测试覆盖「首屏 / 翻页 / 缓存命中
+    / 失败重试」四种路径。
+- id: '3'
+  title: 平台检索描述表
+  description: 把 mainAppCategories 里各平台范围的 searchAction 闭包提取为一份集中描述（平台 id / 标签 / 范围
+    + 取数函数），UI 分类表由它生成，落实 CAP-3。
   spec_checkpoint: false
   done_checkpoint: false
-  invoke_dev_with: >-
-    只加类型：定义 `SearchPlatform`（名称/来源键/范围条目的取数签名）与必要的辅助类型，
-    让 Bilibili/NetEase/Radio/AllVideos 在类型上可赋值给它。方法名不要为了统一而重命名
-    现有公开方法（调用点多、收益为零）；需要统一的是签名形状，用适配器或别名满足。
-    验收方式：写一个仅在类型层面使用的用例（`const p: SearchPlatform = NetEasePlatform`）
-    让它编译通过，并确认新增一个平台时缺方法会在编译期报错。
-
-- id: "4"
+  invoke_dev_with: 先读 `src/page/mainAppCategories.ts`（316 行）与 `src/page/mainAppContainerController.ts`
+    的 runCurrentScope：每个范围现在是一个带 searchAction 闭包的对象，闭包捕获 host.getActionContext()/itemsPerPage
+    等。把「平台 → 范围 → 取数函数」抽成 `src/platforms/platformSearchSources.ts` 的数据描述，取数函数接收`(ctx,
+    pageSize)` 之类的最小参数；categories 只负责把描述映射成现有 Platform 结构（title/shortTitle/sourceKey/subNavBarItems）。行为零变化：文案、顺序、class、phoneOnly、refreshCount
+    的处理都要一致；收藏三来源与设置五范围也一并搬。不要改 createCategories 的对外签名与调用点；拆完确认 mainAppCategories
+    明显变短且不再出现各平台 API 的 import。
+- id: '4'
   title: 错误提示收敛
-  description: >-
-    把 18 处同款 catch + ShowMessage 收敛为分类上报入口，用户可见文案保持不变，落实 CAP-4。
+  description: 把 18 处同款 catch + ShowMessage 收敛为分类上报入口，用户可见文案保持不变，落实 CAP-4。
   spec_checkpoint: false
   done_checkpoint: false
-  invoke_dev_with: >-
-    先按现有文案反推分类（网络失败 / 风控与限流 / 响应解析 / 未知），分类只影响「提示什么、
-    是否去重」，不新增用户可见类别。注意网易云已有的「同因 10 秒去重」与批量端点的静默策略，
-    收敛后必须保持；风控码与 HTTP 433 的既有归类不要改。改完逐条核对用户可见字符串没有变化
-    （测试里对文案有断言的用例是准绳）。
+  invoke_dev_with: 先按现有文案反推分类（网络失败 / 风控与限流 / 响应解析 / 未知），分类只影响「提示什么、 是否去重」，不新增用户可见类别。注意网易云已有的「同因
+    10 秒去重」与批量端点的静默策略， 收敛后必须保持；风控码与 HTTP 433 的既有归类不要改。改完逐条核对用户可见字符串没有变化 （测试里对文案有断言的用例是准绳）。
