@@ -18,9 +18,12 @@ export default defineConfig({
       formats: ['umd'] // 仅输出 UMD 格式
     },
     cssCodeSplit: false, // 不拆分 CSS
-    // 宿站跑在现代浏览器 / Electron，代码本身已用可选链与 Array.at；
-    // 默认 target 会把现代语法降级出辅助代码（+7kB），这里压到 ES2020。
-    target: 'es2020',
+    // 宿站跑在现代浏览器 / Electron，代码本身已用可选链、class fields 与 Array.at；
+    // 默认 target 会把现代语法降级出辅助代码（+7kB），这里压到 ES2022；
+    // minify 用 terser 而不是默认的 esbuild：gzip 再小 ~3kB。
+    // 改这两项后必须真机跑一次（语法兼容性不由单测覆盖）。
+    target: 'es2022',
+    minify: 'terser',
     rollupOptions: {
       output: {
         globals: {
