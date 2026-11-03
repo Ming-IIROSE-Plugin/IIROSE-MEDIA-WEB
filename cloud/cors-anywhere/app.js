@@ -91,7 +91,8 @@ async function requestHandler(req, res) {
     }
     // ================= ⭐ Origin / Referer（核心修复）=================
     const host = parsedUrl.hostname;
-    if (host.includes("bilibili.com")) {
+    const isBili = host.includes("bilibili.com");
+    if (isBili) {
       forwardHeaders["Origin"] = "https://www.bilibili.com";
       forwardHeaders["Referer"] = "https://www.bilibili.com/";
     }
@@ -101,14 +102,7 @@ async function requestHandler(req, res) {
       console.log(rawBody);
     }
     // ================= request =================
-    const options = {
-      method,
-      headers: forwardHeaders,
-      // 保留证书校验：上游是 https 时必须验证链
-    };
-    const proxyReq = (
-      parsedUrl.protocol === "https:" ? https_1.default : http_1.default
-    ).request(parsedUrl, options, (proxyRes) => {
+    const handleResponse = (proxyRes) => {
       const chunks = [];
       proxyRes.on("data", (c) => chunks.push(c));
       proxyRes.on("end", () => {
@@ -128,25 +122,50 @@ async function requestHandler(req, res) {
         res.writeHead(proxyRes.statusCode || 500, responseHeaders);
         res.end(buffer);
       });
+    };
+
+    // 发一次上游请求；超时与错误都直接回给调用方。
+    const fire = (headers, onResponse) => {
+      const req = (
+        parsedUrl.protocol === "https:" ? https_1.default : http_1.default
+      ).request(parsedUrl, { method, headers }, onResponse);
+      // 上游不响应时不要挂着：网关有超时，挂住只会让调用方等满。
+      req.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
+        req.destroy(
+          new Error(`upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`),
+        );
+      });
+      req.on("error", (err) => {
+        console.log("PROXY ERROR:", err.message);
+        if (res.headersSent) return;
+        setCors(res);
+        res.writeHead(504);
+        res.end("Proxy error: " + err.message);
+      });
+      if (method === "POST") req.write(rawBody);
+      req.end();
+      return req;
+    };
+
+    fire(forwardHeaders, (proxyRes) => {
+      // B 站按 UA 分流：浏览器 UA 的请求必须带有效 buvid / cookie，否则判爬虫直接 412
+      // （实测 x/web-interface/view：curl UA 200、Chrome UA 412，补齐 Sec-Fetch-* 也没用）。
+      // 但搜索接口反过来——curl UA 会拿到 v_voucher。所以不统一改 UA，只在真的吃到
+      // 412 时用 API 客户端 UA 重放一次：未受影响（含带 cookie）的请求保持浏览器 UA，
+      // 也不会出现「登录前后 UA 跳变」的问题。
+      if (proxyRes.statusCode === 412 && isBili && method === "GET") {
+        proxyRes.resume();
+        proxyRes.on("end", () => {
+          console.log("BILIBILI 412 -> retry with curl UA");
+          const retryHeaders = { ...forwardHeaders };
+          delete retryHeaders["user-agent"];
+          retryHeaders["User-Agent"] = "curl/8.14.1";
+          fire(retryHeaders, handleResponse);
+        });
+        return;
+      }
+      handleResponse(proxyRes);
     });
-    // 上游不响应时不要挂着：网关有超时，挂住只会让调用方等满。
-    proxyReq.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
-      proxyReq.destroy(
-        new Error(`upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`),
-      );
-    });
-    proxyReq.on("error", (err) => {
-      console.log("PROXY ERROR:", err.message);
-      if (res.headersSent) return;
-      setCors(res);
-      res.writeHead(504);
-      res.end("Proxy error: " + err.message);
-    });
-    // ================= send =================
-    if (method === "POST") {
-      proxyReq.write(rawBody);
-    }
-    proxyReq.end();
   } catch (err) {
     console.log("FATAL ERROR:", err);
     if (res.headersSent) return;
