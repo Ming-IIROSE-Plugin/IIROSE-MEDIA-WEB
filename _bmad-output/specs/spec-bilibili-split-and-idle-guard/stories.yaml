@@ -1,0 +1,40 @@
+- id: "1"
+  title: 拆分 BilibiliPlatform
+  description: >-
+    把 782 行的 `src/platforms/BilibiliPlatform.ts` 按用途拆成搜索、详情与分 P、点播发送、选集几块，
+    每个文件 ≤400 行，公开静态方法签名与调用点不变。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    参考已拆的 `src/platforms/netease/`：主文件保留类与薄委托，子模块放 `src/platforms/bilibili/`。
+    请求必须继续走 `SendFetch` 与现有 WBI 签名路径，不要新起 HTTP 封装。`VOD` 的 cardless 选项、
+    `prepareAndSendMedia` 的发卡/报文顺序、`selectEpisodes` 的入口都要原样保留；测试用
+    `vi.spyOn(BilibiliPlatform, ...)` 的方法要留在类上。禁止改测试，拆完跑 tsc + 全量测试 + 构建。
+
+- id: "2"
+  title: 按需订阅媒体轮询
+  description: >-
+    让 LoopController 与 ShuffleController 跟随 PlaybackMode 的点亮状态订阅/退订媒体桥，
+    未点亮且浮窗未打开时零轮询，落实 CAP-2。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    PlaybackMode 已有 subscribe/toggle，先让控制器订阅它的 state，在 mode 从 none 变为 loop/shuffle 时
+    attach 媒体桥、变回 none 时 detach。注意 LoopController 依赖连续快照维护 recent 窗口（结束前重播判定）：
+    点亮后首个周期内可能没有历史，先在测试里覆盖「点亮→播完→预发」的时序，确认 5 秒窗口够用；
+    若确有缺口，记录实测结论并保留最小订阅（例如点亮后延迟一个周期再判定），不要改轮询间隔。
+    `src/page/index.tsx` 里给 PlaybackMode 用的常驻订阅保持不动，它不直接驱动媒体桥。
+
+- id: "3"
+  title: 产物体积守门
+  description: >-
+    新增构建后体积检查脚本并接入 CI：bundle.js 超过 450 kB 或 gzip 超过 134 kB 时失败，
+    并打印实测值，落实 CAP-3。
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    脚本放 `scripts/check-bundle-size.mjs`，只用 node:fs 与 node:zlib；gzip 用 `zlib.gzipSync(level: 9)`
+    计算字节数，与人工基线同口径。阈值从 SPEC 的 450 kB / 134 kB 取，不要另起一套数字；输出要同时给出
+    实测与阈值（便于判断余量）。接到 package.json 的 build 之后（例如 `build` 后串一个 `check:size`）
+    并在 `.github/workflows/webpack.yml` 的 Build 步骤后加一次调用。脚本本身要有测试覆盖阈值边界
+    （可用临时文件构造），不要只靠手工验证一次。
