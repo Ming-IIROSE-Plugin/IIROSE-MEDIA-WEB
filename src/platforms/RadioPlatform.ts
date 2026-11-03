@@ -4,6 +4,7 @@ import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { RadioSettings } from "../settings/radioSettings/RadioSettings";
 import { Platform } from "./Platform";
+import { splitByPage } from "./shared/splitByPage";
 
 export class RadioPlatform extends Platform {
   static radiourl = [
@@ -18,9 +19,8 @@ export class RadioPlatform extends Platform {
   ];
 
   static searchSongs = async (area: string) => {
-    const platformData: PlatformData[] = [];
-    const allPlatformData: PlatformData[] = [];
-    let count = 0;
+    let platformData: PlatformData[] = [];
+    let allPlatformData: PlatformData[] = [];
 
     if (area === "japan") {
       const data: PlatformData[] = [
@@ -46,17 +46,11 @@ export class RadioPlatform extends Platform {
         },
       ];
 
-      for (const item of data) {
-        if (count >= this.itemPerPage) {
-          allPlatformData.push(item);
-        } else {
-          allPlatformData.push(item);
-          platformData.push(item);
-        }
-        count++;
-      }
+      const split = splitByPage(data, this.itemPerPage);
+      platformData = split.platformData;
+      allPlatformData = split.allPlatformData;
     }
-    const totalPage = Math.ceil(allPlatformData.length / 10);
+    const totalPage = Math.ceil(allPlatformData.length / this.itemPerPage);
     return { platformData, totalPage, allPlatformData };
   };
 

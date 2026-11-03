@@ -156,11 +156,20 @@ export async function commitEnable(): Promise<SyncResult> {
 
     rt.pendingEnable = null;
     rt.unlocked = pending.ctx;
-    updateSyncSettings({
-      enabled: true,
-      salt: pending.ctx.salt,
-      deviceId: pending.ctx.deviceId,
-    });
+    // 本机写不进（配额 / 隐私模式）：云端密文已上传，但本机没有 salt 与 deviceId，
+    // 刷新后就再也解不开自己刚传上去的数据 —— 必须如实报失败。
+    if (
+      !updateSyncSettings({
+        enabled: true,
+        salt: pending.ctx.salt,
+        deviceId: pending.ctx.deviceId,
+      })
+    ) {
+      return {
+        ok: false,
+        message: "本机存储不可用，启用未保存，请检查浏览器存储后重试",
+      };
+    }
     // 本机密钥缓存只是「免重复输口令」的便利，写失败不影响本次会话与已落地的云端结果，
     // 不能让它把一次成功的启用报成失败。
     try {

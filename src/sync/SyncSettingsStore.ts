@@ -18,13 +18,17 @@ export function getSyncSettings(): PluginSyncSettings {
   );
 }
 
+/**
+ * 合并并落盘同步设置；返回是否真的写进本机。
+ * 调用方在「这次写入是否算成功」影响用户判断时（启用 / 关闭）必须检查返回值，
+ * 其余（lastSyncAt、lastRev 之类的记账）忽略即可。
+ */
 export function updateSyncSettings(
   patch: Partial<PluginSyncSettings>,
-): PluginSyncSettings {
+): boolean {
   const pluginSettings = PluginSettings.getPluginSetting();
   pluginSettings.sync = { ...pluginSettings.sync, ...patch };
-  writeJson("imwPluginSetting", pluginSettings);
-  return pluginSettings.sync;
+  return writeJson("imwPluginSetting", pluginSettings);
 }
 
 /** deviceId 惰性生成，生成后不再变（归一化会把非法值清空，这里补生成并落盘） */

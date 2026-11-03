@@ -119,9 +119,11 @@ export class PluginSettings {
   ) {
     const set = (_t: HTMLElement, s: string) => {
       const ps = PluginSettings.getPluginSetting();
-      if (ps) {
-        ps.defaultPage = PluginSettings.normalizeDefaultPage(s);
-        writeJson(PLUGIN_SETTINGS_KEY, ps);
+      ps.defaultPage = PluginSettings.normalizeDefaultPage(s);
+      // 写盘失败就不改标题：否则显示的是「启动页已设为 X」，重启后却回到原值。
+      if (!writeJson(PLUGIN_SETTINGS_KEY, ps)) {
+        ShowMessage.show("设置保存失败，请重试");
+        return;
       }
 
       if (changeActionTitleAction) {
@@ -165,12 +167,11 @@ export class PluginSettings {
     return `${PluginSettings.normalizeFavoritesPageSize(size)} 条`;
   }
 
-  private static saveFavoritesPageSize(size: number): number {
+  /** 写盘成功才返回新值：失败返回 null，调用方据此保持标题显示旧值并提示。 */
+  private static saveFavoritesPageSize(size: number): number | null {
     const ps = PluginSettings.getPluginSetting();
     ps.favoritesPageSize = PluginSettings.normalizeFavoritesPageSize(size);
-    // 存储不可用（写入失败）时本次会话内不生效，不打断交互
-    writeJson(PLUGIN_SETTINGS_KEY, ps);
-    return ps.favoritesPageSize;
+    return writeJson(PLUGIN_SETTINGS_KEY, ps) ? ps.favoritesPageSize : null;
   }
 
   /**
@@ -202,7 +203,9 @@ export class PluginSettings {
           );
           return;
         }
-        report(PluginSettings.saveFavoritesPageSize(value));
+        const saved = PluginSettings.saveFavoritesPageSize(value);
+        if (saved === null) ShowMessage.show("设置保存失败，请重试");
+        else report(saved);
       });
     };
 
@@ -211,7 +214,9 @@ export class PluginSettings {
         setTimeout(askCustom, 300);
         return;
       }
-      report(PluginSettings.saveFavoritesPageSize(Number(s)));
+      const saved = PluginSettings.saveFavoritesPageSize(Number(s));
+      if (saved === null) ShowMessage.show("设置保存失败，请重试");
+      else report(saved);
     };
 
     // 宿站选项第三项是图标位（缺了会渲染成 "undefined"）：这里放条数本身

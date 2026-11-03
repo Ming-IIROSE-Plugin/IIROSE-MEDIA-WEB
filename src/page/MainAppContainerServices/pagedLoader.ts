@@ -112,17 +112,29 @@ export function loadPage<R extends PagedResult>(
     requestToken: currentRequestToken,
   });
 
-  pending.then((res) => {
-    options.onFulfilled?.(res, pending);
-    if (res.allPlatformData) {
-      ctx.pushAllData(currentRequestToken, res.allPlatformData, res.totalPage);
-      return;
-    }
-    // 没有可追加的条目（失败或单页结果）：这里就是本次请求唯一的解除点，
-    // 否则 updating 会一直挂着，之后所有翻页都会被守卫拦住。
-    if (ctx.getState().requestToken === currentRequestToken)
-      ctx.setState({ updating: false });
-  });
+  pending.then(
+    (res) => {
+      options.onFulfilled?.(res, pending);
+      if (res.allPlatformData) {
+        ctx.pushAllData(
+          currentRequestToken,
+          res.allPlatformData,
+          res.totalPage,
+        );
+        return;
+      }
+      // 没有可追加的条目（失败或单页结果）：这里就是本次请求唯一的解除点，
+      // 否则 updating 会一直挂着，之后所有翻页都会被守卫拦住。
+      if (ctx.getState().requestToken === currentRequestToken)
+        ctx.setState({ updating: false });
+    },
+    () => {
+      // 取数 Promise 被拒：同样要解锁，否则一次失败就让翻页永久失效。
+      // 返回给调用方的仍是原 Promise，拒绝语义不变。
+      if (ctx.getState().requestToken === currentRequestToken)
+        ctx.setState({ updating: false });
+    },
+  );
 
   return pending;
 }

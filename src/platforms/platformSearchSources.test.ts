@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { PLATFORM_SEARCH_SOURCES } from "./platformSearchSources";
+import {
+  PLATFORM_SEARCH_SOURCES,
+  validateSearchSources,
+} from "./platformSearchSources";
+import { DESK_MODE_LIST } from "../settings/deskModeCatalog";
 
 const rangesOf = (row: number, source: number) =>
   PLATFORM_SEARCH_SOURCES[row][source].ranges.map((range) => range.title);
 
 describe("平台检索描述表", () => {
+  it("数据自检通过，且行序跟随模式目录", () => {
+    expect(validateSearchSources()).toEqual([]);
+    expect(PLATFORM_SEARCH_SOURCES).toHaveLength(DESK_MODE_LIST.length);
+    const favorites = DESK_MODE_LIST.find((mode) => mode.id === "favorites")!;
+    expect(
+      PLATFORM_SEARCH_SOURCES[favorites.index].map((s) => s.title),
+    ).toEqual(["全部", "网易云音乐", "哔哩哔哩"]);
+  });
+
   it("六种模式各一行，顺序与模式下标一致", () => {
     expect(PLATFORM_SEARCH_SOURCES).toHaveLength(6);
     expect(PLATFORM_SEARCH_SOURCES[0].map((s) => s.title)).toEqual([

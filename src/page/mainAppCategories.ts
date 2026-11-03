@@ -61,7 +61,9 @@ function searchAction(
         },
       });
   }
-  const load = range.desk;
+  const load = (range as { desk?: typeof range.desk }).desk;
+  if (typeof load !== "function")
+    throw new Error(`范围「${range.title}」没有声明取数动作`);
   return () =>
     load(host.getActionContext(), {
       changeSearchKeyword: host.changeSearchKeyword,

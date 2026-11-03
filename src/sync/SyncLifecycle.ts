@@ -209,7 +209,12 @@ export function disable(): SyncResult {
   rt.unlocked = null;
   setRemoteRev(null);
   rt.lastPullAt = 0; // 重新启用后可以立刻拉一次
-  updateSyncSettings({ enabled: false });
+  // 写不进就别报「已关闭」：刷新后同步会复活，用户以为关掉了却在后台上传。
+  if (!updateSyncSettings({ enabled: false }))
+    return {
+      ok: false,
+      message: "本机存储不可用，关闭状态未保存，请检查浏览器存储后重试",
+    };
   return { ok: true, message: "已关闭云端同步，本地收藏保持不变" };
 }
 

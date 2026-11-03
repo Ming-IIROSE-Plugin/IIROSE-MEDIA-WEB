@@ -9,6 +9,7 @@ import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { ParseMediaMetaData } from "../tools/parseMediaMetaData";
 import { Platform } from "./Platform";
+import { splitByPage } from "./shared/splitByPage";
 
 export class AllVideosPlatform extends Platform {
   public static async searchAllVideos(
@@ -17,10 +18,10 @@ export class AllVideosPlatform extends Platform {
     baseurl: string,
   ) {
     let totalPage = 0;
-    let count = 0;
 
-    const platformData: PlatformData[] = [];
-    const allPlatformData: PlatformData[] = [];
+    let platformData: PlatformData[] = [];
+    let allPlatformData: PlatformData[] = [];
+    const collected: PlatformData[] = [];
     const maotaiRes = await CMSAPI.getSearchRequestAll(keyword, page, baseurl);
     if (maotaiRes && maotaiRes.resource.length > 0) {
       for (const item of maotaiRes.resource) {
@@ -37,15 +38,11 @@ export class AllVideosPlatform extends Platform {
           playList: item.playList,
         };
 
-        if (count >= this.itemPerPage) {
-          allPlatformData.push(data);
-        } else {
-          allPlatformData.push(data);
-          platformData.push(data);
-        }
-
-        count++;
+        collected.push(data);
       }
+      const split = splitByPage(collected, this.itemPerPage);
+      platformData = split.platformData;
+      allPlatformData = split.allPlatformData;
       totalPage = Math.ceil(maotaiRes.pagecount / this.itemPerPage);
     }
 

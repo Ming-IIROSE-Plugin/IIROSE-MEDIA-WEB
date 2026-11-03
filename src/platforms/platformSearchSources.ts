@@ -10,6 +10,7 @@
 // `desk`），视图层在用户点击的那一刻才把动作上下文、每页条数、刷新计数、宿站回调喂进来。
 
 import { SendFetch } from "../Api";
+import { DESK_MODE_LIST, type DeskModeId } from "../settings/deskModeCatalog";
 import { AboutService } from "../page/MainAppContainerServices/AboutService";
 import { AllVideosService } from "../page/MainAppContainerServices/AllVideoService";
 import { BilibiliService } from "../page/MainAppContainerServices/BilibiliService";
@@ -286,19 +287,41 @@ const aboutSource: PlatformSearchSource = {
 };
 
 /**
- * 六种模式各自的来源与范围；**下标即模式下标**（`settings/deskModeCatalog`）。
- * 收藏那一行必须留在 `MODE.favorites` 的位置：它的每页条数按该行下标去问容器。
+ * 每个模式的来源与范围，按模式 id 声明（**不是**按下标）。
+ * 行序由 `settings/deskModeCatalog` 决定：目录里插一行，这里的数组会自动跟着走，
+ * 少了某个模式则编译期报错（`Record<DeskModeId, …>` 缺键）。
  */
+const SOURCES_BY_MODE: Record<DeskModeId, readonly PlatformSearchSource[]> = {
+  music: [neteaseSource],
+  video: [bilibiliSource, multiVideoSource],
+  radio: [radioSource],
+  favorites: [
+    favoriteSource("all", "全部", "全部"),
+    favoriteSource("netease", "网易云音乐", "网易云", "netease"),
+    favoriteSource("bilibili", "哔哩哔哩", "B站", "bilibili"),
+  ],
+  settings: [settingsSource],
+  about: [aboutSource],
+};
+
+/** 六种模式各自的来源与范围；下标即模式下标（来自目录，不在这里手写顺序）。 */
 export const PLATFORM_SEARCH_SOURCES: readonly (readonly PlatformSearchSource[])[] =
-  [
-    [neteaseSource],
-    [bilibiliSource, multiVideoSource],
-    [radioSource],
-    [
-      favoriteSource("all", "全部", "全部"),
-      favoriteSource("netease", "网易云音乐", "网易云", "netease"),
-      favoriteSource("bilibili", "哔哩哔哩", "B站", "bilibili"),
-    ],
-    [settingsSource],
-    [aboutSource],
-  ];
+  DESK_MODE_LIST.map((mode) => SOURCES_BY_MODE[mode.id]);
+
+/** 数据自检：返回问题列表（测试与本地排查用，生产不调用）。 */
+export function validateSearchSources(): string[] {
+  const problems: string[] = [];
+  const families = ["ctx", "page", "refresh", "desk"] as const;
+  for (const [row, sources] of PLATFORM_SEARCH_SOURCES.entries())
+    for (const source of sources)
+      for (const range of source.ranges) {
+        const used = families.filter((key) => key in range);
+        if (used.length !== 1)
+          problems.push(
+            `模式 ${row} / ${source.title} / ${range.title}：声明了 ${used.length} 族取数`,
+          );
+      }
+  if (PLATFORM_SEARCH_SOURCES.length !== DESK_MODE_LIST.length)
+    problems.push("行数与模式目录不一致");
+  return problems;
+}
