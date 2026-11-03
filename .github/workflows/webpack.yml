@@ -32,9 +32,6 @@ jobs:
       - name: Test client sync and storage logic
         run: npm test
 
-      - name: Test bundle size guard
-        run: npm run test:scripts
-
       - name: Test sync function gates (no cloud calls)
         run: node --test "cloud/sync/*.test.js"
 

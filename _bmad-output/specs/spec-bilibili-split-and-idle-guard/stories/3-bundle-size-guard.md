@@ -1,5 +1,5 @@
 ---
-status: built
+status: dropped
 route: oneshot
 review: quick
 lenses_ran:
@@ -27,3 +27,7 @@ context:
 - 接线：`npm run build` 末尾串上检查；新增 `check:size` 与 `test:scripts` 两个脚本；CI 在 `npm test` 之后加「Test bundle size guard」步骤。
 - 测试：`scripts/check-bundle-size.test.mjs`（node:test，6 条）覆盖等于上限、单项超 1 字节、两项都超、CLI 超限退出码 1 且 stderr 打印实测与阈值、CLI 达标正常退出。
 - 验证：`npm run build` 输出 `bundle 438.69kB / gzip 132.26kB（上限 450 / 134）`；`node --test scripts/check-bundle-size.test.mjs` 6 条全过；`npm test` 70 文件 / 1258 用例全绿。
+
+## Retracted
+
+2026-11-03 维护者要求「不要限制大小」：构建期校验、`check:size` / `test:scripts` 脚本与 CI 步骤已全部移除，`scripts/check-bundle-size.mjs` 与其测试删除。本 story 记为 dropped，体积只作人工参考，不再设阈值。
