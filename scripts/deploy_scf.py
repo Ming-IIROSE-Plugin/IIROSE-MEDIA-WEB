@@ -182,22 +182,26 @@ def call_api(client: Any, action: str, request: Any) -> Any:
         ) from None
 
 
-def get_function_address(client: Any, namespace: str) -> str:
+def get_function_address(
+    client: Any, namespace: str, name: str = FUNCTION_NAME
+) -> str:
     from tencentcloud.scf.v20180416 import models
 
     request = models.GetFunctionAddressRequest()
-    request.FunctionName = FUNCTION_NAME
+    request.FunctionName = name
     request.Namespace = namespace
     request.Qualifier = QUALIFIER
     response = _response(call_api(client, "GetFunctionAddress", request))
     return str(_field(response, "Url", "") or "")
 
 
-def update_function_code(client: Any, namespace: str, package: bytes) -> Any:
+def update_function_code(
+    client: Any, namespace: str, package: bytes, name: str = FUNCTION_NAME
+) -> Any:
     from tencentcloud.scf.v20180416 import models
 
     request = models.UpdateFunctionCodeRequest()
-    request.FunctionName = FUNCTION_NAME
+    request.FunctionName = name
     request.Namespace = namespace
     request.ZipFile = base64.b64encode(package).decode("ascii")
     if len(request.ZipFile) > 20 * 1024 * 1024:
@@ -211,6 +215,7 @@ def update_function_code(client: Any, namespace: str, package: bytes) -> Any:
 def wait_for_function_ready(
     client: Any,
     namespace: str,
+    name: str = FUNCTION_NAME,
     *,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     interval: float = DEFAULT_POLL_INTERVAL_SECONDS,
@@ -224,7 +229,7 @@ def wait_for_function_ready(
     started = monotonic()
     while True:
         request = models.GetFunctionRequest()
-        request.FunctionName = FUNCTION_NAME
+        request.FunctionName = name
         request.Namespace = namespace
         request.Qualifier = QUALIFIER
         request.ShowCode = "FALSE"

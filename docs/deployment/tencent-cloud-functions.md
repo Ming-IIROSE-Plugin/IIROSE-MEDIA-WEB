@@ -14,6 +14,29 @@
 
 脚本在内存中读取现有 zip，识别 `src/` 或包根目录下配对的 `app.js`、`bundle.js`，替换这两个文件：`bundle.js` 用本次构建产物，`app.js` 用仓库里的 `cloud/bundle/app.js`。SCF 控制台的 `src` 可能表示编辑器根目录；若两种布局同时存在或均不存在则停止。上传前以及部署后重新下载时，都会校验文件列表、其他文件内容及 zip 元数据；路径缺失或校验失败会使 job 失败。代码包、签名 URL 和凭据不会打印或上传为 artifact，跨 job 传递的 artifact 只有本次构建的 `dist/bundle.js`。CI 的 Python SDK 依赖单独固定在 `scripts/requirements-scf.txt`。
 
+### Cors-Anywhere 转发函数
+
+插件的外网请求经两台 `Cors-Anywhere`（`ap-guangzhou` / `ap-hongkong`，代码相同）转发。入口源码在 `cloud/cors-anywhere/app.js`，用 `scripts/deploy_function_app.py` 部署：
+
+```bash
+python3 scripts/deploy_function_app.py --name Cors-Anywhere --region ap-guangzhou --app cloud/cors-anywhere/app.js
+```
+
+该脚本只替换包内 `app.js`，其余文件（`node_modules` 等）原样保留，并在上传前与回读后校验。
+
+已修的三处：不再设置 `rejectUnauthorized: false`（上游证书必须校验）；上游 `set-cookie` 只放在 `X-Proxy-Set-Cookie` 里、不再原样透传（否则会往代理域名种 cookie）；上游请求加了 20 秒超时。
+
+#### 已知风控现象（未登录时）
+
+B 站 `x/web-interface/view`（点播取详情）在**未登录 + 浏览器 UA** 下返回 412，与代理代码无关：
+
+| 请求头的 UA | view | search | passport/nav/spi |
+|---|---|---|---|
+| `curl/8.x` 或空 | 200 | 200 | 正常 |
+| 浏览器 UA（含补齐 Sec-Fetch-* 指纹头） | **412** | 200 | 正常 |
+
+也就是说 B 站按 UA 分流：浏览器 UA 的请求要求带有效 buvid/cookie，否则判爬虫。登录态下正常（维护者确认）。若要覆盖未登录场景，可在代理里对 `bilibili.com` 改写 UA —— 但这会改变登录态链路的 UA 一致性，需要真机验证后再决定。
+
 ### 前端入口的 gzip
 
 `cloud/bundle/app.js` 是云函数的 HTTP 入口，随仓库维护：启动时把 `bundle.js` 压一次（`zlib.gzipSync`，level 9），`/bundle.js` 直接返回 gzip 内容并带 `Content-Encoding: gzip`。
