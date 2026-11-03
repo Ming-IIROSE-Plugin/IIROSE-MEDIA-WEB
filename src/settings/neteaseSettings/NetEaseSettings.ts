@@ -1,15 +1,18 @@
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
 import { NETEASE_NODES, getNeteaseNode } from "../../Api/NeteaseAPI/Nodes";
+import { readJson, writeJson } from "../../storage/localStore";
 
 export class NetEaseSettings {
   public static setNeteaseMusicQuality(
     changeActionTitleAction?: (actionTitle?: string) => void,
   ) {
     const set = (_t: HTMLElement, s: string) => {
-      const neteaseSettings = localStorage.getItem("neteaseSetting");
+      const neteaseSetting = readJson<NeteaseSetting | null>(
+        "neteaseSetting",
+        null,
+      );
 
-      if (neteaseSettings) {
-        const neteaseSetting = JSON.parse(neteaseSettings) as NeteaseSetting;
+      if (neteaseSetting) {
         neteaseSetting.quality = s as
           | "standard"
           | "higher"
@@ -19,7 +22,7 @@ export class NetEaseSettings {
           | "jyeffect"
           | "sky"
           | "jymaster";
-        localStorage.setItem("neteaseSetting", JSON.stringify(neteaseSetting));
+        writeJson("neteaseSetting", neteaseSetting);
       }
 
       if (changeActionTitleAction) {
@@ -73,12 +76,14 @@ export class NetEaseSettings {
     changeActionTitleAction?: (actionTitle?: string) => void,
   ) {
     const set = (_t: HTMLElement, s: string) => {
-      const neteaseSettings = localStorage.getItem("neteaseSetting");
+      const neteaseSetting = readJson<NeteaseSetting | null>(
+        "neteaseSetting",
+        null,
+      );
 
-      if (neteaseSettings) {
-        const neteaseSetting = JSON.parse(neteaseSettings) as NeteaseSetting;
+      if (neteaseSetting) {
         neteaseSetting.api = s as "default" | "HK" | "Dev";
-        localStorage.setItem("neteaseSetting", JSON.stringify(neteaseSetting));
+        writeJson("neteaseSetting", neteaseSetting);
       }
 
       if (changeActionTitleAction) {
@@ -115,13 +120,15 @@ export class NetEaseSettings {
     changeActionTitleAction?: (actionTitle?: string) => void,
   ) {
     const set = (_t: HTMLElement, s: string) => {
-      const neteaseSettings = localStorage.getItem("neteaseSetting");
+      const neteaseSetting = readJson<NeteaseSetting | null>(
+        "neteaseSetting",
+        null,
+      );
 
-      if (neteaseSettings) {
-        const neteaseSetting = JSON.parse(neteaseSettings) as NeteaseSetting;
+      if (neteaseSetting) {
         neteaseSetting.lyricOption = s as
           "off" | "original" | "translated" | "both";
-        localStorage.setItem("neteaseSetting", JSON.stringify(neteaseSetting));
+        writeJson("neteaseSetting", neteaseSetting);
       }
 
       if (changeActionTitleAction) {
@@ -164,9 +171,12 @@ export class NetEaseSettings {
   }
 
   public static getNeteaseMusicSetting(): NeteaseSetting {
-    const neteaseSetting = localStorage.getItem("neteaseSetting");
+    const neteaseSetting = readJson<NeteaseSetting | null>(
+      "neteaseSetting",
+      null,
+    );
     if (neteaseSetting) {
-      return JSON.parse(neteaseSetting) as NeteaseSetting;
+      return neteaseSetting;
     } else {
       return {
         quality: "lossless",

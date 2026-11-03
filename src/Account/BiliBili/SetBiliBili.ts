@@ -1,6 +1,7 @@
 import { BiliBiliLoginApi } from "../../Api/BilibiliAPI/LoginAPI";
 import { ShowImage } from "../../iirose_func/ShowImg";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { readJson, writeJson } from "../../storage/localStore";
 import { BilibiliACC } from "./BilibiliAccountInterface";
 
 import { renderQRCodeDataUrl } from "./qrCode";
@@ -11,15 +12,14 @@ export class BiliBiliAccount {
   }
 
   public async setBuvid() {
-    const bilibiliaccount = localStorage.getItem("bilibiliAccount");
-    if (bilibiliaccount) {
-      const account: BilibiliACC = JSON.parse(bilibiliaccount);
+    const account = readJson<BilibiliACC | null>("bilibiliAccount", null);
+    if (account) {
       if (account.buvid3 && account.buvid4) return;
       const buvid = await BiliBiliLoginApi.getBuvid();
       if (!buvid || !buvid.data) return;
       account.buvid3 = buvid.data.b_3;
       account.buvid4 = buvid.data.b_4;
-      localStorage.setItem("bilibiliAccount", JSON.stringify(account));
+      writeJson("bilibiliAccount", account);
     } else {
       const buvid = await BiliBiliLoginApi.getBuvid();
       if (!buvid || !buvid.data) return;
@@ -27,7 +27,7 @@ export class BiliBiliAccount {
         buvid3: buvid.data.b_3,
         buvid4: buvid.data.b_4,
       };
-      localStorage.setItem("bilibiliAccount", JSON.stringify(account));
+      writeJson("bilibiliAccount", account);
     }
   }
 
@@ -132,38 +132,32 @@ export class BiliBiliAccount {
       gourl: gourl ? gourl : "",
       refresh_token: refresh_token ? refresh_token : "",
     };
-    let lsBilibiliAccount = localStorage.getItem("bilibiliAccount");
+    const lsBilibiliAccount = readJson<BilibiliACC | null>(
+      "bilibiliAccount",
+      null,
+    );
     if (lsBilibiliAccount) {
-      const lsBilibiliAccountParsed: BilibiliACC =
-        JSON.parse(lsBilibiliAccount);
-      lsBilibiliAccountParsed.DedeUserID = bilibiliaccount.DedeUserID;
-      lsBilibiliAccountParsed.DedeUserID__ckMd5 =
-        bilibiliaccount.DedeUserID__ckMd5;
-      lsBilibiliAccountParsed.Expires = bilibiliaccount.Expires;
-      lsBilibiliAccountParsed.SESSDATA = bilibiliaccount.SESSDATA;
-      lsBilibiliAccountParsed.bili_jct = bilibiliaccount.bili_jct;
-      lsBilibiliAccountParsed.gourl = bilibiliaccount.gourl;
-      lsBilibiliAccountParsed.refresh_token = bilibiliaccount.refresh_token;
-      localStorage.setItem(
-        "bilibiliAccount",
-        JSON.stringify(lsBilibiliAccountParsed),
-      );
-    } else
-      localStorage.setItem("bilibiliAccount", JSON.stringify(bilibiliaccount));
+      lsBilibiliAccount.DedeUserID = bilibiliaccount.DedeUserID;
+      lsBilibiliAccount.DedeUserID__ckMd5 = bilibiliaccount.DedeUserID__ckMd5;
+      lsBilibiliAccount.Expires = bilibiliaccount.Expires;
+      lsBilibiliAccount.SESSDATA = bilibiliaccount.SESSDATA;
+      lsBilibiliAccount.bili_jct = bilibiliaccount.bili_jct;
+      lsBilibiliAccount.gourl = bilibiliaccount.gourl;
+      lsBilibiliAccount.refresh_token = bilibiliaccount.refresh_token;
+      writeJson("bilibiliAccount", lsBilibiliAccount);
+    } else writeJson("bilibiliAccount", bilibiliaccount);
     const navUserData = await BiliBiliLoginApi.getNavUserData(
       bilibiliaccount.SESSDATA,
     );
     if (navUserData && navUserData.data) {
-      lsBilibiliAccount = localStorage.getItem("bilibiliAccount");
-      if (lsBilibiliAccount) {
-        const lsBilibiliAccountParsed: BilibiliACC =
-          JSON.parse(lsBilibiliAccount);
+      const lsBilibiliAccountParsed = readJson<BilibiliACC | null>(
+        "bilibiliAccount",
+        null,
+      );
+      if (lsBilibiliAccountParsed) {
         lsBilibiliAccountParsed.uname = navUserData.data.uname;
         lsBilibiliAccountParsed.face = navUserData.data.face;
-        localStorage.setItem(
-          "bilibiliAccount",
-          JSON.stringify(lsBilibiliAccountParsed),
-        );
+        writeJson("bilibiliAccount", lsBilibiliAccountParsed);
       }
       ShowMessage.show(`登录成功，用户名：${navUserData.data.uname}`);
       showImage.hide();

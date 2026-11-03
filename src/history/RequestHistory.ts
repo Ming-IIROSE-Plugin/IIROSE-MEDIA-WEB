@@ -2,6 +2,8 @@
 // 读取只认这一份本地存档。同一媒体移到最前、上限 50 条、跨房间共用；
 // 不提供删除界面，也不进云同步。
 
+import { readString, writeString } from "../storage/localStore";
+
 export const REQUEST_HISTORY_KEY = "imwRequestHistory";
 
 /** 存档版本：结构变化时整体按空历史处理，不做迁移。 */
@@ -199,12 +201,10 @@ export class RequestHistory {
       version: STORAGE_VERSION,
       entries: this.current(),
     });
-    try {
-      localStorage.setItem(REQUEST_HISTORY_KEY, payload);
+    // 写入失败（存储不可用）时保留内容在内存里，dirty 不清，下次再试
+    if (writeString(REQUEST_HISTORY_KEY, payload)) {
       this.snapshot = payload;
       this.dirty = false;
-    } catch {
-      /* 存储不可用：保留内容在内存里，下次再试 */
     }
   }
 
@@ -233,11 +233,7 @@ export class RequestHistory {
   }
 
   private static readRaw(): string | null {
-    try {
-      return localStorage.getItem(REQUEST_HISTORY_KEY);
-    } catch {
-      return null;
-    }
+    return readString(REQUEST_HISTORY_KEY);
   }
 
   private static parseSaved(raw: string | null): RequestHistoryEntry[] {

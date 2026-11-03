@@ -21,6 +21,11 @@ import {
   type ShufflePickerResult,
 } from "./ShufflePicker";
 import { hostIsDark } from "../../../iirose_func/HostTheme";
+import {
+  readString,
+  removeKey,
+  writeString,
+} from "../../../storage/localStore";
 
 import {
   BACK_SLOT_KEY,
@@ -312,28 +317,23 @@ export function openShufflePicker(options: OpenShufflePickerOptions): void {
         ),
         shufflePlatformKey(),
       ];
-      const previous = keys.map((key) => {
-        try {
-          return localStorage.getItem(key);
-        } catch {
-          return null;
+      const previous = keys.map((key) => readString(key));
+      let saved = true;
+      for (const target of SHUFFLE_PLATFORMS) {
+        const selection = aligned[target];
+        if (!selection) continue;
+        // 写失败即停：剩下的键保持原样，交给下面的回滚统一收尾。
+        if (!saveShuffleSelection(target, selection)) {
+          saved = false;
+          break;
         }
-      });
-      try {
-        for (const target of SHUFFLE_PLATFORMS) {
-          const selection = aligned[target];
-          if (selection) saveShuffleSelection(target, selection);
-        }
-        saveShufflePlatform(platform);
-      } catch {
+      }
+      if (saved && !saveShufflePlatform(platform)) saved = false;
+      if (!saved) {
         keys.forEach((key, index) => {
-          try {
-            const value = previous[index];
-            if (value === null) localStorage.removeItem(key);
-            else localStorage.setItem(key, value);
-          } catch {
-            /* 回滚尽力而为 */
-          }
+          const value = previous[index];
+          if (value === null) removeKey(key);
+          else writeString(key, value);
         });
         // 本机存储写不进（配额、隐私模式）。
         fail("保存失败，请重试");

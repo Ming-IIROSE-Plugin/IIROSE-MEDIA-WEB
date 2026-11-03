@@ -7,6 +7,7 @@ import {
   PluginSettings,
   PluginSettingsInterface,
 } from "../pluginSettings/PluginSettings";
+import { readJson, writeJson } from "../../storage/localStore";
 
 export class LocalStorageUtils {
   public static Init() {
@@ -21,40 +22,38 @@ export class LocalStorageUtils {
    * @param key LocalStorage 的键名
    * @param defaultSetting 默认配置对象
    */
-  private static mergeSetting<T>(key: string, defaultSetting: T): void {
-    const lsData = localStorage.getItem(key);
-    if (!lsData) {
-      // 如果完全没有记录，直接写入默认值
-      localStorage.setItem(key, JSON.stringify(defaultSetting));
+  private static mergeSetting<T extends object>(
+    key: string,
+    defaultSetting: T,
+  ): void {
+    const currentSetting = readJson<T | null>(key, null);
+    if (!currentSetting) {
+      // 如果完全没有记录（或存档损坏），直接写入默认值
+      writeJson(key, defaultSetting);
       return;
     }
 
-    try {
-      const currentSetting = JSON.parse(lsData);
-      // 使用展开运算符进行合并：默认值在前，现有值在后（覆盖默认值）
-      // 注意：如果存在深层嵌套（如 chatBox），需要手动处理深层合并
-      const merged = { ...defaultSetting, ...currentSetting };
+    // 使用展开运算符进行合并：默认值在前，现有值在后（覆盖默认值）
+    // 注意：如果存在深层嵌套（如 chatBox），需要手动处理深层合并
+    const merged = { ...defaultSetting, ...currentSetting };
 
-      // 针对你代码中存在的深层对象特殊处理（例如 imwPluginSetting.chatBox / sync）
-      if (key === "imwPluginSetting" && currentSetting.chatBox) {
-        (merged as any).chatBox = {
-          ...(defaultSetting as any).chatBox,
-          ...currentSetting.chatBox,
-        };
-      }
-
-      if (key === "imwPluginSetting" && currentSetting.sync) {
-        (merged as any).sync = {
-          ...(defaultSetting as any).sync,
-          ...currentSetting.sync,
-        };
-      }
-
-      localStorage.setItem(key, JSON.stringify(merged));
-    } catch (e) {
-      // 解析失败则重置为默认值
-      localStorage.setItem(key, JSON.stringify(defaultSetting));
+    // 针对你代码中存在的深层对象特殊处理（例如 imwPluginSetting.chatBox / sync）
+    const stored = currentSetting as { chatBox?: unknown; sync?: unknown };
+    if (key === "imwPluginSetting" && stored.chatBox) {
+      (merged as any).chatBox = {
+        ...(defaultSetting as any).chatBox,
+        ...stored.chatBox,
+      };
     }
+
+    if (key === "imwPluginSetting" && stored.sync) {
+      (merged as any).sync = {
+        ...(defaultSetting as any).sync,
+        ...stored.sync,
+      };
+    }
+
+    writeJson(key, merged);
   }
 
   private static setBilibili() {
@@ -79,14 +78,14 @@ export class LocalStorageUtils {
 
   private static setCommonSetting() {
     // CommonSetting 逻辑较为特殊（涉及版本校验和协议同意），保持原逻辑并增强鲁棒性
-    const lsCommonSetting = localStorage.getItem("commonSetting");
+    const commonSetting = readJson<CommonSettingsInterface | null>(
+      "commonSetting",
+      null,
+    );
     const latestCommonSetting = this.getCommonSetting();
 
-    if (!lsCommonSetting) {
-      localStorage.setItem(
-        "commonSetting",
-        JSON.stringify(latestCommonSetting),
-      );
+    if (!commonSetting) {
+      writeJson("commonSetting", latestCommonSetting);
       const cs = new CommonSettings();
       cs.setAgree(
         latestCommonSetting.TOS.TOSVersion,
@@ -94,8 +93,6 @@ export class LocalStorageUtils {
       );
     } else {
       try {
-        const commonSetting: CommonSettingsInterface =
-          JSON.parse(lsCommonSetting);
         // 合并基础结构，防止缺少 Privacy 或 TOS 对象报错
         const mergedSetting = { ...latestCommonSetting, ...commonSetting };
 
@@ -124,12 +121,9 @@ export class LocalStorageUtils {
           );
         }
 
-        localStorage.setItem("commonSetting", JSON.stringify(mergedSetting));
+        writeJson("commonSetting", mergedSetting);
       } catch (e) {
-        localStorage.setItem(
-          "commonSetting",
-          JSON.stringify(latestCommonSetting),
-        );
+        writeJson("commonSetting", latestCommonSetting);
       }
     }
   }

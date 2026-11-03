@@ -1,4 +1,5 @@
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
+import { readJson, writeJson } from "../../storage/localStore";
 
 export interface CommonSettingsInterface {
   TOS: {
@@ -14,11 +15,13 @@ export interface CommonSettingsInterface {
 export class CommonSettings {
   public setAgree(tosVersion: string, privacyVersion: string) {
     const setTOS = () => {
-      const commonSetting = localStorage.getItem("commonSetting");
-      if (commonSetting) {
-        const cs: CommonSettingsInterface = JSON.parse(commonSetting);
+      const cs = readJson<CommonSettingsInterface | null>(
+        "commonSetting",
+        null,
+      );
+      if (cs) {
         cs.TOS.TOSAgree = true;
-        localStorage.setItem("commonSetting", JSON.stringify(cs));
+        writeJson("commonSetting", cs);
       } else {
         const cs = {
           TOS: {
@@ -30,7 +33,7 @@ export class CommonSettings {
             PrivacyAgree: false,
           },
         };
-        localStorage.setItem("commonSetting", JSON.stringify(cs));
+        writeJson("commonSetting", cs);
       }
 
       let content = `IIROSE-MEDIA-WEB 隐私政策\n`;
@@ -50,11 +53,13 @@ export class CommonSettings {
     };
 
     const setPrivacy = () => {
-      const commonSetting = localStorage.getItem("commonSetting");
-      if (commonSetting) {
-        const cs: CommonSettingsInterface = JSON.parse(commonSetting);
+      const cs = readJson<CommonSettingsInterface | null>(
+        "commonSetting",
+        null,
+      );
+      if (cs) {
         cs.Privacy.PrivacyAgree = true;
-        localStorage.setItem("commonSetting", JSON.stringify(cs));
+        writeJson("commonSetting", cs);
       } else {
         const cs = {
           TOS: {
@@ -66,7 +71,7 @@ export class CommonSettings {
             PrivacyAgree: true,
           },
         };
-        localStorage.setItem("commonSetting", JSON.stringify(cs));
+        writeJson("commonSetting", cs);
       }
     };
 

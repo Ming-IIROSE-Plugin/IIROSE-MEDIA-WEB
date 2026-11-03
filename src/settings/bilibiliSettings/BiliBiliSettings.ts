@@ -2,6 +2,7 @@ import { BilibiliACC } from "../../Account/BiliBili/BilibiliAccountInterface";
 import { BiliBiliAccount } from "../../Account/BiliBili/SetBiliBili";
 import { BiliBiliLoginApi } from "../../Api/BilibiliAPI/LoginAPI";
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
+import { readJson, removeKey, writeJson } from "../../storage/localStore";
 
 export interface BilibiliVideoSettings {
   qn: number;
@@ -57,11 +58,11 @@ export class BiliBiliSettings {
           cookies["SESSDATA"],
         );
 
-        // 从 localStorage 获取已有的 bilibiliAccount
-        const storedAccount = localStorage.getItem("bilibiliAccount");
-        let bilibiliaccount: BilibiliACC = storedAccount
-          ? JSON.parse(storedAccount)
-          : {};
+        // 从本机存档获取已有的 bilibiliAccount
+        let bilibiliaccount: BilibiliACC = readJson<BilibiliACC>(
+          "bilibiliAccount",
+          {},
+        );
 
         // 更新 bilibiliAccount 对象中的字段
         bilibiliaccount = {
@@ -82,12 +83,11 @@ export class BiliBiliSettings {
           face: navData?.data.face || bilibiliaccount.face || "",
         };
 
-        // 更新 localStorage 中的值
-        localStorage.setItem(
-          "bilibiliAccount",
-          JSON.stringify(bilibiliaccount),
-        );
-        if (changeActionTitleAction) {
+        // 更新本机存档中的值；没落盘就不要把标题改成“已登录”，否则下一次启动又变回未登录。
+        if (
+          writeJson("bilibiliAccount", bilibiliaccount) &&
+          changeActionTitleAction
+        ) {
           changeActionTitleAction(bilibiliaccount.uname);
         }
       };
@@ -116,7 +116,7 @@ export class BiliBiliSettings {
 
     function logOut(_t: HTMLElement, s: string) {
       if (s === "1") {
-        localStorage.removeItem("bilibiliAccount");
+        removeKey("bilibiliAccount");
         if (changeActionTitleAction) {
           changeActionTitleAction("未登录");
         }
@@ -182,15 +182,13 @@ export class BiliBiliSettings {
     const setBilibiliVideoQuality = (_t: HTMLElement, s: string) => {
       const qn = parseInt(s);
 
-      const bilibiliSetting = localStorage.getItem("bilibiliSetting");
-      if (bilibiliSetting) {
-        const parseBilibiliSetting: BilibiliVideoSettings =
-          JSON.parse(bilibiliSetting);
+      const parseBilibiliSetting = readJson<BilibiliVideoSettings | null>(
+        "bilibiliSetting",
+        null,
+      );
+      if (parseBilibiliSetting) {
         parseBilibiliSetting.qn = parseInt(s);
-        localStorage.setItem(
-          "bilibiliSetting",
-          JSON.stringify(parseBilibiliSetting),
-        );
+        writeJson("bilibiliSetting", parseBilibiliSetting);
       }
 
       const qnText = this.parseBilibiliVideoQn(qn);
@@ -257,15 +255,13 @@ export class BiliBiliSettings {
     const set = (_t: HTMLElement, s: string) => {
       const qn = parseInt(s);
 
-      const bilibiliSetting = localStorage.getItem("bilibiliSetting");
-      if (bilibiliSetting) {
-        const parseBilibiliSetting: BilibiliVideoSettings =
-          JSON.parse(bilibiliSetting);
+      const parseBilibiliSetting = readJson<BilibiliVideoSettings | null>(
+        "bilibiliSetting",
+        null,
+      );
+      if (parseBilibiliSetting) {
         parseBilibiliSetting.streamqn = parseInt(s);
-        localStorage.setItem(
-          "bilibiliSetting",
-          JSON.stringify(parseBilibiliSetting),
-        );
+        writeJson("bilibiliSetting", parseBilibiliSetting);
       }
 
       const qnText = this.parseBilibiliLiveQn(qn);
@@ -302,15 +298,13 @@ export class BiliBiliSettings {
     function set(userInput: string | null) {
       if (!userInput) return;
       const streamMinutes = parseInt(userInput as string);
-      const bilibiliSetting = localStorage.getItem("bilibiliSetting");
-      if (bilibiliSetting) {
-        const parseBilibiliSetting: BilibiliVideoSettings =
-          JSON.parse(bilibiliSetting);
+      const parseBilibiliSetting = readJson<BilibiliVideoSettings | null>(
+        "bilibiliSetting",
+        null,
+      );
+      if (parseBilibiliSetting) {
         parseBilibiliSetting.streamSeconds = streamMinutes * 60;
-        localStorage.setItem(
-          "bilibiliSetting",
-          JSON.stringify(parseBilibiliSetting),
-        );
+        writeJson("bilibiliSetting", parseBilibiliSetting);
       }
 
       if (changeActionTitleAction) {
@@ -329,15 +323,13 @@ export class BiliBiliSettings {
     const set = (_t: HTMLElement, s: string) => {
       const format = parseInt(s);
 
-      const bilibiliSetting = localStorage.getItem("bilibiliSetting");
-      if (bilibiliSetting) {
-        const parseBilibiliSetting: BilibiliVideoSettings =
-          JSON.parse(bilibiliSetting);
+      const parseBilibiliSetting = readJson<BilibiliVideoSettings | null>(
+        "bilibiliSetting",
+        null,
+      );
+      if (parseBilibiliSetting) {
         parseBilibiliSetting.videoStreamFormat = parseInt(s);
-        localStorage.setItem(
-          "bilibiliSetting",
-          JSON.stringify(parseBilibiliSetting),
-        );
+        writeJson("bilibiliSetting", parseBilibiliSetting);
       }
 
       const formatText = this.parseGetVideoFormat(format);
@@ -384,15 +376,13 @@ export class BiliBiliSettings {
     const set = (_t: HTMLElement, s: string) => {
       const api = this.normalizeBilibiliApi(s);
 
-      const bilibiliSetting = localStorage.getItem("bilibiliSetting");
-      if (bilibiliSetting) {
-        const parseBilibiliSetting: BilibiliVideoSettings =
-          JSON.parse(bilibiliSetting);
+      const parseBilibiliSetting = readJson<BilibiliVideoSettings | null>(
+        "bilibiliSetting",
+        null,
+      );
+      if (parseBilibiliSetting) {
         parseBilibiliSetting.api = api;
-        localStorage.setItem(
-          "bilibiliSetting",
-          JSON.stringify(parseBilibiliSetting),
-        );
+        writeJson("bilibiliSetting", parseBilibiliSetting);
       }
 
       const apiText = this.parseBilibiliApi(api);
@@ -425,12 +415,7 @@ export class BiliBiliSettings {
   }
 
   public getBiliBiliAccount() {
-    const bilibiliaccount = localStorage.getItem("bilibiliAccount");
-    if (bilibiliaccount) {
-      return JSON.parse(bilibiliaccount) as BilibiliACC;
-    } else {
-      return null;
-    }
+    return readJson<BilibiliACC | null>("bilibiliAccount", null);
   }
 
   /**
@@ -439,17 +424,16 @@ export class BiliBiliSettings {
    * 请求层 `Api.getBilibiliCors` 直接读原始存档，不写回它还会打到 localhost。
    */
   public getBilibiliVideoSettings(): BilibiliVideoSettings {
-    const lsBiliBiliSetting = localStorage.getItem("bilibiliSetting");
-    if (lsBiliBiliSetting) {
-      const parsed = JSON.parse(lsBiliBiliSetting) as BilibiliVideoSettings;
+    const parsed = readJson<BilibiliVideoSettings | null>(
+      "bilibiliSetting",
+      null,
+    );
+    if (parsed) {
       const api = this.normalizeBilibiliApi(parsed.api);
       if (api !== parsed.api) {
         parsed.api = api;
-        try {
-          localStorage.setItem("bilibiliSetting", JSON.stringify(parsed));
-        } catch {
-          // 存储不可用：本次会话内按归一化后的节点走，不打断交互
-        }
+        // 存储不可用时写回失败也无妨：本次会话按归一化后的节点走，不打断交互
+        writeJson("bilibiliSetting", parsed);
       }
       return parsed;
     } else {

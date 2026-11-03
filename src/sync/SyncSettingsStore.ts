@@ -1,10 +1,12 @@
 // src/sync/SyncSettingsStore.ts
 // 同步设置的读写与「云端版本号」的单一存放点。
-// 所有对 localStorage 的写入都收敛在这里，便于核对「哪些字段何时落盘」。
+// 同步相关字段的读写与「云端版本号」都收敛在这里；插件设置对象本身的其余字段由 PluginSettings 负责，
+// 两边落盘都经 storage/localStore。
 import {
   PluginSettings,
   type PluginSyncSettings,
 } from "../settings/pluginSettings/PluginSettings";
+import { writeJson } from "../storage/localStore";
 import { SyncCrypto } from "./SyncCrypto";
 
 /** 上次确认过的云端版本号（ETag）；只存内存 + 设置里各一份 */
@@ -21,7 +23,7 @@ export function updateSyncSettings(
 ): PluginSyncSettings {
   const pluginSettings = PluginSettings.getPluginSetting();
   pluginSettings.sync = { ...pluginSettings.sync, ...patch };
-  localStorage.setItem("imwPluginSetting", JSON.stringify(pluginSettings));
+  writeJson("imwPluginSetting", pluginSettings);
   return pluginSettings.sync;
 }
 

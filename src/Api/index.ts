@@ -1,6 +1,7 @@
 import { BilibiliACC } from "../Account/BiliBili/BilibiliAccountInterface";
 import { GetBiliBiliAccount } from "../Account/BiliBili/GetBiliBili";
 import { ShowMessage } from "../iirose_func/ShowMessage";
+import { readJson } from "../storage/localStore";
 import { getNeteaseNode } from "./NeteaseAPI/Nodes";
 
 export class SendFetch {
@@ -215,9 +216,8 @@ export class SendFetch {
       "User-Agent",
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
     );
-    const bilibiliAccount = localStorage.getItem("bilibiliAccount");
-    if (bilibiliAccount) {
-      const account: BilibiliACC = JSON.parse(bilibiliAccount);
+    const account = readJson<BilibiliACC | null>("bilibiliAccount", null);
+    if (account) {
       const excludedKeys = ["face", "uname"];
       const cookieString = Object.entries(account)
         .filter(
@@ -236,10 +236,8 @@ export class SendFetch {
   }
 
   protected static buildCookieString(): string | undefined {
-    const bilibiliAccount = localStorage.getItem("bilibiliAccount");
-    if (!bilibiliAccount) return undefined;
-
-    const account = JSON.parse(bilibiliAccount);
+    const account = readJson<BilibiliACC | null>("bilibiliAccount", null);
+    if (!account) return undefined;
 
     if (!account.SESSDATA) {
       return undefined;
@@ -286,18 +284,8 @@ export class SendFetch {
 
   protected static getBilibiliCors() {
     let api = "Guangzhou";
-    try {
-      const ls =
-        typeof localStorage !== "undefined"
-          ? localStorage.getItem("bilibiliSetting")
-          : null;
-      if (ls) {
-        const parsed = JSON.parse(ls);
-        if (parsed.api) api = parsed.api;
-      }
-    } catch {
-      /* ignore */
-    }
+    const setting = readJson<{ api?: string } | null>("bilibiliSetting", null);
+    if (setting?.api) api = setting.api;
 
     if (api === "Guangzhou") {
       return this.cncors;
@@ -314,21 +302,8 @@ export class SendFetch {
    * 节点 id / 文案 / 图标 / 代理常量的对应关系见 `NETEASE_NODES`，此处只做读取与回落。
    */
   protected static getNeteaseCors() {
-    let api: string | undefined;
-    try {
-      const ls =
-        typeof localStorage !== "undefined"
-          ? localStorage.getItem("neteaseSetting")
-          : null;
-      if (ls) {
-        const parsed = JSON.parse(ls);
-        if (parsed.api) api = parsed.api;
-      }
-    } catch {
-      /* ignore */
-    }
-
-    return this[getNeteaseNode(api).cors];
+    const setting = readJson<{ api?: string } | null>("neteaseSetting", null);
+    return this[getNeteaseNode(setting?.api).cors];
   }
 
   /**

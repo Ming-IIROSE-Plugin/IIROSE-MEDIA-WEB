@@ -2,6 +2,12 @@
 // 只存本机，按账号与平台分键；面板（story 6）写入，控制器每次抽取前读取。
 import type { FavoriteRecord } from "../storage/FavoritesStorageService";
 import { getCurrentOwnerUid } from "../storage/favorites/recordUtils";
+import {
+  readJson,
+  readString,
+  writeJson,
+  writeString,
+} from "../storage/localStore";
 
 export type ShufflePlatform = "netease" | "bilibili";
 
@@ -91,31 +97,23 @@ function parseItems(value: unknown): ShuffleSelectionItem[] | null {
 export function loadShuffleSelection(
   platform: ShufflePlatform,
 ): ShuffleSelection | null {
-  try {
-    const raw = localStorage.getItem(storageKey(platform));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as {
-      version?: unknown;
-      weight?: unknown;
-      items?: unknown;
-    };
-    if (!parsed || parsed.version !== VERSION) return null;
-    if (parsed.weight !== "entry" && parsed.weight !== "song") return null;
-    const items = parseItems(parsed.items);
-    return items ? { weight: parsed.weight, items } : null;
-  } catch {
-    return null;
-  }
+  const parsed = readJson<{
+    version?: unknown;
+    weight?: unknown;
+    items?: unknown;
+  } | null>(storageKey(platform), null);
+  if (!parsed || parsed.version !== VERSION) return null;
+  if (parsed.weight !== "entry" && parsed.weight !== "song") return null;
+  const items = parseItems(parsed.items);
+  return items ? { weight: parsed.weight, items } : null;
 }
 
+/** 保存本平台的选择；返回是否写入成功（供确认流程失败回滚）。 */
 export function saveShuffleSelection(
   platform: ShufflePlatform,
   selection: ShuffleSelection,
-): void {
-  localStorage.setItem(
-    storageKey(platform),
-    JSON.stringify({ version: VERSION, ...selection }),
-  );
+): boolean {
+  return writeJson(storageKey(platform), { version: VERSION, ...selection });
 }
 
 function isShufflePlatform(value: unknown): value is ShufflePlatform {
@@ -132,16 +130,13 @@ export function defaultShufflePlatform(defaultPage: unknown): ShufflePlatform {
 
 /** 本机上次确认的随机平台；没有或数据非法返回 null。 */
 export function loadShufflePlatform(): ShufflePlatform | null {
-  try {
-    const raw = localStorage.getItem(shufflePlatformKey());
-    return isShufflePlatform(raw) ? raw : null;
-  } catch {
-    return null;
-  }
+  const raw = readString(shufflePlatformKey());
+  return isShufflePlatform(raw) ? raw : null;
 }
 
-export function saveShufflePlatform(platform: ShufflePlatform): void {
-  localStorage.setItem(shufflePlatformKey(), platform);
+/** 保存随机平台；返回是否写入成功（供确认流程失败回滚）。 */
+export function saveShufflePlatform(platform: ShufflePlatform): boolean {
+  return writeString(shufflePlatformKey(), platform);
 }
 
 /** 随机平台：已存记录优先，否则按 defaultPage 规则。与主插件面板焦点无关。 */

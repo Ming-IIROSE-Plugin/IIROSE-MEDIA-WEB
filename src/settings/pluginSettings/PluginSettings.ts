@@ -2,6 +2,12 @@ import { ShowMessage } from "../../iirose_func/ShowMessage";
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
 import { Input_Behavior_Module } from "../../input-behavior-module/Input-Behavior-Module";
 import {
+  readJson,
+  readString,
+  writeJson,
+  writeString,
+} from "../../storage/localStore";
+import {
   DEFAULT_DESK_MODE,
   DESK_MODE_LIST,
   deskModeLabel,
@@ -100,11 +106,8 @@ export class PluginSettings {
 
     pluginSettings.chatBox.isProxyAtInput =
       !pluginSettings.chatBox.isProxyAtInput;
-    try {
-      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(pluginSettings));
-    } catch {
-      // 存储不可用（隐私模式 / 配额满）：内存里的设置照常生效，不打断交互
-    }
+    // 存储不可用（隐私模式 / 配额满）时写入失败也无妨：内存里的设置照常生效，不打断交互
+    writeJson(PLUGIN_SETTINGS_KEY, pluginSettings);
 
     onChange?.(pluginSettings.chatBox.isProxyAtInput);
     if (changeSearchKeyword && ShowOrHideIMC)
@@ -118,7 +121,7 @@ export class PluginSettings {
       const ps = PluginSettings.getPluginSetting();
       if (ps) {
         ps.defaultPage = PluginSettings.normalizeDefaultPage(s);
-        localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(ps));
+        writeJson(PLUGIN_SETTINGS_KEY, ps);
       }
 
       if (changeActionTitleAction) {
@@ -165,11 +168,8 @@ export class PluginSettings {
   private static saveFavoritesPageSize(size: number): number {
     const ps = PluginSettings.getPluginSetting();
     ps.favoritesPageSize = PluginSettings.normalizeFavoritesPageSize(size);
-    try {
-      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(ps));
-    } catch {
-      // 存储不可用：本次会话内不生效，不打断交互
-    }
+    // 存储不可用（写入失败）时本次会话内不生效，不打断交互
+    writeJson(PLUGIN_SETTINGS_KEY, ps);
     return ps.favoritesPageSize;
   }
 
@@ -253,11 +253,9 @@ export class PluginSettings {
 
   /** 读已有存档的设置版本标记；读不到（首次 / 存储不可用）按「未迁移」处理。 */
   private static settingsRev(): number {
-    try {
-      return Number(localStorage.getItem(SETTINGS_REV_KEY));
-    } catch {
-      return Number.NaN;
-    }
+    const raw = readString(SETTINGS_REV_KEY);
+    // 读不到（首次 / 存储不可用）按「未迁移」处理：不能落成 0，否则 SETTINGS_REV 为 0 时会跳过迁移。
+    return raw === null ? Number.NaN : Number(raw);
   }
 
   /**
@@ -273,11 +271,10 @@ export class PluginSettings {
       return PluginSettings.normalizeDefaultPage(parsed.defaultPage);
 
     parsed.defaultPage = DEFAULT_DESK_MODE;
-    try {
-      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(parsed));
-      localStorage.setItem(SETTINGS_REV_KEY, String(SETTINGS_REV));
-    } catch {
-      // 存储不可用：本次会话内照样按音乐启动，下次读取再试（迁移幂等）
+    // 存储不可用时写入失败也无妨：本次会话内照样按音乐启动，下次读取再试（迁移幂等）。
+    // 标记只在存档写成功后才落：否则会跳过迁移却没保存新的 defaultPage。
+    if (writeJson(PLUGIN_SETTINGS_KEY, parsed)) {
+      writeString(SETTINGS_REV_KEY, String(SETTINGS_REV));
     }
     return parsed.defaultPage;
   }
@@ -290,7 +287,7 @@ export class PluginSettings {
 
     pluginSettings.searchViewMode =
       pluginSettings.searchViewMode === "list" ? "card" : "list";
-    localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(pluginSettings));
+    writeJson(PLUGIN_SETTINGS_KEY, pluginSettings);
 
     return pluginSettings.searchViewMode;
   }
@@ -310,7 +307,7 @@ export class PluginSettings {
     const set = (_t: HTMLElement, s: string) => {
       const pluginSettings = PluginSettings.getPluginSetting();
       pluginSettings.announceMode = PluginSettings.normalizeAnnounceMode(s);
-      localStorage.setItem(PLUGIN_SETTINGS_KEY, JSON.stringify(pluginSettings));
+      writeJson(PLUGIN_SETTINGS_KEY, pluginSettings);
 
       if (changeActionTitleAction) {
         changeActionTitleAction(
@@ -364,9 +361,11 @@ export class PluginSettings {
   }
 
   public static getPluginSetting(): PluginSettingsInterface {
-    const pluginSettings = localStorage.getItem(PLUGIN_SETTINGS_KEY);
-    if (pluginSettings) {
-      const parsed = JSON.parse(pluginSettings) as PluginSettingsInterface;
+    const parsed = readJson<PluginSettingsInterface | null>(
+      PLUGIN_SETTINGS_KEY,
+      null,
+    );
+    if (parsed) {
       // 单点归一化：手改 localStorage 产生的非法值一律回退 "card"
       parsed.searchViewMode =
         parsed.searchViewMode === "list" ? "list" : "card";

@@ -1,4 +1,5 @@
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
+import { readJson, writeJson } from "../../storage/localStore";
 
 export interface RadioSetting {
   duration: number; // 单位秒
@@ -11,15 +12,13 @@ export class RadioSettings {
     function set(userInput: string | null) {
       if (!userInput) return;
       const streamMinutes = parseInt(userInput as string);
-      const radioSetting = localStorage.getItem("radioSettings");
-      if (radioSetting) {
-        const parseRadioSetting = JSON.parse(radioSetting) as RadioSetting;
-
+      const parseRadioSetting = readJson<RadioSetting | null>(
+        "radioSettings",
+        null,
+      );
+      if (parseRadioSetting) {
         parseRadioSetting.duration = streamMinutes * 60;
-        localStorage.setItem(
-          "radioSettings",
-          JSON.stringify(parseRadioSetting),
-        );
+        writeJson("radioSettings", parseRadioSetting);
       }
 
       if (changeActionTitleAction) {
@@ -33,12 +32,12 @@ export class RadioSettings {
   }
 
   public static getRadioSettings(): RadioSetting {
-    const radioSettings = localStorage.getItem("radioSettings");
+    const radioSettings = readJson<RadioSetting | null>("radioSettings", null);
     if (radioSettings) {
-      return JSON.parse(radioSettings) as RadioSetting;
+      return radioSettings;
     } else {
       const defaultSetting: RadioSetting = { duration: 43200 };
-      localStorage.setItem("radioSettings", JSON.stringify(defaultSetting));
+      writeJson("radioSettings", defaultSetting);
       return defaultSetting;
     }
   }

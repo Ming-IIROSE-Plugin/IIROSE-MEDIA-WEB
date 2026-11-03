@@ -2,6 +2,7 @@
 // 墓碑的物理清理。规则的核心不是「过期就删」，而是「只删已同步上云的墓碑」：
 // 从没上传过的墓碑一旦被清掉，下次并集合并就会用云端的活记录把已删条目复活。
 import type { FavoriteRecord } from "../FavoritesStorageService";
+import { tryReadString } from "../localStore";
 
 /** 墓碑保留期：满 30 天在**下一次写事务**中物理清除（仅限已同步上云的墓碑） */
 export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -11,11 +12,13 @@ export const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
  * （启用时写入 salt，关闭同步不清除）。读不出来时按「可能有副本」保守处理。
  */
 export function cloudCopyMayExist(): boolean {
+  const stored = tryReadString("imwPluginSetting");
+  // 读不出来时按「可能有副本」保守处理
+  if (!stored.ok) return true;
+  if (!stored.value) return false;
   try {
-    const raw = localStorage.getItem("imwPluginSetting");
-    if (!raw) return false;
     const sync = (
-      JSON.parse(raw) as {
+      JSON.parse(stored.value) as {
         sync?: { salt?: unknown; lastSyncAt?: unknown; enabled?: unknown };
       }
     ).sync;

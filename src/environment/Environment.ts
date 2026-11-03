@@ -1,4 +1,5 @@
 import { SendFetch } from "../Api";
+import { readJson, writeJson } from "../storage/localStore";
 // 全局声明，告诉 TypeScript window 具有 iirosemedia 属性
 
 declare global {
@@ -34,29 +35,21 @@ export class Environment {
   }
 
   private static readCachedLocation(): Location | null {
-    try {
-      const raw = localStorage.getItem(LOCATION_CACHE_KEY);
-      if (!raw) return null;
-      const cached = JSON.parse(raw) as { location?: string; at?: number };
-      if (typeof cached.at !== "number") return null;
-      if (Date.now() - cached.at > LOCATION_CACHE_TTL_MS) return null;
-      return cached.location === "CN" || cached.location === "Global"
-        ? cached.location
-        : null;
-    } catch {
-      return null;
-    }
+    const cached = readJson<{ location?: string; at?: number } | null>(
+      LOCATION_CACHE_KEY,
+      null,
+    );
+    if (!cached) return null;
+    if (typeof cached.at !== "number") return null;
+    if (Date.now() - cached.at > LOCATION_CACHE_TTL_MS) return null;
+    return cached.location === "CN" || cached.location === "Global"
+      ? cached.location
+      : null;
   }
 
   private static writeCachedLocation(location: Location) {
-    try {
-      localStorage.setItem(
-        LOCATION_CACHE_KEY,
-        JSON.stringify({ location, at: Date.now() }),
-      );
-    } catch {
-      /* 存储不可用时下次再探测 */
-    }
+    // 存储不可用时写入失败也无妨：下次再探测
+    writeJson(LOCATION_CACHE_KEY, { location, at: Date.now() });
   }
 
   private static async setCors() {

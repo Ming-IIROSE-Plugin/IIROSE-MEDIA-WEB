@@ -1,3 +1,4 @@
+import { readJson, writeJson } from "../storage/localStore";
 import type { MediaProgressPosition } from "./model";
 
 export const MEDIA_PROGRESS_POSITION_KEY = "imwMediaProgressPosition";
@@ -16,16 +17,10 @@ function isPosition(value: unknown): value is MediaProgressPosition {
   );
 }
 
-/** 按键读取 `{x,y}`；非法值或 localStorage 抛错都按无记录。 */
+/** 按键读取 `{x,y}`；非法值或 localStorage 不可用都按无记录。 */
 export function readPosition(key: string): MediaProgressPosition | undefined {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return undefined;
-    const value: unknown = JSON.parse(raw);
-    return isPosition(value) ? { x: value.x, y: value.y } : undefined;
-  } catch {
-    return undefined;
-  }
+  const value = readJson<unknown>(key, undefined);
+  return isPosition(value) ? { x: value.x, y: value.y } : undefined;
 }
 
 /** 按键保存 `{x,y}`；写入失败静默忽略。 */
@@ -34,11 +29,8 @@ export function savePosition(
   position: MediaProgressPosition | undefined,
 ): void {
   if (!position) return;
-  try {
-    localStorage.setItem(key, JSON.stringify({ x: position.x, y: position.y }));
-  } catch {
-    // localStorage 受限或配额耗尽时，位置仍由当前页面内存状态保留。
-  }
+  // 写入失败（受限或配额耗尽）时位置仍由当前页面内存状态保留。
+  writeJson(key, { x: position.x, y: position.y });
 }
 
 export function readMediaProgressPosition(): MediaProgressPosition | undefined {

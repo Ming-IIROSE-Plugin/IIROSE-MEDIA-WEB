@@ -1,12 +1,8 @@
+import { readJson } from "../../storage/localStore";
 import { BilibiliACC } from "./BilibiliAccountInterface";
 
 export class GetBiliBiliAccount {
   public getBiliBiliAccount() {
-    const bilibiliaccount = localStorage.getItem("bilibiliAccount");
-    if (bilibiliaccount) {
-      return JSON.parse(bilibiliaccount) as BilibiliACC;
-    } else {
-      return null;
-    }
+    return readJson<BilibiliACC | null>("bilibiliAccount", null);
   }
 }
