@@ -43,6 +43,21 @@ vi.mock(
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { BilibiliPlatform } from "./BilibiliPlatform";
 import openSource from "./BilibiliPlatform.ts?raw";
+import biliSearchSource from "./bilibili/search.ts?raw";
+import biliPagesSource from "./bilibili/pages.ts?raw";
+import biliPlaybackSource from "./bilibili/playback.ts?raw";
+import biliEpisodesSource from "./bilibili/episodes.ts?raw";
+import biliSharedSource from "./bilibili/shared.ts?raw";
+
+// 拆分后平台源码分散在主文件与子模块：守卫必须扫全部，否则搬走的部分不再受约束。
+const platformSources = [
+  openSource,
+  biliSearchSource,
+  biliPagesSource,
+  biliPlaybackSource,
+  biliEpisodesSource,
+  biliSharedSource,
+].join("\n");
 import type { EpisodePickEntry } from "../page/components/episode-picker/EpisodePicker";
 
 const pages = [
@@ -255,10 +270,10 @@ describe("多 P 点播开选集面板", () => {
 
 describe("宿站选择器的存量已删除", () => {
   it("平台源码里没有 buildSelect2 / 跨弹窗 setTimeout(300)", () => {
-    expect(openSource).not.toMatch(/buildSelect2/);
-    expect(openSource).not.toMatch(/buildBiliSelect/);
-    expect(openSource).not.toMatch(/buildOrderConfirmSelect/);
-    expect(openSource).not.toMatch(/setTimeout\([^)]*,\s*300\s*\)/);
-    expect(openSource).not.toMatch(/IIROSEUtils/);
+    expect(platformSources).not.toMatch(/buildSelect2/);
+    expect(platformSources).not.toMatch(/buildBiliSelect/);
+    expect(platformSources).not.toMatch(/buildOrderConfirmSelect/);
+    expect(platformSources).not.toMatch(/setTimeout\([^)]*,\s*300\s*\)/);
+    expect(platformSources).not.toMatch(/IIROSEUtils/);
   });
 });
