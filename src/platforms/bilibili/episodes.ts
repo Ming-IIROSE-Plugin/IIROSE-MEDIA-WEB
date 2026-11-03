@@ -5,6 +5,7 @@ import {
   type EpisodePickEntry,
 } from "../../page/components/episode-picker/openEpisodePicker";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { reportFailure } from "../../tools/reportFailure";
 import { Announce } from "../../iirose_func/Socket/Announce";
 import { BiliBiliSettings } from "../../settings/bilibiliSettings/BiliBiliSettings";
 import type { AutoPlayOptions } from "../Platform";
@@ -159,7 +160,7 @@ export const vod = async (
     }
   } catch (error) {
     console.error("[VOD Error]:", error);
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
   }
 };
 

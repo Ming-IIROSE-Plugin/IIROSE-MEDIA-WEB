@@ -7,6 +7,7 @@ import {
 import { guardedRequest } from "../playback/RequestGuard";
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { ShowMessage } from "../iirose_func/ShowMessage";
+import { reportFailure } from "../tools/reportFailure";
 import {
   Announce,
   type BatchSendOutcome,
@@ -309,7 +310,7 @@ export class NetEasePlatform extends Platform {
       if (!platformData.neteaseMusic) throw new Error("没有网易云音乐数据");
       NetEasePlatform.buildSelect(action);
     } catch (error) {
-      ShowMessage.show((error as Error).message);
+      reportFailure(error);
     }
   };
 
@@ -334,7 +335,7 @@ export class NetEasePlatform extends Platform {
         cardless: options?.cardless,
       }).catch((e) => Announce.showBatchItemError(e));
     } catch (error) {
-      ShowMessage.show((error as Error).message);
+      reportFailure(error);
     }
   };
 

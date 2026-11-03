@@ -1,7 +1,7 @@
 import { SendFetch } from "../../Api";
 import { BiliBiliLiveApi } from "../../Api/BilibiliAPI/BiliBiliLive";
 import { BiliBiliVideoApi } from "../../Api/BilibiliAPI/BiliBiliVideoAPI";
-import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { reportFailure } from "../../tools/reportFailure";
 import { Socket } from "../../iirose_func/Socket";
 import { Announce } from "../../iirose_func/Socket/Announce";
 import { Media } from "../../iirose_func/Socket/Media";
@@ -262,6 +262,6 @@ export const streamLive = async (
       });
     }
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
   }
 };

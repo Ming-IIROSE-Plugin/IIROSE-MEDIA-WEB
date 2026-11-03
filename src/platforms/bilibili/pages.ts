@@ -1,6 +1,6 @@
 import { BiliBiliCourseApi } from "../../Api/BilibiliAPI/bilibili-course/BiliBiliCourseApi";
 import { BiliBiliVideoApi } from "../../Api/BilibiliAPI/BiliBiliVideoAPI";
-import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { reportFailure } from "../../tools/reportFailure";
 
 export const multiPageBasics = async (
   pd: PlatformData,
@@ -102,7 +102,7 @@ export const multiPageBasics = async (
       };
     } else throw new Error("获取视频信息失败");
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     return { platformData: [], allPlatformData: [], totalPage: 0 };
   }
 };
@@ -121,7 +121,7 @@ export const videoDetail = async (videoId: string) => {
       return res.data;
     } else throw new Error("获取视频信息失败");
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     return null;
   }
 };

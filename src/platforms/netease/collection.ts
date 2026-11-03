@@ -1,5 +1,6 @@
 import { NeteaseMusicAPI } from "../../Api/NeteaseAPI/NeteaseMusic";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { reportFailure } from "../../tools/reportFailure";
 import { CollectionSegments } from "../CollectionSegments";
 import {
   DETAIL_CHUNK,
@@ -92,7 +93,7 @@ export const getSongListMultiPageData = async (
     const ids = songListDetail.playlist.trackIds.map((item) => item.id);
     return collectionSegments(ids);
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
     return null;
   }
@@ -111,7 +112,7 @@ export const getAlbumMultiPageData = async (
     const ids = albumDetails.songs.map((item) => item.id);
     return collectionSegments(ids);
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
     return null;
   }

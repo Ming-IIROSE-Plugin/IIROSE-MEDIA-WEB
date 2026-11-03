@@ -1,4 +1,4 @@
-import { ShowMessage } from "../iirose_func/ShowMessage";
+import { reportFailure } from "../tools/reportFailure";
 import { Socket } from "../iirose_func/Socket";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
@@ -65,7 +65,7 @@ export class RadioPlatform extends Platform {
     try {
       await Announce.runSingleAnnounce(() => this.finalODSONG([platformData]));
     } catch (error) {
-      ShowMessage.show((error as Error).message);
+      reportFailure(error);
     }
   };
 

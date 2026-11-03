@@ -1,6 +1,6 @@
 import { BiliBiliSearchApi } from "../../Api/BilibiliAPI/BiliBiliSearch";
 import { BiliBiliVideoApi } from "../../Api/BilibiliAPI/BiliBiliVideoAPI";
-import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { reportFailure } from "../../tools/reportFailure";
 import {
   removeEmTagsUsingDOMParser,
   splitByPage,
@@ -47,7 +47,7 @@ export const recommendVideos = async (
     const totalPage = 1;
     return { platformData, totalPage };
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     return { platformData: [], totalPage: 0 };
   }
 };
@@ -116,7 +116,7 @@ export const searchVideosBasics = async (
     );
     return { platformData, totalPage, allPlatformData };
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     return { platformData: [], totalPage: 0 };
   }
 };
@@ -158,7 +158,7 @@ export const searchLiveBasics = async (
 
     return { platformData, totalPage: totalPage };
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     return { platformData: [], totalPage: 0 };
   }
 };

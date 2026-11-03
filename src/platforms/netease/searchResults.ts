@@ -1,4 +1,5 @@
 import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { reportFailure } from "../../tools/reportFailure";
 import { splitByPage } from "../shared/splitByPage";
 import { getNeteasePlatformDataByIds, searchNetease } from "./search";
 
@@ -32,7 +33,7 @@ export const searchMusicsBasics = async (
 
     return { platformData, totalPage, allPlatformData };
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
     return { platformData: [], totalPage: 0, allPlatformData: [] };
   }
@@ -73,7 +74,7 @@ export const searchMusicListBasics = async (
 
     return { platformData, totalPage, allPlatformData };
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
     return { platformData: [], totalPage: 0, allPlatformData: [] };
   }
@@ -109,7 +110,7 @@ export const searchAlbumBasics = async (
 
     return { platformData, totalPage, allPlatformData };
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
     return { platformData: [], totalPage: 0, allPlatformData: [] };
   }
@@ -146,7 +147,7 @@ export const searchMvBasics = async (
 
     return { platformData, totalPage, allPlatformData };
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
     ShowMessage.show("遇到了一些问题，你可以在设置中切换API以解决");
     return { platformData: [], totalPage: 0, allPlatformData: [] };
   }

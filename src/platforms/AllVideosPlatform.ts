@@ -3,7 +3,7 @@ import {
   openEpisodePicker,
   type EpisodePickEntry,
 } from "../page/components/episode-picker/openEpisodePicker";
-import { ShowMessage } from "../iirose_func/ShowMessage";
+import { reportFailure } from "../tools/reportFailure";
 import { Socket } from "../iirose_func/Socket";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
@@ -87,7 +87,7 @@ export class AllVideosPlatform extends Platform {
       });
     } catch (error) {
       console.error("[Video VOD Action Error]:", error);
-      ShowMessage.show((error as Error).message);
+      reportFailure(error);
     }
   }
 

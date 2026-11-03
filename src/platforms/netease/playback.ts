@@ -1,6 +1,7 @@
 import { NeteaseMusicAPI } from "../../Api/NeteaseAPI/NeteaseMusic";
 import type { BatchHandle } from "../../playback/BatchProgress";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { reportFailure } from "../../tools/reportFailure";
 import { Socket } from "../../iirose_func/Socket";
 import {
   Announce,
@@ -182,6 +183,6 @@ export const sendMv = async (platformData: PlatformData, baseHex: string) => {
       socket.send(mediaEvent);
     });
   } catch (error) {
-    ShowMessage.show((error as Error).message);
+    reportFailure(error);
   }
 };
