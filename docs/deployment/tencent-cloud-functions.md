@@ -24,6 +24,18 @@ python3 scripts/deploy_function_app.py --name Cors-Anywhere --region ap-guangzho
 
 该脚本只替换包内 `app.js`，其余文件（`node_modules` 等）原样保留，并在上传前与回读后校验。
 
+#### 代码包只保留实际用到的文件
+
+历史包里有 8.2 MB 的 `node_modules`（express / jade / morgan / cookie-parser），而 `app.js` 只用 `node:http` / `node:https` / `node:url`，一个都不需要。现在用整包重建替换：
+
+```bash
+python3 scripts/deploy_function_package.py --name Cors-Anywhere --region ap-guangzhou --dir cloud/cors-anywhere
+```
+
+`cloud/cors-anywhere/` 只有 `app.js` + `scf_bootstrap`（可执行位保留）+ 最小 `package.json`，包从 1.9 MB 降到 **3.3 KB**。打包时时间戳固定，同样的源码打出同样的字节（`verify_package` 会逐文件比对回读结果）。
+
+实测冷启动首次请求 0.29 s（原 1.9 MB 包为 0.34–0.78 s），热态 0.16–0.27 s。
+
 已修的三处：不再设置 `rejectUnauthorized: false`（上游证书必须校验）；上游 `set-cookie` 只放在 `X-Proxy-Set-Cookie` 里、不再原样透传（否则会往代理域名种 cookie）；上游请求加了 20 秒超时。
 
 #### 已知风控现象（未登录时）
