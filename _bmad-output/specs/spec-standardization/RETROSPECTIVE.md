@@ -63,30 +63,32 @@ headless: false
 
 ## Action Items
 
-| #   | 项                                                                   | 证据     | 建议    |
-| --- | -------------------------------------------------------------------- | -------- | ------- |
-| A1  | 设置写盘失败不返回新值（`saveFavoritesPageSize` / `setDefaultPage`） | F2       | fix now |
-| A2  | 同步启用/关闭串接写盘结果，失败如实返回                              | F3       | fix now |
-| A3  | `loadPage` 补 rejection 分支解除 `updating`                          | F5       | fix now |
-| A4  | SPEC 的 CAP-4 success 收窄为「单一上报入口」，分类记为未实现         | F1       | fix now |
-| A5  | `RadioPlatform` / `AllVideosPlatform` 接入 `splitByPage` 与页大小    | F10      | fix now |
-| A6  | 描述表行序由 `deskModeCatalog` 派生，消除第二份真相                  | F8       | 提案    |
-| A7  | 描述表配置错误改为启动时校验（而非构造期抛错/点击才炸）              | F11      | 提案    |
-| A8  | `runSearch` 递增票号，堵住在途结果回灌                               | F12      | 提案    |
-| A9  | 给失败文案补端到端断言（含 `undefined` 抛出物的现状）                | 验证缺口 | 提案    |
-| A10 | 修正 story 4 的「20 处」与 story 1 关于弹窗的结论                    | F14/F13  | fix now |
+> 2026-11-03 复盘后经维护者批准全修（A1–A10），代码见 `9c92f93`。
+
+| # | 项 | 证据 | 状态 |
+|---|---|---|---|
+| A1 | 设置写盘失败不返回新值（`saveFavoritesPageSize` / `setDefaultPage`） | F2 | 已修 |
+| A2 | 同步启用/关闭串接写盘结果，失败如实返回 | F3 | 已修 |
+| A3 | `loadPage` 补 rejection 分支解除 `updating` | F5 | 已修 |
+| A4 | SPEC 的 CAP-4 收窄为「单一上报入口」，分类写入 Non-goals | F1 | 已修 |
+| A5 | `RadioPlatform` / `AllVideosPlatform` 接入 `splitByPage` 与页大小 | F10 | 已修 |
+| A6 | 描述表行序由 `deskModeCatalog` 派生（`Record<DeskModeId, …>`） | F8 | 已修 |
+| A7 | 描述表加 `validateSearchSources()` 自检，漏族给明确错误 | F11 | 已修 |
+| A8 | `runSearch` 递增票号，堵住在途结果回灌 | F12 | 已修 |
+| A9 | 给失败文案补端到端断言 | 验证缺口 | 已修（Error 与非 Error 各一条） |
+| A10 | 修正 story 4 的「20 处」与 story 1 关于弹窗的结论 | F14/F13 | 已修 |
 
 ---
 
 ## Acceptance Verdict
 
-**accepted-with-open-items**
+**accepted**
 
-- CAP-1（存储收敛）：达成——生产代码 `localStorage` 直连归零，key 与格式零漂移；但引入两处「写失败仍报成功」（F2/F3）。
-- CAP-2（分页单一实现）：**部分达成**——7 个 Service 有 6 个接入，两份 `splitByPage` 合并；但 `RadioPlatform` / `AllVideosPlatform` 仍有各自的切分循环（F10）。
-- CAP-3（描述表）：达成（方案已按 memlog 调整并写进 SPEC）；遗留行序第二真相（F8）与配置错误模式（F11）。
-- CAP-4（提示收敛）：**部分达成**——单一入口已落地，分类未做且 SPEC 未同步（F1）。
-- 两处高优先级回归（F2/F3）由本次引入，修复前不应视为完全干净。
+- CAP-1（存储收敛）：达成——生产代码 `localStorage` 直连归零，key 与格式零漂移；两处「写失败仍报成功」（F2/F3）已修。
+- CAP-2（分页单一实现）：达成——7 个 Service 有 6 个接入（`InnerPageService` 语义不同，已记入非目标），`splitByPage` 全仓一处，`RadioPlatform` / `AllVideosPlatform` 已接入。
+- CAP-3（描述表）：达成（方案已按 memlog 调整并写进 SPEC）；行序第二真相（F8）与配置错误模式（F11）已修。
+- CAP-4（提示收敛）：达成——单一入口落地，CAP 已按实际交付收窄，失败分类写入 Non-goals（F1）。
+- 两处高优先级回归（F2/F3）由本次引入，已在复盘后修复（`9c92f93`）；A1–A10 全部落地，测试 76 文件 / 1292 用例全绿，产物 436.45 kB / gzip 132.66 kB。
 
 ## Assumptions
 
