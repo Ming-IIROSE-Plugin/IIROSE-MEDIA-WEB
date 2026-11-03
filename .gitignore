@@ -34,3 +34,6 @@ _bmad/render/
 
 # 体积分析产物（rollup-plugin-visualizer，已不再依赖）
 /stats.html
+
+# Python 部署脚本的字节码缓存
+__pycache__/

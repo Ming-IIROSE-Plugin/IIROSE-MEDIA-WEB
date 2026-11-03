@@ -23,6 +23,8 @@ DEFAULT_NAMESPACE = "default"
 QUALIFIER = "$LATEST"
 TARGET_BUNDLE = "src/bundle.js"
 REQUIRED_ENTRY = "src/app.js"
+# 云函数的前端入口：随仓库维护（gzip 响应），部署时与 bundle 一起替换。
+APP_SOURCE = Path(__file__).resolve().parent.parent / "cloud" / "bundle" / "app.js"
 DEFAULT_TIMEOUT_SECONDS = 600
 DEFAULT_POLL_INTERVAL_SECONDS = 5
 
@@ -60,28 +62,37 @@ def _read_zip(data: bytes) -> zipfile.ZipFile:
         raise DeploymentError("腾讯云函数现有代码包不是有效的 zip 文件") from exc
 
 
-def replace_bundle(package: bytes, bundle: bytes) -> bytes:
-    """Replace exactly ``src/bundle.js`` while retaining all other entries."""
+def replace_bundle(
+    package: bytes, bundle: bytes, app: bytes | None = None
+) -> bytes:
+    """Replace ``bundle.js``（以及可选的 ``app.js``）while retaining all other entries."""
 
     with _read_zip(package) as source:
         names = source.namelist()
         if len(set(names)) != len(names):
             raise DeploymentError("现有代码包含重复路径，无法安全替换")
         target = bundle_entry(names)
+        app_target = target[: -len("bundle.js")] + "app.js"
         if not bundle:
             raise DeploymentError("构建后的 bundle 为空")
+        if app is not None and not app:
+            raise DeploymentError("app.js 为空，拒绝用空文件覆盖线上入口")
+
+        replacements = {target: bundle}
+        if app is not None:
+            replacements[app_target] = app
 
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w") as destination:
             destination.comment = source.comment
             for info in source.infolist():
-                content = bundle if info.filename == target else source.read(info)
+                content = replacements.get(info.filename, source.read(info))
                 destination.writestr(
                     copy.copy(info), content, compress_type=info.compress_type
                 )
         updated = output.getvalue()
     # 上传前也验证；不能保留元数据的特殊 zip 必须在修改云函数前失败。
-    verify_package_update(package, updated, bundle)
+    verify_package_update(package, updated, bundle, app)
     return updated
 
 
@@ -103,6 +114,7 @@ def verify_package_update(
     original: bytes,
     updated: bytes,
     expected_bundle: bytes,
+    expected_app: bytes | None = None,
 ) -> None:
     """Verify the replacement and preservation invariants after re-downloading."""
 
@@ -118,9 +130,16 @@ def verify_package_update(
                 raise DeploymentError("更新后代码包的文件顺序发生了非预期变化")
             if _zip_metadata(before_info) != _zip_metadata(after_info):
                 raise DeploymentError("更新后文件元数据发生变化")
+            expected = None
             if before_info.filename == target:
-                if after.read(after_info) != expected_bundle:
-                    raise DeploymentError(f"更新后 {target} 内容校验失败")
+                expected = expected_bundle
+            elif expected_app is not None and before_info.filename == (
+                target[: -len("bundle.js")] + "app.js"
+            ):
+                expected = expected_app
+            if expected is not None:
+                if after.read(after_info) != expected:
+                    raise DeploymentError(f"更新后 {before_info.filename} 内容校验失败")
             elif before.read(before_info) != after.read(after_info):
                 raise DeploymentError("更新后其他文件内容发生变化")
 
@@ -236,20 +255,24 @@ def wait_for_function_ready(
         sleep(interval)
 
 
-def deploy_bundle(client: Any, namespace: str, bundle: bytes) -> None:
+def deploy_bundle(
+    client: Any, namespace: str, bundle: bytes, app: bytes | None = None
+) -> None:
     address = get_function_address(client, namespace)
     original = download_package(address)
-    updated = replace_bundle(original, bundle)
+    updated = replace_bundle(original, bundle, app)
     update_function_code(client, namespace, updated)
     wait_for_function_ready(client, namespace)
     verified = download_package(get_function_address(client, namespace))
-    verify_package_update(original, verified, bundle)
+    verify_package_update(original, verified, bundle, app)
 
 
 def deploy(bundle_path: Path, secret_id: str, secret_key: str, namespace: str) -> None:
     if not secret_id or not secret_key:
         raise DeploymentError("缺少 TENCENT_SECRET_ID 或 TENCENT_SECRET_KEY")
     bundle = bundle_path.read_bytes()
+    # 云函数入口随仓库维护：读完即校验，空文件在替换阶段会被拒绝。
+    app = APP_SOURCE.read_bytes() if APP_SOURCE.is_file() else None
 
     from tencentcloud.common import credential
     from tencentcloud.common.profile.client_profile import ClientProfile
@@ -260,7 +283,7 @@ def deploy(bundle_path: Path, secret_id: str, secret_key: str, namespace: str) -
     client = scf_client.ScfClient(
         credential.Credential(secret_id, secret_key), REGION, profile
     )
-    deploy_bundle(client, namespace, bundle)
+    deploy_bundle(client, namespace, bundle, app)
 
 
 def main(argv: list[str] | None = None) -> int:

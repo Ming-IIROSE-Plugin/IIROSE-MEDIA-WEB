@@ -89,6 +89,27 @@ class DeployScfTests(unittest.TestCase):
                     deploy_scf._zip_metadata(after.getinfo(name)),
                 )
 
+    def test_app_is_replaced_together_with_bundle(self):
+        original = make_package()
+        updated = deploy_scf.replace_bundle(
+            original, b"new bundle", b"new handler"
+        )
+        with zipfile.ZipFile(io.BytesIO(updated)) as archive:
+            self.assertEqual(archive.read("src/app.js"), b"new handler")
+            self.assertEqual(archive.read("src/bundle.js"), b"new bundle")
+            # 其余文件原样保留
+            self.assertEqual(archive.read("config.json"), b'{"keep": true}')
+
+    def test_app_is_untouched_when_not_provided(self):
+        original = make_package()
+        updated = deploy_scf.replace_bundle(original, b"new bundle")
+        with zipfile.ZipFile(io.BytesIO(updated)) as archive:
+            self.assertEqual(archive.read("src/app.js"), b"handler")
+
+    def test_empty_app_is_rejected(self):
+        with self.assertRaises(deploy_scf.DeploymentError):
+            deploy_scf.replace_bundle(make_package(), b"new bundle", b"")
+
     def test_missing_target_or_required_file_is_rejected(self):
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w") as archive:

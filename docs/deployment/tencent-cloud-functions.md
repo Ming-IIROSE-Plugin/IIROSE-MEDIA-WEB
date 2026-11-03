@@ -12,7 +12,15 @@
 - `scf:UpdateFunctionCode`：更新函数代码。
 - `scf:GetFunction`：轮询异步更新状态。
 
-脚本在内存中读取现有 zip，识别 `src/` 或包根目录下配对的 `app.js`、`bundle.js`，仅替换 bundle。SCF 控制台的 `src` 可能表示编辑器根目录；若两种布局同时存在或均不存在则停止。上传前以及部署后重新下载时，都会校验文件列表、其他文件内容及 zip 元数据；路径缺失或校验失败会使 job 失败。代码包、签名 URL 和凭据不会打印或上传为 artifact，跨 job 传递的 artifact 只有本次构建的 `dist/bundle.js`。CI 的 Python SDK 依赖单独固定在 `scripts/requirements-scf.txt`。
+脚本在内存中读取现有 zip，识别 `src/` 或包根目录下配对的 `app.js`、`bundle.js`，替换这两个文件：`bundle.js` 用本次构建产物，`app.js` 用仓库里的 `cloud/bundle/app.js`。SCF 控制台的 `src` 可能表示编辑器根目录；若两种布局同时存在或均不存在则停止。上传前以及部署后重新下载时，都会校验文件列表、其他文件内容及 zip 元数据；路径缺失或校验失败会使 job 失败。代码包、签名 URL 和凭据不会打印或上传为 artifact，跨 job 传递的 artifact 只有本次构建的 `dist/bundle.js`。CI 的 Python SDK 依赖单独固定在 `scripts/requirements-scf.txt`。
+
+### 前端入口的 gzip
+
+`cloud/bundle/app.js` 是云函数的 HTTP 入口，随仓库维护：启动时把 `bundle.js` 压一次（`zlib.gzipSync`，level 9），`/bundle.js` 直接返回 gzip 内容并带 `Content-Encoding: gzip`。
+
+有一个必须知道的坑：**SCF 的函数 URL 网关会把请求头 `Accept-Encoding` 改写成 `identity`**（实测：客户端发 `gzip, br`，函数收到 `identity`）。因此不要按 `Accept-Encoding` 协商——协商永远不命中，会一直发明文。当前实现默认发 gzip（浏览器与油猴 `@require` 都必然支持），需要明文诊断时用 `/bundle.js?plain=1`。
+
+效果：线上单次下载从 432,847 字节降到 128,739 字节；`gzip -dc` 解压后与 `dist/bundle.js` 逐字节一致。
 
 更新只针对 **`$LATEST`**，`Publish=FALSE`，不改变 Handler、环境变量、触发器或别名。已发布版本和指向这些版本的别名不会自动切换；如果线上入口绑定的是已发布版本，需要另行发布或调整绑定才能提供新 bundle。同一目标的部署 job 共用 concurrency group，`cancel-in-progress: false`，不会由新 push 取消正在运行的部署。GitHub concurrency 只保留一个 pending job，密集 push 可能替换较早的待执行部署，且不保证执行顺序。
 
