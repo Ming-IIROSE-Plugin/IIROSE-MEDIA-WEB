@@ -48,6 +48,12 @@ export class MainAppContainer extends Component<
       ? PluginSettings.getPluginSetting().favoritesPageSize
       : this.itemsPerPage;
   }
+
+  /** 收藏列表的每页条数：分类表的收藏行用它，不依赖「模式下标 = 行下标」。 */
+  favoritesPageSize(): number {
+    return this.pageSizeFor(MODE.favorites);
+  }
+
   bilibiliRefreshCount = 1;
 
   /** 切模式时待提交的关键词（粘贴视频链接要先切到视频模式）。 */
