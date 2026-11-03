@@ -1,12 +1,15 @@
 // InnerPageService.ts
 import { NetEasePlatform } from "../../platforms/NetEasePlatform";
 import type { CollectionSegments } from "../../platforms/CollectionSegments";
+import type { PagePayload } from "./pagedLoader";
 
-/** 内页首屏（第 1 段）数据：与 `mediaData` 同形。 */
-export interface InnerPageData {
-  platformData: PlatformData[];
-  totalPage: number;
-}
+/**
+ * 内页首屏（第 1 段）数据：与 `mediaData` 同形。
+ * 内页不走 `pagedLoader` 的「首屏空态 → 装入 Promise → 后续页追加」：
+ * 它由容器经 `InnerPageHost` 落现场，翻页也交给 `CollectionSegments` 分段取详情，
+ * 没有 `pushAllData` 这一步——只共用数据形状。
+ */
+export type InnerPageData = PagePayload;
 
 /**
  * 容器交给服务的现场读写口：服务不持有 state、也不调 `setState`。

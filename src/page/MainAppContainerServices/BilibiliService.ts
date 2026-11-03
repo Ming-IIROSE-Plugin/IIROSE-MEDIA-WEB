@@ -1,6 +1,7 @@
 // BilibiliLogic.ts
 
 import { BilibiliPlatform } from "../../platforms/BilibiliPlatform";
+import { loadPage, showPage, sliceCachedPage } from "./pagedLoader";
 
 export class BilibiliService {
   /**
@@ -29,14 +30,8 @@ export class BilibiliService {
     ctx: MainAppContainerActionContext,
     itemsPerPage: number,
   ) {
-    const {
-      searchKeyword,
-      allMediaData,
-      currentPage,
-      updating,
-      totalPage,
-      requestToken,
-    } = ctx.getState();
+    const { searchKeyword, allMediaData, currentPage, updating, totalPage } =
+      ctx.getState();
 
     if (searchKeyword === "") {
       ctx.setState({ mediaData: null, totalPage: 0 });
@@ -44,46 +39,32 @@ export class BilibiliService {
     }
 
     const maxPage = Math.ceil(allMediaData.length / itemsPerPage);
+    const vod = BilibiliPlatform.VOD;
 
     // 命中本地缓存
     if (currentPage <= maxPage) {
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, allMediaData.length);
-      const currentPageData = allMediaData.slice(startIndex, endIndex);
-
-      ctx.setState({
-        mediaData: Promise.resolve({
-          platformData: currentPageData,
+      showPage(
+        ctx,
+        {
+          platformData: sliceCachedPage(
+            allMediaData,
+            currentPage,
+            itemsPerPage,
+          ),
           totalPage,
-        }),
-        currentOnDemandPlay: BilibiliPlatform.VOD,
-      });
+        },
+        vod,
+      );
     }
     // 网络请求
     else if (!updating) {
-      const currentRequestToken = requestToken + 1;
-      ctx.setState({ updating: true, requestToken: currentRequestToken });
-
       const page =
         currentPage !== 1 ? Math.floor(allMediaData.length / 50) + 1 : 1;
 
-      const dataPromise = BilibiliPlatform.searchForVideosBasicsData(
-        searchKeyword,
-        page,
-      );
-
-      ctx.setState({
-        mediaData: dataPromise,
-        currentOnDemandPlay: BilibiliPlatform.VOD,
-      });
-
-      dataPromise.then((res) => {
-        if (res.allPlatformData)
-          ctx.pushAllData(
-            currentRequestToken,
-            res.allPlatformData,
-            res.totalPage,
-          );
+      loadPage(ctx, {
+        fetch: () =>
+          BilibiliPlatform.searchForVideosBasicsData(searchKeyword, page),
+        onDemandPlay: vod,
       });
     }
   }

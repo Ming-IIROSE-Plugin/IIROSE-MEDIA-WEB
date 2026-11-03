@@ -1,5 +1,6 @@
 import { NetEasePlatform } from "../../platforms/NetEasePlatform";
 import { RequestHistory } from "../../history/RequestHistory";
+import { showLocalList } from "./pagedLoader";
 
 /**
  * 音乐首屏供数：单曲范围、关键词为空时，把本地点播历史里的网易云单曲铺成曲目表。
@@ -15,24 +16,12 @@ export class RecentService {
     const allMediaData = RequestHistory.recentMusic().map((entry) =>
       RequestHistory.toPlatformData(entry),
     );
-    const totalPage = Math.ceil(allMediaData.length / itemsPerPage);
-    const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPage || 1);
-    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
-    const currentPageData = allMediaData.slice(
-      startIndex,
-      startIndex + itemsPerPage,
-    );
 
-    ctx.setState({
-      updating: false,
-      currentPage: safeCurrentPage,
-      totalPage,
-      allMediaData,
-      mediaData: Promise.resolve({
-        platformData: currentPageData,
-        totalPage,
-      }),
-      currentOnDemandPlay: NetEasePlatform.MOD,
+    // 整张历史一次取全：按页码切片后连同列表一起落地
+    showLocalList(ctx, allMediaData, {
+      currentPage,
+      itemsPerPage,
+      onDemandPlay: NetEasePlatform.MOD,
     });
   }
 }

@@ -1,5 +1,6 @@
 // AllVideosService.ts
 import { AllVideosPlatform } from "../../platforms/AllVideosPlatform";
+import { loadPage, showPage, sliceCachedPage } from "./pagedLoader";
 
 export class AllVideosService {
   /**
@@ -13,14 +14,8 @@ export class AllVideosService {
     baseUrl: string,
     itemsPerPage: number,
   ) {
-    const {
-      searchKeyword,
-      allMediaData,
-      currentPage,
-      updating,
-      totalPage,
-      requestToken,
-    } = ctx.getState();
+    const { searchKeyword, allMediaData, currentPage, updating, totalPage } =
+      ctx.getState();
 
     // 1. 基础校验：空关键字处理
     if (searchKeyword === "") {
@@ -34,53 +29,34 @@ export class AllVideosService {
     }
 
     const maxLoadedPage = Math.ceil(allMediaData.length / itemsPerPage);
+    const vod = AllVideosPlatform.VOD;
 
     // 3. 逻辑 A: 处理本地分页缓存
     if (currentPage <= maxLoadedPage) {
-      const vod = AllVideosPlatform.VOD;
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, allMediaData.length);
-      const currentPageData = allMediaData.slice(startIndex, endIndex);
-
-      const mediaDataPromise = Promise.resolve({
-        platformData: currentPageData,
-        totalPage: totalPage,
-      });
-
-      ctx.setState({
-        mediaData: mediaDataPromise,
-        currentOnDemandPlay: vod,
-      });
+      showPage(
+        ctx,
+        {
+          platformData: sliceCachedPage(
+            allMediaData,
+            currentPage,
+            itemsPerPage,
+          ),
+          totalPage,
+        },
+        vod,
+      );
     }
     // 4. 逻辑 B: 处理异步网络请求
-    else {
-      if (updating) return;
-
-      const currentRequestToken = requestToken + 1;
-      ctx.setState({ updating: true, requestToken: currentRequestToken });
-
-      const vod = AllVideosPlatform.VOD;
+    else if (!updating) {
       // 计算采集站对应的页码 (假设每页 10 条)
       const page =
         currentPage !== 1 ? Math.floor(allMediaData.length / 10) + 1 : 1;
-      const dataPromise = AllVideosPlatform.searchAllVideos(
-        searchKeyword,
-        page,
-        baseUrl,
-      );
 
-      ctx.setState({
-        mediaData: dataPromise,
-        currentOnDemandPlay: vod,
-      });
-
-      dataPromise.then((res) => {
-        // 调用 context 中定义的 pushAllData 将数据追加到全局列表
-        ctx.pushAllData(
-          currentRequestToken,
-          res.allPlatformData,
-          res.totalPage,
-        );
+      // 落地后由加载器凭票号追加到全局列表
+      loadPage(ctx, {
+        fetch: () =>
+          AllVideosPlatform.searchAllVideos(searchKeyword, page, baseUrl),
+        onDemandPlay: vod,
       });
     }
   }

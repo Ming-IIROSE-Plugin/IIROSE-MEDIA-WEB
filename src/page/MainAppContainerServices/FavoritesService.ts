@@ -6,6 +6,7 @@ import { PluginSettings } from "../../settings/pluginSettings/PluginSettings";
 import { NetEasePlatform } from "../../platforms/NetEasePlatform";
 import { BilibiliPlatform } from "../../platforms/BilibiliPlatform";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { showLocalList } from "./pagedLoader";
 
 /** 收藏来源筛选：「全部」= 不按平台过滤（story 6 接入三来源切换器）。 */
 export type FavoritePlatformFilter = "all" | "netease" | "bilibili";
@@ -122,13 +123,6 @@ export class FavoritesService {
     }
 
     const allData = this.restoreAll(records);
-    const totalPage = Math.ceil(allData.length / itemsPerPage);
-    const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPage || 1);
-    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
-    const currentPageData = allData.slice(
-      startIndex,
-      startIndex + itemsPerPage,
-    );
 
     // 把平台的发送过程交回去：点播守卫据此显示「点播中」（专辑 / 歌单先弹菜单，返回 void）
     const onDemandPlay = (data: PlatformData) => {
@@ -140,16 +134,7 @@ export class FavoritesService {
       return NetEasePlatform.MOD(data);
     };
 
-    ctx.setState({
-      updating: false,
-      currentPage: safeCurrentPage,
-      totalPage,
-      allMediaData: allData,
-      mediaData: Promise.resolve({
-        platformData: currentPageData,
-        totalPage,
-      }),
-      currentOnDemandPlay: onDemandPlay,
-    });
+    // 一次取全再按页码切片：页码取发起时的现场，落地即收尾 `updating`
+    showLocalList(ctx, allData, { currentPage, itemsPerPage, onDemandPlay });
   }
 }

@@ -1,25 +1,6 @@
 import { ShowMessage } from "../../iirose_func/ShowMessage";
+import { splitByPage } from "../shared/splitByPage";
 import { getNeteasePlatformDataByIds, searchNetease } from "./search";
-
-/** 前 `itemPerPage` 条进当前页，其余只留在本地缓存（两者顺序都与入参一致）。 */
-const splitByPage = (data: PlatformData[], itemPerPage: number) => {
-  const platformData: PlatformData[] = [];
-  const allPlatformData: PlatformData[] = [];
-  let count = 0;
-
-  for (const item of data) {
-    const entry = item;
-    if (count >= itemPerPage) {
-      allPlatformData.push(entry);
-    } else {
-      allPlatformData.push(entry);
-      platformData.push(entry);
-    }
-    count++;
-  }
-
-  return { platformData, allPlatformData };
-};
 
 /**
  * 搜索歌单

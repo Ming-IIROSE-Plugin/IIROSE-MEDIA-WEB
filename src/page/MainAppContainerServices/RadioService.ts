@@ -1,4 +1,5 @@
 import { RadioPlatform } from "../../platforms/RadioPlatform";
+import { loadPage, showPage, sliceCachedPage } from "./pagedLoader";
 
 export class RadioService {
   /**
@@ -29,7 +30,6 @@ export class RadioService {
       allMediaData,
       currentPage,
       updating,
-      requestToken,
       isCurrentInMultiPage,
       searchKeyword,
     } = ctx.getState();
@@ -46,64 +46,45 @@ export class RadioService {
       currentPage <= maxPage ||
       this.hasLoadedList(ctx.getState().mediaData)
     ) {
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, filtered.length);
-      const currentPageData = filtered.slice(startIndex, endIndex);
-
       // 如果在多级页面，点播逻辑通常会变为 MOD (播放单曲)
       const onDemand = isCurrentInMultiPage
         ? RadioPlatform.MOD
         : getOnDemandPlay(RadioPlatform);
 
-      const listData = Promise.resolve({
-        platformData: currentPageData,
-        totalPage: 1,
-      });
+      const listData = showPage(
+        ctx,
+        {
+          platformData: sliceCachedPage(filtered, currentPage, itemsPerPage),
+          totalPage: 1,
+        },
+        onDemand,
+      );
       // 切片结果同样是「本服务取回来的列表」：下一次逐字过滤还在它上面切，不再出网
       this.loadedLists.add(listData);
-
-      ctx.setState({
-        mediaData: listData,
-        currentOnDemandPlay: onDemand,
-      });
     }
     // 2. 逻辑 B: 处理异步网络请求（返回前同样按关键词过一遍）
     else if (!updating) {
-      const currentRequestToken = requestToken + 1;
-      ctx.setState({ updating: true, requestToken: currentRequestToken });
-
-      // 过滤按「落地时的当前关键词」求值：请求在途时改词，落地的也得是收窄后的列表
-      const dataPromise = searchFn(area).then((res) => {
-        const currentKeyword = ctx
-          .getState()
-          .searchKeyword.trim()
-          .toLowerCase();
-        return {
-          ...res,
-          platformData: (res.platformData as PlatformData[]).filter(
-            (item) =>
-              !currentKeyword ||
-              (item.title ?? "").toLowerCase().includes(currentKeyword),
-          ),
-          totalPage: 1,
-        };
-      });
-      const onDemand = getOnDemandPlay(RadioPlatform);
-
-      ctx.setState({
-        mediaData: dataPromise,
-        currentOnDemandPlay: onDemand,
-        requestToken: currentRequestToken,
-      });
-
-      dataPromise.then((res) => {
+      loadPage(ctx, {
+        // 过滤按「落地时的当前关键词」求值：请求在途时改词，落地的也得是收窄后的列表
+        fetch: () =>
+          searchFn(area).then((res) => {
+            const currentKeyword = ctx
+              .getState()
+              .searchKeyword.trim()
+              .toLowerCase();
+            return {
+              ...res,
+              platformData: (res.platformData as PlatformData[]).filter(
+                (item) =>
+                  !currentKeyword ||
+                  (item.title ?? "").toLowerCase().includes(currentKeyword),
+              ),
+              totalPage: 1,
+            };
+          }),
+        onDemandPlay: getOnDemandPlay(RadioPlatform),
         // 落地成功才算「已加载一次」：失败（拒绝）不记，下一次过滤键仍可重试
-        this.loadedLists.add(dataPromise);
-        ctx.pushAllData(
-          currentRequestToken,
-          res.allPlatformData,
-          res.totalPage,
-        );
+        onFulfilled: (_res, pending) => this.loadedLists.add(pending),
       });
     }
   }

@@ -19,27 +19,5 @@ export const removeEmTagsUsingDOMParser = (input: string) => {
   return doc.body.textContent || "";
 };
 
-/**
- * 按 `itemPerPage` 拆出当前页与完整列表：两者顺序与入参一致，
- * 当前页是完整列表的前缀（缓存翻页要用完整列表）。
- */
-export const splitByPage = (
-  data: PlatformData[],
-  itemPerPage: number,
-): { platformData: PlatformData[]; allPlatformData: PlatformData[] } => {
-  const platformData: PlatformData[] = [];
-  const allPlatformData: PlatformData[] = [];
-  let count = 0;
-
-  for (const item of data) {
-    if (count >= itemPerPage) {
-      allPlatformData.push(item);
-    } else {
-      allPlatformData.push(item);
-      platformData.push(item);
-    }
-    count++;
-  }
-
-  return { platformData, allPlatformData };
-};
+/** 分页切分与网易云共用一份，这里只作本平台的转发出口。 */
+export { splitByPage } from "../shared/splitByPage";

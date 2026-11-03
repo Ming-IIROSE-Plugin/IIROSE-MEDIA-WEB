@@ -1,5 +1,6 @@
 // NetEaseService.ts
 import { NetEasePlatform } from "../../platforms/NetEasePlatform";
+import { loadPage, showPage, sliceCachedPage } from "./pagedLoader";
 
 export class NetEaseService {
   /**
@@ -26,29 +27,29 @@ export class NetEaseService {
       currentPage,
       totalPage,
       updating,
-      requestToken,
       isCurrentInMultiPage,
     } = ctx.getState();
     const maxPage = Math.ceil(allMediaData.length / itemsPerPage);
 
     // 1. 逻辑 A: 处理本地分页缓存
     if (currentPage <= maxPage) {
-      const startIndex = (currentPage - 1) * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, allMediaData.length);
-      const currentPageData = allMediaData.slice(startIndex, endIndex);
-
       // 如果在多级页面，点播逻辑通常会变为 MOD (播放单曲)
       const onDemand = isCurrentInMultiPage
         ? NetEasePlatform.MOD
         : getOnDemandPlay(NetEasePlatform);
 
-      ctx.setState({
-        mediaData: Promise.resolve({
-          platformData: currentPageData,
+      showPage(
+        ctx,
+        {
+          platformData: sliceCachedPage(
+            allMediaData,
+            currentPage,
+            itemsPerPage,
+          ),
           totalPage,
-        }),
-        currentOnDemandPlay: onDemand,
-      });
+        },
+        onDemand,
+      );
     }
     // 2. 逻辑 B: 处理异步网络请求
     else if (!updating) {
@@ -57,27 +58,13 @@ export class NetEaseService {
         return;
       }
 
-      const currentRequestToken = requestToken + 1;
-      ctx.setState({ updating: true, requestToken: currentRequestToken });
-
       // 计算页码 (网易云通常 100 条/页)
       const page =
         currentPage !== 1 ? Math.floor(allMediaData.length / 100) + 1 : 1;
-      const dataPromise = searchFn(searchKeyword, page);
-      const onDemand = getOnDemandPlay(NetEasePlatform);
 
-      ctx.setState({
-        mediaData: dataPromise,
-        currentOnDemandPlay: onDemand,
-        requestToken: currentRequestToken,
-      });
-
-      dataPromise.then((res) => {
-        ctx.pushAllData(
-          currentRequestToken,
-          res.allPlatformData,
-          res.totalPage,
-        );
+      loadPage(ctx, {
+        fetch: () => searchFn(searchKeyword, page),
+        onDemandPlay: getOnDemandPlay(NetEasePlatform),
       });
     }
   }
