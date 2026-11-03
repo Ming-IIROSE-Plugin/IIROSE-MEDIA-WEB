@@ -24,8 +24,8 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
   - **intent:** 平台的检索能力集中成一份描述表（平台 id、标签、范围与取数函数），UI 分类表由它生成；新增平台只加数据，不改视图层。
   - **success:** `mainAppCategories` 里不再逐个手写各平台的 `searchAction` 闭包来定义能力；四个平台的范围与取数集中声明在一处；调用点、文案与运行时行为不变。
 - **CAP-4**
-  - **intent:** 失败提示收敛为「分类 + 单一上报入口」，不再逐处复制同款 catch 与提示文案。
-  - **success:** `ShowMessage.show((error as Error).message)` 这类同款调用在平台层不再成片出现；失败分类（网络 / 风控 / 解析 / 未知）由一处决定，用户可见文案与现在一致。
+  - **intent:** 失败提示收敛为单一上报入口，不再逐处复制同款 catch 与提示文案。
+  - **success:** `ShowMessage.show((error as Error).message)` 这类同款调用在平台层不再出现；用户可见文案与现在逐字一致（由失败路径的断言锁定）。
 
 ## Constraints
 
@@ -39,6 +39,7 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
 
 - 给四个平台套统一基类或运行时分支：协议差异大，抽象后必然变成 `if (platform === ...)`，比现在更难读。
 - 为四家强造同一个 `search()` 签名：方法名与参数各不相同，适配对象会变成无人消费的死代码。
+- 失败分类（网络 / 风控 / 解析 / 未知）统一：已存在的分类只服务网易云节点切换与提示去重，平台层其余失败没有可区分的信号，强行归类只能靠猜；本轮只收敛上报入口。
 - 把 6 个 Service 抽象成泛型框架：它们各自只有一两个方法，抽象成本高于收益。
 - 进一步抽 UI 组件：结果区与浮窗样式已经收敛，再往上抽会把布局耦合进来。
 - 拆分剩余 ≤800 行的文件（`FavoritesStorageService`、`SettingsService`、`BiliBiliSettings`、`LoginAPI`、加密模块等）。

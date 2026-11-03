@@ -34,5 +34,5 @@ context:
 - `settingsRev` 存储不可用时回落 0：patch，改 `NaN`。
 - `BiliBiliSettings` 写失败仍报成功：patch，写入成功才更新标题。
 - `openShufflePicker` 的异常边界由 try/catch 收窄为布尔判定：记录不修——写链路已全 try，当前无可抛路径；若将来出现，`confirming` 会卡住的隐患记在此处。
-- `LocalStorageUtils` 损坏存档提前一次启动弹协议：记录不修，最终结果与旧实现一致。
+- `LocalStorageUtils` 损坏存档提前一次启动弹协议：记录不修。结论修正——旧实现解析失败时只写回默认值、不弹窗，新实现当场弹；**存储不可用（隐私模式）时每次刷新都会重弹一次 TOS + 隐私协议**，这是新行为取代旧行为（旧实现是 `getItem` 直接抛错、初始化中断），不是「结果一致」。
 - `SyncSettingsStore` 注释与事实不符：patch。
