@@ -84,7 +84,8 @@ export function useDeck(): DeckModel | null {
       setProgress(null);
       return undefined;
     }
-    const active = new ProgressSession(session.bridge, setProgress);
+    // 底条随面板常驻（面板关掉也留在树上）：它不能把轮询永久按在 250ms。
+    const active = new ProgressSession(session.bridge, setProgress, false);
     setProgressSession(active);
     setProgress(active.state);
     return () => {

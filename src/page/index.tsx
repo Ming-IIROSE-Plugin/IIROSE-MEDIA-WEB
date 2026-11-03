@@ -80,6 +80,7 @@ function initMediaProgress() {
   let sidebar!: SidebarMediaEntry;
   let session!: MediaSessionHandle;
   let unsubscribePlayback: (() => void) | undefined;
+  let unsubscribeMode: (() => void) | undefined;
   let close: (restoreFocus?: boolean) => void = () => {};
   // 随机点亮前的选择面板：侧栏行与面板底部条共用同一条接线（确认才作废旧预取并点亮）。
   let openShuffle: (
@@ -112,6 +113,7 @@ function initMediaProgress() {
       safely(() => releaseEpisodePicker());
       safely(() => unmountBatch?.());
       safely(() => unsubscribePlayback?.());
+      safely(() => unsubscribeMode?.());
       safely(() => loop?.dispose());
       safely(() => shuffle?.dispose());
       // 只摘掉属于自己的观察者：后注入者接管后不能清掉新实例的钩子。
@@ -163,6 +165,8 @@ function initMediaProgress() {
     memory?.record(data);
     RequestHistory.recordPayload(data);
     noteMediaSent(data);
+    // 循环可用性取决于「本曲有没有报文缓存」：自己发完立即刷新，不必等下一拍轮询。
+    bridge.poke();
   };
   Socket.observe = observeSocket;
   shuffle = new ShuffleController(
@@ -240,7 +244,10 @@ function initMediaProgress() {
     },
     document,
     playbackRow.element,
-    (present) => playback.setMediaPresent(present),
+    (present) => {
+      playback.setMediaPresent(present);
+      bridge.poke();
+    },
   );
   unsubscribePlayback = bridge.subscribe((snapshot) =>
     playback.applySnapshot(snapshot),
@@ -250,10 +257,16 @@ function initMediaProgress() {
     bridge,
     playback,
     pickShuffle: (done, returnFocus) => openShuffle(returnFocus ?? null, done),
+    setPanelOpen: (open) => bridge.setActive("panel", open),
   };
   provideMediaSession(session);
   loop.attach();
   shuffle.attach();
+  // 点亮任一模式也切到 250ms：预发重播与随机判定都需要更细的粒度。
+  unsubscribeMode = playback.subscribe((state) => {
+    bridge.setActive("loop", state.mode === "loop");
+    bridge.setActive("shuffle", state.mode === "shuffle");
+  });
   onPageHide = (event: PageTransitionEvent) => {
     saveMediaProgressPosition(lastPosition);
     if (!event.persisted) dispose();

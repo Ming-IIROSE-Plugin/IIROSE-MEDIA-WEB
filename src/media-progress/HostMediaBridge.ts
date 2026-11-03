@@ -39,12 +39,22 @@ export interface MediaHost {
 }
 
 // 包装仅观察宿站已发生的行为；不主动调用播放器或定位函数。
+/** 面板 / 浮窗 / 已点亮模式下的刷新节奏。 */
+const ACTIVE_POLL_MS = 250;
+/** 无人观察时的刷新节奏：再慢就会让侧栏按钮的可用性明显落后。 */
+const IDLE_POLL_MS = 1000;
+
 export class HostMediaBridge {
   private instance = 0;
   private roomKey: string | null = null;
   private roomKeyInitialized = false;
   private seekVersion = 0;
   private listeners = new Set<(snapshot: MediaSnapshot) => void>();
+  /** 需要 250ms 节奏的场景（面板 / 浮窗 / 已点亮的模式）；为空时退到 1s。 */
+  private activeTags = new Set<string>();
+  /** 当前定时器的间隔，0 表示没起表。 */
+  private intervalMs = 0;
+  private poking = false;
   private restorers: (() => void)[] = [];
   private timer?: ReturnType<typeof setInterval>;
   private hooked = new Map<
@@ -152,18 +162,52 @@ export class HostMediaBridge {
 
   subscribe(listener: (snapshot: MediaSnapshot) => void): () => void {
     this.listeners.add(listener);
-    if (!this.timer) {
-      this.installHooks();
-      this.timer = setInterval(() => {
-        this.installHooks();
-        this.emit();
-      }, 250);
-    }
+    this.retune();
     listener(this.read());
     return () => {
       this.listeners.delete(listener);
       if (!this.listeners.size) this.stop();
     };
+  }
+
+  /**
+   * 标记「有人正在看」的场景（面板打开 / 浮窗打开 / 循环或随机已点亮）。
+   * 有任一标记时 250ms，全为空时 1s：宿站没有媒体事件，只靠轮询发现别人点歌、
+   * 切歌与播放结束，所以不能完全停表。
+   */
+  /** 事件驱动的立即刷新（如插件自己发了报文、侧栏媒体卡增删）：不改变轮询节奏。 */
+  poke(): void {
+    // 监听器里可能再次触发（例如重播又发一次报文）：同一次 emit 内不重入。
+    if (!this.listeners.size || this.poking) return;
+    this.poking = true;
+    try {
+      this.emit();
+    } finally {
+      this.poking = false;
+    }
+  }
+
+  setActive(tag: string, on: boolean): void {
+    const size = this.activeTags.size;
+    if (on) this.activeTags.add(tag);
+    else this.activeTags.delete(tag);
+    if (this.activeTags.size !== size) this.retune();
+  }
+
+  private retune() {
+    if (!this.listeners.size) {
+      this.stop();
+      return;
+    }
+    const wanted = this.activeTags.size ? ACTIVE_POLL_MS : IDLE_POLL_MS;
+    if (this.timer && this.intervalMs === wanted) return;
+    clearInterval(this.timer);
+    this.installHooks();
+    this.intervalMs = wanted;
+    this.timer = setInterval(() => {
+      this.installHooks();
+      this.emit();
+    }, wanted);
   }
 
   send(
@@ -291,6 +335,7 @@ export class HostMediaBridge {
   private stop() {
     clearInterval(this.timer);
     this.timer = undefined;
+    this.intervalMs = 0;
     this.restorers.reverse().forEach((restore) => restore());
     this.restorers = [];
     this.hooked.clear();
@@ -298,6 +343,7 @@ export class HostMediaBridge {
 
   dispose() {
     this.listeners.clear();
+    this.activeTags.clear();
     this.stop();
   }
 }

@@ -41,6 +41,8 @@ export class ProgressSession {
   constructor(
     private bridge: HostMediaBridge,
     private changed: (state: ProgressState) => void,
+    /** 是否把「有人看着进度」记为活跃场景：浮窗为 true，常驻的面板底条为 false。 */
+    private readsProgress = true,
   ) {
     this.state = {
       media: bridge.read(),
@@ -49,6 +51,7 @@ export class ProgressSession {
       message: "",
     };
     this.unsubscribe = bridge.subscribe((media) => this.receive(media));
+    if (this.readsProgress) bridge.setActive("progress", true);
   }
 
   private publish() {
@@ -224,5 +227,6 @@ export class ProgressSession {
     this.disposed = true;
     this.clearOperation();
     this.unsubscribe();
+    if (this.readsProgress) this.bridge.setActive("progress", false);
   }
 }

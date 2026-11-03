@@ -12,6 +12,8 @@ export interface MediaSessionHandle {
    * `returnFocus` 是关闭面板后应归还焦点的触发元素。
    */
   pickShuffle: (done: () => void, returnFocus?: HTMLElement | null) => void;
+  /** 主面板开合：打开时媒体轮询切到 250ms，关闭后若无其它活跃场景退回 1s。 */
+  setPanelOpen?: (open: boolean) => void;
 }
 
 export type MediaSessionListener = (session: MediaSessionHandle | null) => void;

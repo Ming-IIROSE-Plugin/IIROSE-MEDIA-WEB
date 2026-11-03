@@ -740,7 +740,8 @@ describe("宿站桥接与交互生命周期", () => {
     const stop = bridge.subscribe(vi.fn());
     const original = vi.fn();
     host.shareMedia = original;
-    vi.advanceTimersByTime(250);
+    // 无活跃场景时按 1s 节奏轮询（见 HostMediaBridge 的 IDLE_POLL_MS）。
+    vi.advanceTimersByTime(1000);
     expect(host.shareMedia).not.toBe(original);
     const later = vi.fn();
     host.shareMedia = later;

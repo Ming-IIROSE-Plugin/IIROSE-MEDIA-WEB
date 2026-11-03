@@ -1,5 +1,9 @@
 import { Component, ComponentChild } from "preact";
 import { MainApp } from "./MainApp";
+import {
+  mediaSession,
+  subscribeMediaSession,
+} from "../media-progress/MediaSession";
 import { Input_Behavior_Module } from "../input-behavior-module/Input-Behavior-Module";
 import { closeSidebar } from "../iirose_func/CloseSideBar";
 import { Gesture } from "../listener/Gesture";
@@ -22,6 +26,7 @@ export class MainAppControlLayer extends Component<
   MainAppControlLayerState
 > {
   private mainHolder: HTMLElement | null = null;
+  private unsubscribeSession?: () => void;
   constructor(props: undefined) {
     super(props);
   }
@@ -66,6 +71,11 @@ export class MainAppControlLayer extends Component<
     const { changeSearchKeyword } = this.controller;
     Input_Behavior_Module.init(changeSearchKeyword, this.ShowHideMainApp);
 
+    // 会话可能晚于本组件提供（init 里两个模块先后创建）：提供时把当前开合状态补上。
+    this.unsubscribeSession = subscribeMediaSession(() => {
+      mediaSession()?.setPanelOpen?.(this.state.mainAppDisplay);
+    });
+
     // 3. 注册全局事件
     window.addEventListener("keydown", this.hotkeyControlApp);
     window.addEventListener("touchstart", Gesture.handleTouchStart);
@@ -73,6 +83,11 @@ export class MainAppControlLayer extends Component<
   }
 
   componentWillUnmount(): void {
+    // 卸载时面板一定不可见：撤掉 250ms 的活跃标记。
+    this.unsubscribeSession?.();
+    this.unsubscribeSession = undefined;
+    mediaSession()?.setPanelOpen?.(false);
+
     // 1. 基础清理
     window.removeEventListener("keydown", this.hotkeyControlApp);
     window.removeEventListener("touchstart", Gesture.handleTouchStart);
@@ -106,6 +121,8 @@ export class MainAppControlLayer extends Component<
 
   // 将副作用逻辑提取成一个独立方法
   private applyDisplaySideEffects(isShowing: boolean) {
+    // 面板开着才需要 250ms 的媒体刷新（底部条要显示可用性）；关掉后退回 1s。
+    mediaSession()?.setPanelOpen?.(isShowing);
     const el = document.getElementById("IIROSE_MEDIA_CONTAINER");
     if (el) {
       isShowing
