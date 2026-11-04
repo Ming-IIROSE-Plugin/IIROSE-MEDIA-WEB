@@ -16,13 +16,13 @@
 
 ### Cors-Anywhere 转发函数
 
-插件的外网请求经两台 `Cors-Anywhere`（`ap-guangzhou` / `ap-hongkong`，代码相同）转发。入口源码在 `cloud/cors-anywhere/app.js`，用 `scripts/deploy_function_app.py` 部署：
+插件的外网请求经两台 `Cors-Anywhere`（`ap-guangzhou` / `ap-hongkong`，代码相同）转发。入口源码在 `cloud/cors-anywhere/app.js`，**整包重建部署**：
 
 ```bash
-python3 scripts/deploy_function_app.py --name Cors-Anywhere --region ap-guangzhou --app cloud/cors-anywhere/app.js
+python3 scripts/deploy_function_package.py --name Cors-Anywhere --region ap-guangzhou --dir cloud/cors-anywhere
 ```
 
-该脚本只替换包内 `app.js`，其余文件（`node_modules` 等）原样保留，并在上传前与回读后校验。
+两台都要各跑一次（`--region ap-hongkong`）。`scripts/deploy_function_app.py` 是「只替换包内 `app.js`、保留其余文件」的旧入口，现在没有使用者了——留着是为了将来某个函数必须保留 `node_modules` 时还能只换入口。
 
 #### 代码包只保留实际用到的文件
 
