@@ -60,7 +60,7 @@ CLIENT_SETTINGS_PATH = (
     / "src"
     / "settings"
     / "pluginSettings"
-    / "PluginSettings.ts"
+    / "normalize.ts"
 )
 # 进包的文件：入口、依赖与模块类型声明；测试与仓库其余内容不入包。
 PACKAGE_ENTRIES = ("package.json", "cos.js", "logic.js", "index.js")
@@ -481,7 +481,7 @@ def verify_client_server_url(
         raise DeploymentError("未能从函数 URL 触发器读到地址，无法校验与客户端一致")
     if not client_url:
         raise DeploymentError(
-            "未能从 src/settings/pluginSettings/PluginSettings.ts 读到 "
+            "未能从 src/settings/pluginSettings/normalize.ts 读到 "
             "DEFAULT_SYNC_SERVER_URL，无法校验函数 URL 一致性"
         )
     if deployed_url.rstrip("/") != client_url.rstrip("/"):

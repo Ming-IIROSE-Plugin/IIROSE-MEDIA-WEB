@@ -956,7 +956,10 @@ test("validateWrapped 逐字段独立生效", () => {
   assert.equal(logic.validateWrapped(null), "invalid_wrapped");
   assert.equal(logic.validateWrapped("x"), "invalid_wrapped");
   assert.equal(logic.validateWrapped([ok]), "invalid_wrapped");
-  assert.equal(logic.validateWrapped({ iv: ok.iv, ct: ok.ct, x: 1 }), "invalid_wrapped");
+  assert.equal(
+    logic.validateWrapped({ iv: ok.iv, ct: ok.ct, x: 1 }),
+    "invalid_wrapped",
+  );
   assert.equal(
     logic.validateWrapped({ iv: "AAAA", ct: ok.ct }),
     "invalid_wrapped",
@@ -994,9 +997,7 @@ const CLIENT_CRYPTO_PATH = path.join(
 
 function clientConstSource(name) {
   const raw = fs.readFileSync(CLIENT_CRYPTO_PATH, "utf8");
-  const match = raw.match(
-    new RegExp(`export const ${name}\\s*=\\s*([^;]+);`),
-  );
+  const match = raw.match(new RegExp(`export const ${name}\\s*=\\s*([^;]+);`));
   assert.ok(match, `客户端 SyncCrypto.ts 缺少常量 ${name}`);
   return match[1].trim();
 }
@@ -1020,7 +1021,7 @@ const CLIENT_SETTINGS_PATH = path.join(
   "src",
   "settings",
   "pluginSettings",
-  "PluginSettings.ts",
+  "normalize.ts",
 );
 const CLIENT_STORAGE_PATH = path.join(
   __dirname,
@@ -1028,7 +1029,8 @@ const CLIENT_STORAGE_PATH = path.join(
   "..",
   "src",
   "storage",
-  "FavoritesStorageService.ts",
+  "favorites",
+  "recordUtils.ts",
 );
 
 /** 从客户端 TS 源里取 `const NAME = /.../flags;` 的正则主体 */
@@ -1064,8 +1066,14 @@ test("跨端信封常量一致（客户端 SyncCrypto.ts ↔ 服务端 logic.js�
   assert.equal(clientConst("WRAPPED_IV_BYTES"), logic.WRAPPED_IV_BYTES);
   assert.equal(clientConst("WRAPPED_MIN_BYTES"), logic.WRAPPED_MIN_BYTES);
 
-  assert.deepEqual(clientConstList("ENVELOPE_FIELDS_V1"), logic.ENVELOPE_FIELDS_V1);
-  assert.deepEqual(clientConstList("ENVELOPE_FIELDS_V2"), logic.ENVELOPE_FIELDS_V2);
+  assert.deepEqual(
+    clientConstList("ENVELOPE_FIELDS_V1"),
+    logic.ENVELOPE_FIELDS_V1,
+  );
+  assert.deepEqual(
+    clientConstList("ENVELOPE_FIELDS_V2"),
+    logic.ENVELOPE_FIELDS_V2,
+  );
   assert.deepEqual(clientConstList("WRAPPED_FIELDS"), logic.WRAPPED_FIELDS);
 
   // 客户端自身的关系也要成立（这两个常量在客户端是写死的字面量）
