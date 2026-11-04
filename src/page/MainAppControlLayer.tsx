@@ -186,8 +186,10 @@ export class MainAppControlLayer extends Component<
 
     // 3. 业务逻辑检查：如果搜索词变了，必须允许 render 以更新子组件列表
     if (this.state.searchKeyword !== nextState.searchKeyword) {
-      // 额外保险：确保在 render 前，容器样式是正确的
-      this.applyDisplaySideEffects(nextState.mainAppDisplay);
+      // 额外保险：确保在 render 前，容器样式是正确的。
+      // 空词只来自面板内的清除，不再走这条（它会触发云同步拉取、收起侧栏）
+      if (nextState.searchKeyword)
+        this.applyDisplaySideEffects(nextState.mainAppDisplay);
       return true;
     }
 
@@ -218,8 +220,8 @@ export class MainAppControlLayer extends Component<
      * @returns
      */
     changeSearchKeyword: (keyword: string | null) => {
-      if (keyword !== null && keyword !== "")
-        this.setState({ searchKeyword: keyword });
+      // 空串也要记下：否则清除后全局词停在旧值，再 `@` 同一个词不会触发搜索
+      if (keyword !== null) this.setState({ searchKeyword: keyword });
     },
   };
 

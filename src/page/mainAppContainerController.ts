@@ -19,8 +19,15 @@ export interface MainAppController {
   /** 真正发起检索：页码归 1、清结果，再交给当前范围的动作。 */
   runSearch(
     text: string,
-    options?: { propagate?: boolean; reloadEmpty?: boolean },
+    options?: {
+      propagate?: boolean;
+      reloadEmpty?: boolean;
+      /** 回到第一个范围，并让在途搜索的迟到结果作废。 */
+      resetToFirstScope?: boolean;
+    },
   ): void;
+  /** 音乐模式已搜索时回到「最近点播」；未搜索时无动作。 */
+  clearMusicSearch(): void;
   /** 输入即过滤（收藏 / 电台）：只改关键词与页码，不清结果、不出网。 */
   filterLive(text: string): void;
   /** 切换来源：页码归 1、回到第一个范围。 */
@@ -92,8 +99,11 @@ export function createController(
      */
     submitSearch: (text: string) => {
       const keyword = text.trim();
-      // 空提交不发起检索（沿用旧搜索栏：清空后提交无动作）
-      if (!keyword) return;
+      // 空提交不发起检索；只有音乐模式已搜索时才回到「最近点播」
+      if (!keyword) {
+        host.controller.clearMusicSearch();
+        return;
+      }
       const video = detectVideoTarget(keyword);
       if (video && host.state.mode !== MODE.video) {
         host.pendingSearch = video;
@@ -108,16 +118,13 @@ export function createController(
      * 空的检索只重置现场、不发请求；`reloadEmpty` 用于「清除搜索」——本地过滤的范围
      * （收藏 / 电台）要按清空后的关键词重取一遍。
      */
-    runSearch: (
-      text: string,
-      options?: { propagate?: boolean; reloadEmpty?: boolean },
-    ) => {
+    runSearch: (text, options) => {
       const keyword = text.trim();
       host.innerPageSource = null;
       host.dropSegments();
       // 浏览型范围（视频的「推荐」）不承接关键词：有词时自动落到第一个可搜索的范围
       const platform = host.currentPlatform();
-      let scope = host.state.SubNavBarIndex;
+      let scope = options?.resetToFirstScope ? 0 : host.state.SubNavBarIndex;
       if (keyword && platform?.subNavBarItems[scope]?.class !== "search") {
         const first = platform?.subNavBarItems.findIndex(
           (item) => item.class === "search",
@@ -145,6 +152,10 @@ export function createController(
           innerSelection: SelectionService.clear(),
           updating: false,
           currentSubNavBarAction: nextAction,
+          // 最近点播不经 `loadPage`，票号要在这里换，否则在途搜索会追加进新列表
+          ...(options?.resetToFirstScope
+            ? { requestToken: host.state.requestToken + 1 }
+            : {}),
         },
         () => {
           if (keyword || options?.reloadEmpty) host.runCurrentScope();
@@ -152,6 +163,15 @@ export function createController(
             host.props.changeSearchKeyword(keyword);
         },
       );
+    },
+
+    clearMusicSearch: () => {
+      if (host.state.mode !== MODE.music || !host.state.searchKeyword.trim())
+        return;
+      host.controller.runSearch("", {
+        reloadEmpty: true,
+        resetToFirstScope: true,
+      });
     },
 
     /**

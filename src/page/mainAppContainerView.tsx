@@ -117,6 +117,11 @@ export function renderContainer(host: MainAppContainerViewHost) {
               sourceIndex={PlatformIndex}
               onSelectSource={host.controller.selectSource}
               onSubmit={host.controller.submitSearch}
+              onClear={
+                mode === MODE.music
+                  ? host.controller.clearMusicSearch
+                  : undefined
+              }
               onLiveInput={
                 mode === MODE.favorites || mode === MODE.radio
                   ? host.controller.filterLive

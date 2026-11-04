@@ -119,6 +119,30 @@ describe("主面板主题属性", () => {
     expect(panel().getAttribute("data-imw-theme")).toBe("light");
   });
 
+  it("全局搜索词接受空串、忽略 null（清除后再 @ 同一个词才会触发）", async () => {
+    const ref = createRef<MainAppControlLayer>();
+    render(h(Layer, { ref } as object), host);
+    await act(async () => {
+      ref.current!.controller.changeSearchKeyword("关键词");
+    });
+    await act(async () => {
+      ref.current!.controller.changeSearchKeyword(null);
+    });
+    expect(ref.current!.state.searchKeyword).toBe("关键词");
+    const sideEffects = vi.spyOn(
+      ref.current as unknown as {
+        applyDisplaySideEffects(show: boolean): void;
+      },
+      "applyDisplaySideEffects",
+    );
+    await act(async () => {
+      ref.current!.controller.changeSearchKeyword("");
+    });
+    expect(ref.current!.state.searchKeyword).toBe("");
+    // 清除不能带出云同步拉取、收起侧栏这些显示副作用
+    expect(sideEffects).not.toHaveBeenCalled();
+  });
+
   it("品牌强调色已退役：根节点不带任何强调色变量类", () => {
     render(h(Layer, {}), host);
     const classes = panel().className.split(/\s+/);

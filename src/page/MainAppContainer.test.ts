@@ -184,6 +184,12 @@ interface Harness {
     switchToMultiPage: (platformData: PlatformData) => Promise<void>;
     switchToOutFromMultiPage: () => void;
     updateCurrentInMultiPageStatus: (status: boolean) => void;
+    clearMusicSearch: () => void;
+    pushAllData: (
+      token: number,
+      data: PlatformData[] | undefined,
+      totalPage: number,
+    ) => void;
   };
   /** 结果区行 / 卡主体点击的落点（操作条挂点）。 */
   handleRowActivate: (
@@ -1951,6 +1957,134 @@ describe("专辑 / 歌单内页", () => {
       expect(selection()!.orderOf(3)).toBe(2);
       expect(bar()!.textContent).toContain("已选 2 首");
     });
+  });
+});
+
+describe("音乐模式回到最近点播", () => {
+  const search = async (controller: Harness["controller"], word: string) => {
+    await act(async () => {
+      controller.runSearch(word);
+    });
+  };
+  const clearButton = () =>
+    root.querySelector<HTMLButtonElement>('button[aria-label="清除搜索"]');
+
+  it("已搜索时空提交：回到单曲范围的最近点播，页码归 1，不再搜索", async () => {
+    const { ref, props: p } = await mount(MODE.music);
+    const controller = (ref.current as unknown as Harness).controller;
+    await search(controller, "陈绮贞");
+    await act(async () => {
+      controller.selectScope(1);
+    });
+    expect(ref.current!.state.SubNavBarIndex).toBe(1);
+    const searches = netease.searchMusic.mock.calls.length;
+    const recents = recent.load.mock.calls.length;
+
+    await act(async () => {
+      controller.submitSearch("   ");
+    });
+
+    expect(ref.current!.state.searchKeyword).toBe("");
+    expect(ref.current!.state.SubNavBarIndex).toBe(0);
+    expect(ref.current!.state.currentPage).toBe(1);
+    expect(recent.load.mock.calls.length).toBe(recents + 1);
+    expect(netease.searchMusic.mock.calls.length).toBe(searches);
+    expect(p.changeSearchKeyword).toHaveBeenLastCalledWith("");
+  });
+
+  it("内页开着时清除：一并退出内页", async () => {
+    const { ref } = await mount(MODE.music);
+    const controller = (ref.current as unknown as Harness).controller;
+    await search(controller, "陈绮贞");
+    await act(async () => {
+      controller.updateCurrentInMultiPageStatus(true);
+    });
+
+    await act(async () => {
+      controller.clearMusicSearch();
+    });
+
+    expect(ref.current!.state.isCurrentInMultiPage).toBe(false);
+    expect(ref.current!.state.oldItems).toBeNull();
+  });
+
+  it("已在首屏：空提交与清除都不重载列表", async () => {
+    const { ref } = await mount(MODE.music);
+    const controller = (ref.current as unknown as Harness).controller;
+    const recents = recent.load.mock.calls.length;
+
+    await act(async () => {
+      controller.submitSearch("");
+      controller.clearMusicSearch();
+    });
+
+    expect(recent.load.mock.calls.length).toBe(recents);
+  });
+
+  it("清除后迟到的搜索结果不写入当前列表", async () => {
+    const { ref } = await mount(MODE.music);
+    const controller = (ref.current as unknown as Harness).controller;
+    await search(controller, "陈绮贞");
+    const staleToken = ref.current!.state.requestToken;
+
+    await act(async () => {
+      controller.clearMusicSearch();
+    });
+    await act(async () => {
+      controller.pushAllData(staleToken, [{} as PlatformData], 5);
+    });
+
+    expect(ref.current!.state.allMediaData).toEqual([]);
+    expect(ref.current!.state.totalPage).toBe(0);
+  });
+
+  it("清除后全局词也清空，再 `@` 同一个词会重新搜索", async () => {
+    const { ref, props: p } = await mount(MODE.music);
+    const rerender = async (searchKeyword: string) => {
+      await act(async () => {
+        render(h(Container, { ...p, searchKeyword, ref } as object), root);
+      });
+    };
+    await rerender("陈绮贞");
+    const searches = netease.searchMusic.mock.calls.length;
+    expect(searches).toBeGreaterThan(0);
+
+    await act(async () => {
+      (ref.current as unknown as Harness).controller.clearMusicSearch();
+    });
+    await rerender("");
+    expect(ref.current!.state.searchKeyword).toBe("");
+
+    await rerender("陈绮贞");
+    expect(netease.searchMusic.mock.calls.length).toBe(searches + 1);
+  });
+
+  it.each([
+    ["视频", MODE.video],
+    ["电台", MODE.radio],
+    ["收藏", MODE.favorites],
+  ])("清除钮只接在音乐模式；%s模式空提交没有变化", async (_name, mode) => {
+    const { ref } = await mount(mode);
+    const controller = (ref.current as unknown as Harness).controller;
+    await search(controller, "某视频");
+    expect(clearButton()).toBeNull();
+    await act(async () => {
+      controller.submitSearch("");
+    });
+    expect(ref.current!.state.searchKeyword).toBe("某视频");
+    expect(clearButton()).toBeNull();
+  });
+
+  it("音乐模式点清除钮走完整条路", async () => {
+    const { ref } = await mount(MODE.music);
+    await search((ref.current as unknown as Harness).controller, "陈绮贞");
+    const recents = recent.load.mock.calls.length;
+
+    await act(async () => clearButton()!.click());
+
+    expect(ref.current!.state.searchKeyword).toBe("");
+    expect(recent.load.mock.calls.length).toBe(recents + 1);
+    expect(root.querySelector("input")!.value).toBe("");
   });
 });
 

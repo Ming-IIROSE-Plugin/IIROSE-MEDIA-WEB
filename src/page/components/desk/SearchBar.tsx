@@ -1,6 +1,7 @@
 // 搜索栏（DESIGN.md `search-bar` / `source-switcher` / `search-submit` / `key-hint`）。
 // 一个整体：来源切换器 → 竖分隔线 → 放大镜 + 输入区（蔷薇红光标）→ 键位提示 → 墨底「搜索」。
 // 手机只保留来源简称 + 输入区（16px 防 iOS 聚焦放大），不显示键位提示与搜索按钮。
+// 音乐模式输入区后另有清除钮，手机也保留（手机没有搜索按钮，靠它回最近点播）。
 import { Component, createRef } from "preact";
 import {
   DeskIcon,
@@ -41,6 +42,7 @@ import {
   roomSupportsRequest,
   notifyRoomUnsupported,
 } from "../media-card-container/roomSupport";
+import { isPhoneLayout } from "../media-card-container/mediaFormat";
 import { SourceMenu } from "./SourceMenu";
 
 export interface SearchSource {
@@ -63,6 +65,8 @@ export interface SearchBarProps {
   onSubmit: (keyword: string) => void;
   /** 输入即通知（收藏 / 电台的即时过滤）；Enter / 按钮提交仍走 `onSubmit`。 */
   onLiveInput?: (keyword: string) => void;
+  /** 传了才显示清除钮（目前只有音乐模式）：输入区已清空后通知调用方。 */
+  onClear?: () => void;
   /** 面板是否打开：`/` 只在面板打开时抢焦点（单一来源，别去读 DOM class）。 */
   active: boolean;
 }
@@ -213,10 +217,16 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
   }
 
   private placeholder = () =>
-    this.props.placeholderPhone &&
-    window.matchMedia?.("(max-width: 768px)")?.matches
+    this.props.placeholderPhone && isPhoneLayout()
       ? this.props.placeholderPhone
       : this.props.placeholder;
+
+  private handleClear = () => {
+    this.setState({ value: "" });
+    // 桌面把焦点留在输入区接着打字；手机不聚焦，避免弹键盘
+    if (!isPhoneLayout()) this.focus();
+    this.props.onClear?.();
+  };
 
   render() {
     const { sources, sourceIndex } = this.props;
@@ -313,6 +323,17 @@ export class SearchBar extends Component<SearchBarProps, SearchBarState> {
             this.submit();
           }}
         />
+
+        {this.props.onClear && this.state.value && (
+          <button
+            type="button"
+            aria-label="清除搜索"
+            className={`mr-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent ${roundedMd} ${deskInk3} ${deskFocusRing} ${deskPress} max-[768px]:mr-0 max-[768px]:h-11 max-[768px]:w-11`}
+            onClick={this.handleClear}
+          >
+            <DeskIcon name="close" size={18} />
+          </button>
+        )}
 
         {hint && (
           <kbd

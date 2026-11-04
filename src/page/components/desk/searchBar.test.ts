@@ -61,6 +61,59 @@ afterEach(() => {
   document.getElementById("IIROSE_MEDIA_CONTAINER")?.remove();
 });
 
+describe("清除钮", () => {
+  const clearButton = () =>
+    host.querySelector<HTMLButtonElement>('button[aria-label="清除搜索"]');
+  const type = async (text: string) => {
+    await act(async () => {
+      input().value = text;
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+
+  it("传了 onClear 时才随输入出现，点击清空输入并通知调用方", async () => {
+    const onClear = vi.fn();
+    draw({ onClear });
+    expect(clearButton()).toBeNull();
+
+    await type("陈绮贞");
+    expect(clearButton()).not.toBeNull();
+
+    await act(async () => clearButton()!.click());
+    expect(input().value).toBe("");
+    expect(onClear).toHaveBeenCalledOnce();
+    expect(clearButton()).toBeNull();
+  });
+
+  it("其他模式不传 onClear：有内容也没有清除钮", async () => {
+    draw();
+    await type("陈绮贞");
+    expect(clearButton()).toBeNull();
+  });
+
+  it("桌面清除后焦点回到输入区，手机不聚焦以免弹键盘", async () => {
+    const original = window.matchMedia;
+    const setPhone = (matches: boolean) => {
+      window.matchMedia = (() => ({ matches })) as unknown as typeof original;
+    };
+    try {
+      setPhone(false);
+      draw({ onClear: () => {} });
+      await type("陈绮贞");
+      await act(async () => clearButton()!.click());
+      expect(document.activeElement).toBe(input());
+
+      input().blur();
+      setPhone(true);
+      await type("陈绮贞");
+      await act(async () => clearButton()!.click());
+      expect(document.activeElement).not.toBe(input());
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});
+
 describe("搜索栏", () => {
   it("来源切换器带圆点与简称，只有一个来源也显示", () => {
     draw();
