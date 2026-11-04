@@ -74,9 +74,10 @@ export class SelectionService {
     collection: PlatformData,
   ): InnerSelectionItem[] {
     if (current.innerCollection !== collection) return current.innerSelection;
-    const sentPositions = new Set(sent.map((item) => item.position));
+    // 位置 + 曲目 id 一起比：等待期间在同一位置改勾了别的歌，不能被这次收尾带走。
+    const sentKeys = new Set(sent.map((item) => `${item.position}:${item.id}`));
     return current.innerSelection.filter(
-      (item) => !sentPositions.has(item.position),
+      (item) => !sentKeys.has(`${item.position}:${item.id}`),
     );
   }
 

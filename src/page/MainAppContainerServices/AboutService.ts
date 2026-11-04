@@ -27,7 +27,12 @@ export class AboutService {
             actionTitle: "铭", // 这里对应你的名字 Ming
             icon: "user",
             action: async () => {
-              await ShowOrHideIMC();
+              // 面板关不掉（宿站拒绝 / 已在关）不该连名片一起吞掉。
+              try {
+                await ShowOrHideIMC();
+              } catch {
+                /* 继续弹名片 */
+              }
               new About().aboutCreator();
             },
           },
