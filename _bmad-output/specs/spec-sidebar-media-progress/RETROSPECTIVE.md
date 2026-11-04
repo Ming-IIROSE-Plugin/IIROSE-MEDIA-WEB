@@ -167,11 +167,23 @@ U1：!15有权调整、他端同步、权限判断、本人通道正常。U5：�
 
 ## Acceptance verdict
 
-**rejected（严格机器验收；criteria: profiled）**。
+**accepted-with-open-items**（2026-11-04 维护者复核后更新；原始机器判定见下）。
 
 这不是否认U1/U5或宣布整项功能不可用。主流程已有用户验收，最终构建和263项测试通过；但F1是合法媒体末尾定位的确定失败，F2违背可用的键盘/原生事件交互，F3在5秒等待预算内对相对成功回读给出错误结果，完整边界标准尚未满足。!16正向服务端证据另有F6缺口，因此不能诚实地给出完整accepted。
 
 未使用缺失的pending_stories列表强制拒绝，也未把陈旧in-progress标签当代码未实现；拒绝依据是复现的行为不符合要求。用户可裁定接受这些开放项并将结论覆盖为accepted-with-open-items；本轮未假设该裁定已发生。
+
+## 2026-11-04 复核
+
+A1–A5、A7–A8 的修复在 HEAD 上仍然成立（逐项核实）：
+
+| 项 | 证据 |
+|---|---|
+| A1 小数时长末尾 | `absoluteSeekTarget(target, media.duration)` 仍是唯一入口（`ProgressSession.ts:137/161`），`model.test.ts:118` 断言 300.8 → 300；`HostMediaBridge.test.ts:450`、`MediaProgress.test.ts:589` 均有 `[300.8, 300]` 用例 |
+| A2 输入来源生命周期 | `MediaProgress.tsx:82-91/132/336` 仍按手势生命周期置位与释放，混用/取消路径在 `MediaProgress.test.ts` |
+| A3 相对确认窗口 | `ProgressSession.ts` 的 `sentAt` + 自然推进上界仍在；`HostMediaBridge.test.ts:511/532` 覆盖「绝对目标不放宽 / 自然推进不确认」 |
+
+因此把判定从 `rejected` 更新为 `accepted-with-open-items`：fix-now 项已全部落地，剩下的只有需要人工的 `!16` 真实账号验收（A6）与服务端证据缺口（F6），两者都不阻塞已确认的 `!15` / owner / 本地位置能力。
 
 ## Fix follow-through (A1–A5, A7–A8)
 

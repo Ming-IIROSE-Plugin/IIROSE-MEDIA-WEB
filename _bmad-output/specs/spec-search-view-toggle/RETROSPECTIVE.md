@@ -70,6 +70,19 @@ headless: false
 - **模式分歧**:①box-sizing 无 preflight 靠手动 `box-border`——本特性踩中一次(bf2bd01),A4 指出这是系统性坑;②宿主 CSS 交互(通配过渡 E2)未纳入既有「宿站元素选择器」章节的防御清单
 - **spec 对账**:V1(图标语义)+ SPEC.md Open Questions 过期(B4,已延后)+ B10 台账与 reality 不符(已执行未销账)+ 冻结「最左缘」由 8950f4e 兑现(文字与实现终于一致)
 
+## 2026-11-04 复核（defer 5-10）
+
+| 项 | 现状 |
+|---|---|
+| 5 元信息省略号（verify-then-decide） | 未复测；该处的 `text-ellipsis` + `min-w-0` 约定已在 `AGENTS.md` 的视觉检查单里固定，属真机复测项而非代码待办 |
+| 6 移动端 375px 挤压 | 需设计裁决（缩按钮 / 缩略图 / 图标化），不是代码待办 |
+| 7 切换钮 a11y（role/键盘） | 站点级决策（与全站 div-onClick 风格一致），不是代码待办 |
+| 8 72px 魔数常量化 | **已随 `spec-media-desk-redesign` 消失**：当前 `72px` 只剩 `EpisodePicker` 与 `StateMessage` 两处新代码，原提案指的 3 个文件已重写 |
+| 9 台账清理 | 2026-10-31 已完成 |
+| 10 既有 deferred-work 4 项 | `_bmad-output/initiative-media-desk-redesign/deferred-work.md` 已不在仓库；相关条目随 redesign 收尾处理 |
+
+结论：defer 5-10 中没有仍可执行的代码项——5/6/7 需要维护者或设计裁决，8/9/10 已随代码演进关闭。
+
 ## Behavior verification
 
 - `8933aa3`:6 条 AC 真机逐条验证(即时切换/持久化/双入口/multiPage/窄屏/老数据回填)——记录于实现 spec triage 与会话日志
