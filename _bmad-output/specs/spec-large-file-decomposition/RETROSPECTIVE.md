@@ -62,34 +62,36 @@ headless: false
 
 ## Action Items
 
-| #   | 项                                                                             | 证据   | 建议    |
-| --- | ------------------------------------------------------------------------------ | ------ | ------- |
-| A1  | 回写 story 4/5 的 gzip 结论：真因是构建 target，已由 `713a520` 解决            | F1/F2  | fix now |
-| A2  | CAP-3 补口径（vite 报表 vs `gzip -9` 二选一），并记录 epic 期间的实际轨迹      | F3     | fix now |
-| A3  | story 6 补 Triage Log 与 `context:`（加 `shufflePickerHost.ts`）               | F14    | fix now |
-| A4  | 三个文件的行数改成实测值                                                       | F4     | fix now |
-| A5  | 写清「400 行」只约束四个目标文件，story 6 是自愿扩展                           | F5     | fix now |
-| A6  | story 2 的 private→public 数量更正为 25，并注明 `controller` 可写的影响        | F6     | fix now |
-| A7  | `playlistSkeleton` 改为 deps 注入（与 `fetchSongDetailsPooled` 一致）          | F9     | fix now |
-| A8  | `host.state` 声明为可选，或工厂延后到构造完成后执行                            | F10    | fix now |
-| A9  | 空合集判定提取为一个函数，三处共用                                             | F11    | fix now |
-| A10 | `itemsPerPage` / `snapshots` 的 `readonly` 与实际对齐                          | F12    | fix now |
-| A11 | `BiliBiliVideoApi` 加注释：静态成员在原型链上，别用 `getOwnPropertyNames` 打桩 | F13    | fix now |
-| A12 | memlog 收尾的「五个 story」改为 6 个；CAP-2 口径注明只覆盖值导出               | F8/F16 | fix now |
-| A13 | effect 顺序的记录更正                                                          | F7     | 提案    |
-| A14 | 下一轮 epic 收尾必须跑四条主路径真机                                           | F15    | 流程    |
+> 2026-11-04 复盘后经维护者批准全修（A1–A14）。
+
+| # | 项 | 证据 | 状态 |
+|---|---|---|---|
+| A1 | 回写 story 4/5 的 gzip 结论（真因是构建 target，已由 `713a520` 解决） | F1/F2 | 已修 |
+| A2 | CAP-3 补口径（`gzip -9` 实测），并记录 epic 期间的实际轨迹 | F3 | 已修 |
+| A3 | story 6 补 Triage Log 与 `context:`（加 `shufflePickerHost.ts`） | F14 | 已修 |
+| A4 | 三个文件的行数改成实测值（74 / 17 / 338 / 261） | F4 | 已修 |
+| A5 | 写清「400 行」只约束四个目标文件，story 6 是自愿扩展 | F5 | 已修 |
+| A6 | story 2 的 private→public 数量更正为 25，并注明 `controller` 可写的影响 | F6 | 已修 |
+| A7 | `playlistSkeleton` 改为 deps 注入 | F9 | 已修 |
+| A8 | `controller` / `categories` 移到构造函数末尾，`host.state` 不再是未定义 | F10 | 已修 |
+| A9 | 空合集判定提取为 `isEmptyCollection`，三处共用 | F11 | 已修 |
+| A10 | `itemsPerPage` / `snapshots` 的 `readonly` 与实际对齐 | F12 | 已修 |
+| A11 | `BiliBiliVideoApi` 加注释：静态成员在原型链上 | F13 | 已修 |
+| A12 | memlog 的「五个 story」改为 6 个；CAP-2 口径注明只覆盖值导出 | F8/F16 | 已修 |
+| A13 | effect 顺序的记录更正（净效果等价，但顺序确实变了） | F7 | 已修 |
+| A14 | SPEC 约束新增：收尾必须跑四条主路径真机 | F15 | 已修 |
 
 ---
 
 ## Acceptance Verdict
 
-**accepted-with-open-items**
+**accepted**
 
 - CAP-1（四个文件 ≤400 行）：达成，逐文件实测 386 / 364 / 338 / 17 行。
 - CAP-2（死代码清零）：达成（值导出 4 项），但「清零」只覆盖值导出，9 个零引用类型未纳入（F16）。
-- CAP-3（产物不回退）：**epic 内未达成**——story 4/5 期间 raw 与 gzip 都超过基线；`713a520` 才拉回，但那个提交不属于本 epic，且记录未回写（F1/F2/F3）。
-- 记录质量：6 份 story 里有 5 份存在可核对的事实偏差（行数、数量、effect 顺序、story 数）。
-- 覆盖缺口：story 6 无审查（F14），真机没覆盖四条主路径（F15）。
+- CAP-3（产物不回退）：**epic 内未达成**，由范围外的 `713a520` 拉回；记录已按复盘改正（A1–A3）。
+- 记录质量：6 份 story 里有 5 份存在可核对的事实偏差（行数、数量、effect 顺序、story 数），已在 A4–A6、A12–A13 改正。
+- 覆盖缺口：story 6 无审查（F14，已补 triage），真机没覆盖四条主路径（F15，已写入后续约束）。
 
 ## Assumptions
 

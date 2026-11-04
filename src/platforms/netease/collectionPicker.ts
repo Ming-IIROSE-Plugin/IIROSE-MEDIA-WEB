@@ -23,6 +23,10 @@ export interface CollectionPickerDeps {
     description?: string,
     key?: string,
   ) => Promise<void>;
+  /** 歌单骨架：与 `fetchDetails` 一样走注入，保证平台层的同名入口仍可被替换。 */
+  playlistSkeleton: (
+    playlist: Parameters<typeof playlistSkeleton>[0],
+  ) => ReturnType<typeof playlistSkeleton>;
 }
 
 /**
@@ -106,7 +110,7 @@ export const openCollectionEpisodePicker = (
           title: playlist.name,
           description: playlist.description ?? "",
         };
-        const skeleton = playlistSkeleton(playlist);
+        const skeleton = deps.playlistSkeleton(playlist);
         missing = skeleton.missing;
         return entriesOf(skeleton.tracks);
       }

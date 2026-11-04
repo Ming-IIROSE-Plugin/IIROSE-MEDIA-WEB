@@ -17,6 +17,7 @@ import {
   toggleRow,
   toggleTrack,
   type PickerState,
+  isEmptyCollection,
 } from "./pickerModel";
 import { PlatformTabs } from "./PlatformTabs";
 import {
@@ -139,7 +140,7 @@ export function ShufflePicker({
     () => summarize(state, list, loaded),
     [state, list, loaded],
   );
-  const empty = (id: string) => loaded.get(id)?.length === 0;
+  const empty = (id: string) => isEmptyCollection(loaded, id);
   const canConfirm = !!records && summary.entries > 0 && !exiting && !busy;
   // 全选/全不选按输入框当前内容取可见行，不等 150ms 防抖。
   const bulk = (checked: boolean) => {

@@ -60,7 +60,8 @@ export interface MainAppControllerHost {
   ): void;
   readonly props: MainAppContainerProps;
   /** 每页条数（音乐 / 视频等固定 10；收藏按设置走的是 `pageSizeFor`）。 */
-  readonly itemsPerPage: number;
+  /** 每页条数：容器按模式/收藏设置给出，这里的值可能随设置变化，不要当常量缓存。 */
+  itemsPerPage: number;
   /** 切模式时待提交的关键词（粘贴视频链接要先切到视频模式）。 */
   pendingSearch: string | null;
   /** 内页的来源条目：重试时按它重新载入内页。 */

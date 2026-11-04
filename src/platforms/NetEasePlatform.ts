@@ -94,6 +94,8 @@ export class NetEasePlatform extends Platform {
         NetEasePlatform.fetchSongDetailsPooled(ids, options),
       playIds: (ids, title, description, key) =>
         NetEasePlatform.playSongIds(ids, title, description, key),
+      playlistSkeleton: (playlist) =>
+        NetEasePlatform.playlistSkeleton(playlist),
     });
 
   /**

@@ -82,6 +82,8 @@ export class MainAppContainer extends Component<
       searchViewMode:
         PluginSettings.getPluginSetting().searchViewMode || "card",
     };
+    this.controller = createController(this);
+    this.categories = createCategories(this);
   }
 
   componentDidMount() {
@@ -385,8 +387,12 @@ export class MainAppContainer extends Component<
     return this.props.ShowOrHideIMC;
   }
 
-  controller: MainAppController = createController(this);
+  /**
+   * 控制器字典与分类表都在构造函数末尾创建：它们的 host 接口把 `state` 声明为必需，
+   * 而类字段初始化早于 `this.state = {...}`，放在字段里会在 state 还不存在时调用工厂。
+   */
+  controller!: MainAppController;
 
   /** 六种模式各自的来源与范围；下标即模式下标（表见 `mainAppCategories`）。 */
-  private categories: Categories[] = createCategories(this);
+  private categories!: Categories[];
 }

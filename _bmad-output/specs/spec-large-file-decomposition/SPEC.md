@@ -22,13 +22,16 @@ sources: [] # files fully absorbed into the SPEC (audit only; downstream does NO
   - **success:** `src/tools/ImageTools.ts` 与 `src/Api/NeteaseAPI/NeteaseSearch/AlbumInterface.ts` 被删除，`tokens.deskGutterWide` 与 `searchIntent.normalizeKeyword` 被删除，`tsc` 与测试全绿。
 - **CAP-3**
   - **intent:** 拆分不带来产物回退。
-  - **success:** `dist/bundle.js` ≤ 450 kB 且 gzip ≤ 134 kB，`npm test` 与 `npm run build` 全绿。
+  - **success:** `dist/bundle.js` ≤ 450 kB 且 gzip ≤ 134 kB（**口径：`gzip -9` 实测字节数，不用 vite 报表**；两者差约 800 B），`npm test` 与 `npm run build` 全绿。
+
+  > 复盘记：本 epic 自己的提交里 CAP-3 并未达成——story 4 是 444.78 kB / 134.25 kB、story 5 是 444.46 / 134.27，raw 与 gzip 都超过基线。真正拉回 437.25 / 131.99 的是 epic 之外的 `713a520`（`target: 'es2020'`）。
 
 ## Constraints
 
 - 产物仍是单文件 UMD（油猴 `@require` 与 iframe 注入决定），不引入 code-split 或动态 chunk。
 - 拆分只搬代码：行为、UI、用户可见文案、宿站交互契约一律不变；不借机改逻辑。
 - 每个 story 独立提交且测试全绿；现有测试不得放宽或删除来迁就新结构。
+- 收尾验收必须跑四条主路径（点播、循环/随机、收藏、设置）的真机验证；只做「面板能打开」的冒烟不算。
 - 不新增运行时依赖；格式化/整文件重排单独提交（`style:` 前缀）。
 
 ## Non-goals

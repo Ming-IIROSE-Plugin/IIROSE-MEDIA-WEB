@@ -7,6 +7,7 @@ import {
   type ShufflePlatform,
 } from "../../../playback/ShuffleSelection";
 import {
+  isEmptyCollection,
   isTrackChecked,
   pickedCount,
   rowOf,
@@ -187,8 +188,7 @@ export function PickerList({
           const single = isSingle(record);
           const expandable = canExpand(record);
           const open = expandable && expanded.has(record.id);
-          // 与父组件里 `empty()` 同一判定：空合集不可点选（两处需同步改）。
-          const disabled = loaded.get(record.id)?.length === 0;
+          const disabled = isEmptyCollection(loaded, record.id);
           const toggle = () => {
             if (!disabled) onToggleRow(record);
           };

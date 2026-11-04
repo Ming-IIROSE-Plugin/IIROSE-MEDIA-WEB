@@ -22,7 +22,8 @@ export interface MainAppModesHost {
   ): void;
   readonly props: MainAppContainerProps;
   /** 各模式现场快照；没有 = 该模式首次进入。 */
-  readonly snapshots: Map<number, ModeSnapshot>;
+  /** 各模式现场快照：只读引用，内容会随模式切换就地增改。 */
+  snapshots: Map<number, ModeSnapshot>;
   /** 切模式时待提交的关键词（粘贴视频链接要先切到视频模式）。 */
   pendingSearch: string | null;
   /** 内页的来源条目：重试时按它重新载入内页。 */

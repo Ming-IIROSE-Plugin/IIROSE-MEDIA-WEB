@@ -14,4 +14,7 @@ import { BiliBiliWatchApi } from "./watch";
  * 注意：链上任何一环都不要声明 `cors` / `cncors` / `malaysiacors` / `devcors` 同名静态字段，
  * `getBilibiliCors()` 是靠 `this` 沿链读到 `SendFetch` 上那四个值的。
  */
+// 注意：30 个方法都在原型链上（继承而来），不是 `BiliBiliVideoApi` 的自有属性。
+// 用 `Object.getOwnPropertyNames(BiliBiliVideoApi)` 或 `vi.spyOn(BiliBiliVideoApi, "x")`
+// 找不到它们——要打桩请 mock 整个模块，或改用 `BilibiliPlatform` 层的入口。
 export class BiliBiliVideoApi extends BiliBiliWatchApi {}

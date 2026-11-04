@@ -69,6 +69,17 @@ function partialTracks(
 }
 
 /** 部分勾选数（「已选 k」）：已加载时只计仍在歌单里的。 */
+/**
+ * 合集是否「已读但为空」：不可展开、不可勾选。
+ * 全选（`setVisible`）与行灰化（`PickerList`）共用这一处判定，避免两边各写一份后分叉。
+ */
+export function isEmptyCollection(
+  loaded: ReadonlyMap<string, { length: number }>,
+  id: string,
+): boolean {
+  return loaded.get(id)?.length === 0;
+}
+
 export function pickedCount(
   row: RowSelection,
   loaded: PickerTrack[] | undefined,
