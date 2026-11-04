@@ -10,33 +10,27 @@ import {
   unavailableReason,
   type MediaProgressPosition,
 } from "../../../media-progress/model";
-import {
-  currentViewportPosition,
-  pointerPosition,
-} from "../../../media-progress/viewport";
+import { currentViewportPosition } from "../../../media-progress/viewport";
 import {
   DragGrip,
   PanelHeader,
   panelFrame,
   panelSurface,
   secondaryButton,
-  startsOnControl,
   stopHostGestures,
-  Svg,
   themeAttr,
-  type DragHandleProps,
 } from "../floating-panel/floatingPanel";
-import { deskAccent, deskInk2, deskThumb } from "../floating-panel/tokens";
+import { deskAccent, deskInk2 } from "../floating-panel/tokens";
+import { ClockIcon, MediaProgressDetails } from "./MediaProgressDetails";
+import {
+  createDragHandle,
+  createSeekHandlers,
+  type DragMove,
+  type InputSource,
+} from "./progressGestures";
 
 // 快进快退：共享的描边次要按钮，保留原有尺寸、字号与禁用态。
 const stepClass = `${secondaryButton} min-w-[44px] px-2 text-[13px] disabled:cursor-not-allowed disabled:opacity-35`;
-
-const ClockIcon = () => (
-  <Svg size={22}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3 2" />
-  </Svg>
-);
 
 function samePosition(
   first: MediaProgressPosition,
@@ -71,17 +65,11 @@ export function MediaProgress({
   const positionRef = useRef(position);
   const onPositionChangeRef = useRef(onPositionChange ?? (() => {}));
   const session = useRef<ProgressSession>();
-  const move = useRef<{
-    pointer: number;
-    x: number;
-    y: number;
-    left: number;
-    top: number;
-  }>();
+  const move = useRef<DragMove>();
   const seekPointer = useRef<number>();
-  const inputSource = useRef<"pointer" | "keyboard" | "native" | null>(null);
+  const inputSource = useRef<InputSource | null>(null);
   const trailingChange = useRef<ReturnType<typeof setTimeout>>();
-  const startInput = (source: "pointer" | "keyboard" | "native") => {
+  const startInput = (source: InputSource) => {
     clearTimeout(trailingChange.current);
     trailingChange.current = undefined;
     inputSource.current = source;
@@ -181,66 +169,22 @@ export function MediaProgress({
     };
   }, []);
 
-  const pointerTarget = (element: HTMLInputElement, clientX: number) => {
-    const rect = element.getBoundingClientRect();
-    session.current?.preview(
-      ((clientX - rect.left) / rect.width) * (media.duration || 0),
-    );
-  };
-
-  const dragHandle: DragHandleProps = {
-    onPointerDown: (event) => {
-      if (!event.isPrimary || event.button !== 0) return;
-      // 关闭钮在头部行内：在它上面按下不拖动。
-      if (startsOnControl(event)) return;
-      const pointer = pointerPosition(
-        panel.current!,
-        event.clientX,
-        event.clientY,
-      );
-      move.current = {
-        pointer: event.pointerId,
-        x: pointer.x,
-        y: pointer.y,
-        left: positionRef.current.x,
-        top: positionRef.current.y,
-      };
-      event.currentTarget.setPointerCapture(event.pointerId);
-      setDragging(true);
-    },
-    onPointerMove: (event) => {
-      const start = move.current;
-      const element = panel.current;
-      if (!start || start.pointer !== event.pointerId || !element) return;
-      const pointer = pointerPosition(element, event.clientX, event.clientY);
-      const { metrics, offsetLeft, offsetTop } =
-        currentViewportPosition(element);
-      updatePosition(
-        constrainPosition(
-          start.left + pointer.x - start.x,
-          start.top + pointer.y - start.y,
-          element.offsetWidth,
-          element.offsetHeight,
-          metrics.width,
-          metrics.height,
-          offsetLeft,
-          offsetTop,
-        ),
-      );
-    },
-    onPointerUp: () => {
-      move.current = undefined;
-      setDragging(false);
-    },
-    onPointerCancel: () => {
-      move.current = undefined;
-      setDragging(false);
-    },
-    onLostPointerCapture: () => {
-      move.current = undefined;
-      setDragging(false);
-    },
-  };
+  const dragHandle = createDragHandle({
+    panel,
+    move,
+    position: positionRef,
+    updatePosition,
+    setDragging,
+  });
+  const seekHandlers = createSeekHandlers({
+    session,
+    media,
+    seekPointer,
+    inputSource,
+    trailingChange,
+    startInput,
+    finishInput,
+  });
 
   return (
     <div
@@ -279,47 +223,13 @@ export function MediaProgress({
         handle={dragHandle}
       />
       <div className="px-4 pb-3">
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl ${deskThumb} ${deskInk2}`}
-          >
-            {media.playing && media.cover && failedCover !== media.cover ? (
-              <img
-                className="h-full w-full object-cover"
-                src={media.cover}
-                alt=""
-                onError={() => setFailedCover(media.cover)}
-              />
-            ) : (
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                aria-hidden="true"
-              >
-                <path d="M9 18V5l11-2v13M9 8l11-2" />
-                <ellipse cx="6" cy="18" rx="3" ry="2.5" />
-                <ellipse cx="17" cy="16" rx="3" ry="2.5" />
-              </svg>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div
-              className="truncate font-semibold"
-              title={media.playing ? media.title : "暂无播放内容"}
-            >
-              {media.playing ? media.title : "暂无播放内容"}
-            </div>
-            <div className={`mt-1 text-[12px] tabular-nums ${deskInk2}`}>
-              {formatTime(media.playing ? time : null)} /{" "}
-              {formatTime(media.playing ? media.duration : null)}
-              {state.preview !== null ? " · 预览" : ""}
-            </div>
-          </div>
-        </div>
+        <MediaProgressDetails
+          media={media}
+          time={time}
+          previewing={state.preview !== null}
+          failedCover={failedCover}
+          onCoverError={setFailedCover}
+        />
         <input
           type="range"
           aria-label="媒体播放位置"
@@ -330,121 +240,7 @@ export function MediaProgress({
           value={time ?? 0}
           disabled={disabled}
           className={`m-0 mt-2 h-[44px] w-full touch-none cursor-pointer ${deskAccent} disabled:cursor-not-allowed disabled:opacity-40`}
-          onInput={(event) => {
-            if (
-              seekPointer.current !== undefined ||
-              (inputSource.current === "keyboard" &&
-                session.current?.state.preview !== null)
-            )
-              return;
-            const active = session.current;
-            if (!active || active.state.waiting) return;
-            const target = event.currentTarget.valueAsNumber;
-            if (active.state.preview === null && !active.begin()) return;
-            startInput("native");
-            active.preview(target);
-          }}
-          onChange={(event) => {
-            if (
-              inputSource.current === "pointer" ||
-              inputSource.current === "keyboard" ||
-              trailingChange.current !== undefined
-            )
-              return;
-            const active = session.current;
-            if (!active || active.state.waiting) return;
-            const target = event.currentTarget.valueAsNumber;
-            if (
-              inputSource.current === "native" &&
-              active.state.preview === null
-            )
-              return;
-            if (inputSource.current !== "native") {
-              if (
-                active.state.preview !== null ||
-                target === active.state.media.current ||
-                !active.begin()
-              )
-                return;
-            }
-            startInput("native");
-            active.preview(target);
-            finishInput();
-            active.commit();
-          }}
-          onPointerDown={(event) => {
-            if (
-              !event.isPrimary ||
-              event.button !== 0 ||
-              !session.current?.begin()
-            )
-              return;
-            event.preventDefault();
-            event.currentTarget.focus();
-            startInput("pointer");
-            seekPointer.current = event.pointerId;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            pointerTarget(event.currentTarget, event.clientX);
-          }}
-          onPointerMove={(event) => {
-            if (seekPointer.current === event.pointerId)
-              pointerTarget(event.currentTarget, event.clientX);
-          }}
-          onPointerUp={(event) => {
-            if (seekPointer.current !== event.pointerId) return;
-            pointerTarget(event.currentTarget, event.clientX);
-            finishInput();
-            session.current?.commit();
-          }}
-          onPointerCancel={() => {
-            seekPointer.current = undefined;
-            session.current?.cancel();
-          }}
-          onLostPointerCapture={() => {
-            if (seekPointer.current !== undefined) {
-              seekPointer.current = undefined;
-              session.current?.cancel();
-            }
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              finishInput();
-              session.current?.commit();
-              return;
-            }
-            const changes: Record<string, number> = {
-              ArrowRight: 1,
-              ArrowUp: 1,
-              ArrowLeft: -1,
-              ArrowDown: -1,
-              PageUp: 60,
-              PageDown: -60,
-            };
-            if (
-              !(event.key in changes) &&
-              event.key !== "Home" &&
-              event.key !== "End"
-            )
-              return;
-            event.preventDefault();
-            if (
-              session.current?.state.preview === null &&
-              !session.current.begin()
-            )
-              return;
-            startInput("keyboard");
-            const current =
-              session.current?.state.preview ?? media.current ?? 0;
-            session.current?.preview(
-              event.key === "Home"
-                ? 0
-                : event.key === "End"
-                  ? media.duration!
-                  : current + changes[event.key],
-            );
-          }}
-          onBlur={() => session.current?.cancel()}
+          {...seekHandlers}
         />
         <div className="grid grid-cols-4 gap-2">
           {([-60, -1, 1, 60] as const).map((seconds) => (

@@ -1,25 +1,34 @@
 // 结果区容器：Promise 状态机（loading / error / 空 / 未搜索）+ 按模式与范围选形态。
-// 取代旧的 `MediaCard`：曲目表 / 音乐网格 / 视频网格 / 专辑·歌单行 / 状态部件都在这里选。
+// 形态派生与文案在 resultsModel，列表 / 网格 / 状态分别在 ResultsRows /
+// ResultsTiles / ResultsPlaceholder；容器只管状态机、滚动与点播接线。
 import { guardedRequest } from "../../../playback/RequestGuard";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 import { SettingsCards } from "../settings/SettingsGroup";
 import { MediaContainerContext } from "../media-container-context/MediaContainerContext";
 import { MODE } from "../desk/deskModes";
 import { deskGutter, deskInk, typeLabelStrong } from "../floating-panel/tokens";
-import { CollectionRow } from "./CollectionRow";
-import { MusicTile } from "./MusicTile";
-import { SkeletonRows, SkeletonTiles } from "./Skeletons";
+import { ResultsPlaceholder } from "./ResultsPlaceholder";
+import { ResultsRows } from "./ResultsRows";
+import { ResultsTiles } from "./ResultsTiles";
 import { StateMessage } from "./StateMessage";
-import { TracklistHeader, TracklistRow } from "./TracklistRow";
-import { VideoTile } from "./VideoTile";
-import { isCollectionItem } from "./mediaFormat";
-import { isNowPlayingTitle, subscribeNowPlayingTitle } from "./nowPlaying";
+import { TracklistHeader } from "./TracklistRow";
+import { subscribeNowPlayingTitle } from "./nowPlaying";
 import { notifyRoomUnsupported, roomSupportsRequest } from "./roomSupport";
+import {
+  emptyMessage,
+  musicGridClass,
+  RADIO_MIN_PENDING_MS,
+  settingsPageClass,
+  shapeOf,
+  videoGridClass,
+  type Load,
+  type ResultsPayload,
+  type ResultsSelection,
+  type SelectionProps,
+} from "./resultsModel";
 
-export interface ResultsPayload {
-  platformData: PlatformData[];
-  totalPage: number;
-}
+export { RADIO_MIN_PENDING_MS, shapeOf } from "./resultsModel";
+export type { ResultsPayload, ResultsSelection } from "./resultsModel";
 
 export interface ResultsAreaProps {
   mediaData: Promise<ResultsPayload> | null;
@@ -45,68 +54,6 @@ export interface ResultsAreaProps {
    * 选择状态由容器持有——结果区随 `mediaData` 重置，放这里翻页就丢。
    */
   selection?: ResultsSelection;
-}
-
-export interface ResultsSelection {
-  /** 1 起的点选序号；未选为 undefined。 */
-  orderOf: (position: number) => number | undefined;
-  onToggle: (position: number, platformData: PlatformData) => void;
-}
-
-type Shape =
-  | "settings"
-  | "tracklist"
-  | "musicGrid"
-  | "videoGrid"
-  | "collections"
-  | "radio"
-  | "favorites"
-  | "favoritesGrid";
-
-type Load =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "ready"; data: ResultsPayload };
-
-const musicGridClass =
-  "grid grid-cols-5 gap-x-[22px] gap-y-[22px] [grid-auto-rows:max-content] max-[768px]:grid-cols-3 max-[768px]:gap-x-3 max-[768px]:gap-y-4";
-const videoGridClass =
-  "grid grid-cols-4 gap-x-[22px] gap-y-[26px] [grid-auto-rows:max-content] max-[768px]:grid-cols-2 max-[768px]:gap-x-3 max-[768px]:gap-y-[18px]";
-/** 设置 / 关于：纸色底上的卡列（卡宽随内容区收敛，卡间 24px，DESIGN.md `settings-group.note`）。 */
-const settingsPageClass =
-  "flex max-w-[760px] flex-col gap-6 pb-4 pt-6 max-[768px]:pb-6";
-
-/** 形态由「模式 + 范围 + 视图 + 内页」派生，不新增 prop 爆炸。 */
-/** 电台流几乎瞬间发出：「点播中」至少停留 1 秒，看得见过渡。 */
-export const RADIO_MIN_PENDING_MS = 1_000;
-
-export function shapeOf(options: {
-  mode: number;
-  scopeIndex: number;
-  viewMode: "card" | "list";
-  isInnerPage: boolean;
-}): Shape {
-  const { mode, scopeIndex, viewMode, isInnerPage } = options;
-  // 内页（专辑 / 歌单曲目、多 P）同样跟着视图切换走
-  if (isInnerPage)
-    return viewMode === "list"
-      ? "tracklist"
-      : mode === MODE.video
-        ? "videoGrid"
-        : "musicGrid";
-  if (mode === MODE.settings || mode === MODE.about) return "settings";
-  if (mode === MODE.radio) return "radio";
-  if (mode === MODE.favorites)
-    return viewMode === "list" ? "favorites" : "favoritesGrid";
-  if (mode === MODE.video)
-    return viewMode === "list" ? "tracklist" : "videoGrid";
-  if (mode === MODE.music) {
-    if (scopeIndex === 1 || scopeIndex === 2) return "collections";
-    if (scopeIndex === 3) return "videoGrid";
-    return viewMode === "list" ? "tracklist" : "musicGrid";
-  }
-  return "tracklist";
 }
 
 export function ResultsArea({
@@ -230,9 +177,6 @@ export function ResultsArea({
     void switchToMultiPage(platformData);
   };
 
-  const isNowPlaying = (platformData: PlatformData) =>
-    isNowPlayingTitle(nowPlayingTitle, platformData);
-
   const handleAreaClick = (event: MouseEvent) => {
     if (revealedKey === null) return;
     const target = event.target as HTMLElement | null;
@@ -240,27 +184,15 @@ export function ResultsArea({
     setRevealedKey(null);
   };
 
-  const emptyState = (): { message: string; action?: string } => {
-    // 内页没有关键词可换：空列表说明这张专辑/歌单本身没有曲目。
-    if (isInnerPage) return { message: "这张列表没有曲目。" };
-    if (firstScreen)
-      return { message: "还没有点播记录。搜索歌名或歌手，点播到房间。" };
-    if (shape === "favorites" || shape === "favoritesGrid") {
-      return trimmedKeyword
-        ? { message: "没有匹配的收藏", action: "清除搜索" }
-        : { message: "还没有收藏。在曲目旁点星标即可收藏。" };
-    }
-    if (shape === "radio" && trimmedKeyword)
-      return { message: "没有匹配的电台", action: "清除搜索" };
-    return { message: "没有找到结果。换个关键词试试。" };
-  };
-
   /** 表头文案：专辑/歌单的时长列换成曲目数。 */
   const durationLabel = shape === "collections" ? "曲目数" : "时长";
 
   /** 内页勾选只给内页的曲目行 / 音乐网格卡。 */
   const selectable = !!selection && isInnerPage;
-  const selectProps = (platformData: PlatformData, index: number) => {
+  const selectProps = (
+    platformData: PlatformData,
+    index: number,
+  ): SelectionProps => {
     if (!selection || !selectable) return {};
     const position = pageOffset + index;
     return {
@@ -268,82 +200,6 @@ export function ResultsArea({
       onToggleSelect: () => selection.onToggle(position, platformData),
     };
   };
-
-  const renderRows = (items: PlatformData[]) => {
-    if (shape === "collections") {
-      return items.map((platformData, index) => (
-        <CollectionRow
-          key={`${index}:${platformData.title}`}
-          platformData={platformData}
-          index={pageOffset + index + 1}
-          onOpen={() => openCollection(platformData)}
-        />
-      ));
-    }
-    return items.map((platformData, index) =>
-      // 收藏里的专辑 / 歌单：与搜索结果同一种行（曲目数 + 「查看」进内页）
-      shape === "favorites" && isCollectionItem(platformData) ? (
-        <CollectionRow
-          key={`${index}:${platformData.title}`}
-          platformData={platformData}
-          index={pageOffset + index + 1}
-          onOpen={() => openCollection(platformData)}
-        />
-      ) : (
-        <TracklistRow
-          key={`${index}:${platformData.title}`}
-          platformData={platformData}
-          index={pageOffset + index + 1}
-          variant={shape === "radio" ? "radio" : "track"}
-          nowPlaying={isNowPlaying(platformData)}
-          supported={supported}
-          onPlay={() => play(platformData)}
-          {...selectProps(platformData, index)}
-        />
-      ),
-    );
-  };
-
-  const renderTiles = (items: PlatformData[]) =>
-    items.map((platformData, index) => {
-      const key = `${index}:${platformData.title}`;
-      const revealed = revealedKey === key;
-      // 收藏网格里歌曲、视频、专辑混排：统一方形卡（视频封面方形裁切）
-      // 收藏网格里的专辑 / 歌单：胶囊是「查看」，点卡片或胶囊都进内页
-      const collection =
-        shape === "favoritesGrid" && isCollectionItem(platformData);
-      const open = () => void openCollection(platformData);
-      return shape === "musicGrid" || shape === "favoritesGrid" ? (
-        <MusicTile
-          key={key}
-          platformData={platformData}
-          nowPlaying={isNowPlaying(platformData)}
-          supported={collection || supported}
-          revealed={revealed}
-          onReveal={() => setRevealedKey(key)}
-          onPlay={collection ? open : () => play(platformData)}
-          idleLabel={collection ? "查看" : "点播"}
-          {...selectProps(platformData, index)}
-        />
-      ) : (
-        <VideoTile
-          key={key}
-          platformData={platformData}
-          nowPlaying={isNowPlaying(platformData)}
-          supported={supported}
-          revealed={revealed}
-          onReveal={() => setRevealedKey(key)}
-          onPlay={() => play(platformData)}
-          // 课程没有分 P 详情 / 播放流接口（课程流走 `BiliBiliCourseApi`）：面板取不到
-          // 分集，桌面保留内页钻取这条既有能力；其余多 P / 多集由面板接管。
-          onSelectEpisodes={
-            platformData.bilibili?.course_id
-              ? () => void openCollection(platformData)
-              : undefined
-          }
-        />
-      );
-    });
 
   const body = () => {
     if (shape === "settings") {
@@ -355,58 +211,27 @@ export function ResultsArea({
       );
     }
 
-    if (load.status === "error")
+    if (load.status !== "ready")
       return (
-        <StateMessage message="加载失败" action="重试" onAction={onRetry} />
-      );
-
-    // 方形卡网格：音乐网格与收藏网格
-    const square = shape === "musicGrid" || shape === "favoritesGrid";
-
-    // idle = 还没有任何数据承诺（首次进入某模式 / 恢复到 `mediaData: null` 的快照）：
-    // 此时渲染骨架，不能落到空态——否则会闪一帧「没有找到结果」。
-    // 例外：空关键词的视频模式 / 音乐专辑·歌单·MV 范围不会自己发请求，idle 是常态，
-    // 骨架会永远转下去——这里给搜索提示。
-    if (
-      load.status === "idle" &&
-      !trimmedKeyword &&
-      !isInnerPage &&
-      (mode === MODE.video || (mode === MODE.music && scopeIndex !== 0))
-    ) {
-      return (
-        <StateMessage
-          message={
-            mode === MODE.video
-              ? "输入关键词或粘贴 BV 号，搜索视频。"
-              : "输入关键词开始搜索。"
-          }
+        <ResultsPlaceholder
+          load={load}
+          shape={shape}
+          mode={mode}
+          scopeIndex={scopeIndex}
+          trimmedKeyword={trimmedKeyword}
+          isInnerPage={isInnerPage}
+          onRetry={onRetry}
         />
       );
-    }
 
-    if (load.status === "idle" || load.status === "loading") {
-      return shape === "tracklist" ||
-        shape === "collections" ||
-        shape === "favorites" ||
-        shape === "radio" ? (
-        <div className={deskGutter}>
-          <SkeletonRows />
-        </div>
-      ) : (
-        <div
-          className={`${deskGutter} ${square ? musicGridClass : videoGridClass}`}
-        >
-          <SkeletonTiles
-            count={square ? 10 : 8}
-            aspect={square ? "square" : "video"}
-          />
-        </div>
-      );
-    }
-
-    const items = load.status === "ready" ? load.data.platformData : [];
+    const items = load.data.platformData;
     if (items.length === 0) {
-      const empty = emptyState();
+      const empty = emptyMessage({
+        isInnerPage,
+        firstScreen,
+        shape,
+        trimmedKeyword,
+      });
       return (
         <StateMessage
           message={empty.message}
@@ -416,6 +241,7 @@ export function ResultsArea({
       );
     }
 
+    const square = shape === "musicGrid" || shape === "favoritesGrid";
     const recentHeading = firstScreen && (
       <h2 className={`mb-1 mt-4 ${typeLabelStrong} ${deskInk}`}>最近点播</h2>
     );
@@ -425,7 +251,17 @@ export function ResultsArea({
         <div className={deskGutter}>
           {recentHeading}
           <div className={square ? musicGridClass : videoGridClass}>
-            {renderTiles(items)}
+            <ResultsTiles
+              items={items}
+              shape={shape}
+              nowPlayingTitle={nowPlayingTitle}
+              supported={supported}
+              revealedKey={revealedKey}
+              onReveal={setRevealedKey}
+              onPlay={play}
+              onOpenCollection={openCollection}
+              selectProps={selectProps}
+            />
           </div>
         </div>
       );
@@ -440,7 +276,16 @@ export function ResultsArea({
             selectable={selectable}
           />
         )}
-        {renderRows(items)}
+        <ResultsRows
+          items={items}
+          shape={shape}
+          pageOffset={pageOffset}
+          nowPlayingTitle={nowPlayingTitle}
+          supported={supported}
+          onPlay={play}
+          onOpenCollection={openCollection}
+          selectProps={selectProps}
+        />
       </div>
     );
   };
