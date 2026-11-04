@@ -4,24 +4,19 @@ import {
   deriveFavoriteId as deriveFavoriteIdImpl,
   inScope,
   storageId as toStorageId,
-  normalizeRecord,
   getCurrentOwnerUid as currentOwnerUid,
   toPublicRecord,
 } from "./favorites/recordUtils";
 import {
-  STORE_NAME,
   dbState,
   ensureOwnerScope as ensureOwnerScopeImpl,
   openDatabase,
   readAll as readAllImpl,
-  rebuildFallbackIdCache as rebuildFallbackIdCacheImpl,
-  refreshIdCache as refreshIdCacheImpl,
 } from "./favorites/database";
 import { restorePlatformData as restorePlatformDataImpl } from "./favorites/restorePlatformData";
-import {
-  TOMBSTONE_TTL_MS,
-  purgeTombstones as purgeTombstonesImpl,
-} from "./favorites/tombstones";
+import { TOMBSTONE_TTL_MS } from "./favorites/tombstones";
+import { addFavorite, removeFavorite } from "./favorites/writes";
+import { applyRemoteMerge as applyRemoteMergeImpl } from "./favorites/merge";
 
 export interface FavoriteRecord {
   /**
@@ -140,11 +135,6 @@ export class FavoritesStorageService {
     }
   }
 
-  /** 补齐同步字段，防止云端或旧版本数据缺字段 */
-  private static purgeTombstones(store: IDBObjectStore): void {
-    purgeTombstonesImpl(store);
-  }
-
   /**
    * 根据 PlatformData 生成规范化的唯一标识符
    */
@@ -196,92 +186,7 @@ export class FavoritesStorageService {
    * 添加收藏（归属当前账号）
    */
   public static async add(data: PlatformData): Promise<FavoriteRecord | null> {
-    await this.ensureOwnerScope();
-    const meta = this.deriveFavoriteId(data);
-    if (!meta) {
-      console.warn("[FavoritesStorage] 无法提取有效收藏主键", data);
-      return null;
-    }
-
-    // 解析并升级 HTTPS 封面
-    let resolvedCover = "";
-    try {
-      resolvedCover =
-        typeof data.coverImg === "string" ? data.coverImg : await data.coverImg;
-    } catch {
-      resolvedCover = "";
-    }
-    if (resolvedCover) {
-      resolvedCover = resolvedCover.replace(/^http:\/\//, "https://");
-    }
-
-    // 复制 platformData，剥离无法序列化的 Promise 属性
-    const sanitizedPlatformData: PlatformData = {
-      ...data,
-      coverImg: resolvedCover,
-      multiPage: undefined, // 存库时脱钩，恢复时重组
-    };
-
-    const ownerUid = currentValidUid();
-    const storageId = ownerUid ? toStorageId(ownerUid, meta.id) : meta.id;
-    const now = Date.now();
-    const record: FavoriteRecord = {
-      id: storageId,
-      ...(ownerUid ? { ownerUid } : {}),
-      platform: meta.platform,
-      type: meta.type,
-      title: data.title,
-      subtitle: data.subtitle,
-      coverImg: resolvedCover,
-      author: data.author || "",
-      websiteUrl: data.websiteUrl || "",
-      duration: data.duration,
-      trackCount: data.trackCount,
-      createdAt: now,
-      updatedAt: now,
-      // 同键再次收藏：写入的新记录天然覆盖旧墓碑
-      deletedAt: undefined,
-      dirty: true,
-      platformData: sanitizedPlatformData,
-    };
-
-    dbState.cachedIds.add(storageId);
-
-    if (dbState.useFallback) {
-      dbState.memoryFallback.set(storageId, record);
-      this.emitChange();
-      return toPublicRecord(record);
-    }
-
-    const db = await dbState.dbPromise;
-    if (!db) {
-      dbState.memoryFallback.set(storageId, record);
-      this.emitChange();
-      return toPublicRecord(record);
-    }
-
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const store = tx.objectStore(STORE_NAME);
-        this.purgeTombstones(store);
-        const req = store.put(record);
-        req.onsuccess = () => {
-          this.emitChange();
-          resolve(toPublicRecord(record));
-        };
-        req.onerror = (e) => {
-          console.error("[FavoritesStorage] 写入 IndexedDB 失败:", e);
-          dbState.memoryFallback.set(storageId, record);
-          this.emitChange();
-          resolve(toPublicRecord(record));
-        };
-      } catch (e) {
-        dbState.memoryFallback.set(storageId, record);
-        this.emitChange();
-        resolve(toPublicRecord(record));
-      }
-    });
+    return addFavorite(data, () => this.emitChange());
   }
 
   /**
@@ -289,80 +194,7 @@ export class FavoritesStorageService {
    * 作用域限定在当前账号。
    */
   public static async remove(target: string | PlatformData): Promise<void> {
-    await this.ensureOwnerScope();
-    const logicalId =
-      typeof target === "string" ? target : this.deriveFavoriteId(target)?.id;
-    if (!logicalId) return;
-
-    // 与 isFavorited() 对称：优先当前账号的键；未归属记录（游客态/升级时 uid 无效）
-    // 的键就是裸逻辑主键，必须回退到它，否则取消收藏会静默失败、星标反弹。
-    const ownerKey = toStorageId(this.getCurrentOwnerUid(), logicalId);
-    const storageId = dbState.cachedIds.has(ownerKey) ? ownerKey : logicalId;
-
-    dbState.cachedIds.delete(ownerKey);
-    dbState.cachedIds.delete(logicalId);
-
-    const now = Date.now();
-
-    if (dbState.useFallback) {
-      const existing = dbState.memoryFallback.get(storageId);
-      if (existing && !existing.deletedAt) {
-        dbState.memoryFallback.set(storageId, {
-          ...existing,
-          deletedAt: now,
-          updatedAt: now,
-          dirty: true,
-        });
-        this.emitChange();
-      }
-      return;
-    }
-
-    const db = await dbState.dbPromise;
-    if (!db) {
-      const existing = dbState.memoryFallback.get(storageId);
-      if (existing && !existing.deletedAt) {
-        dbState.memoryFallback.set(storageId, {
-          ...existing,
-          deletedAt: now,
-          updatedAt: now,
-          dirty: true,
-        });
-        this.emitChange();
-      }
-      return;
-    }
-
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const store = tx.objectStore(STORE_NAME);
-        this.purgeTombstones(store);
-        const getReq = store.get(storageId);
-        getReq.onsuccess = () => {
-          const existing = getReq.result as FavoriteRecord | undefined;
-          if (!existing || existing.deletedAt) {
-            resolve();
-            return;
-          }
-          const putReq = store.put({
-            ...existing,
-            deletedAt: now,
-            updatedAt: now,
-            dirty: true,
-          });
-          putReq.onsuccess = () => {
-            this.emitChange();
-            resolve();
-          };
-          putReq.onerror = () => resolve();
-        };
-        getReq.onerror = () => resolve();
-        tx.onabort = () => resolve();
-      } catch {
-        resolve();
-      }
-    });
+    return removeFavorite(target, () => this.emitChange());
   }
 
   /**
@@ -455,12 +287,7 @@ export class FavoritesStorageService {
   }
 
   /**
-   * 把「已成功写入云端」的合并结果批量落地到当前账号：
-   * - 活记录 → 覆盖写回并**清除 dirty**、写 `syncedAt`（30 天墓碑清理的前提）；
-   * - 墓碑条目 → 只影响本地已有的同键记录（本地没有则该墓碑对本地无意义）；
-   * - `snapshotUpdatedAt` 之后被本地改动过的记录跳过，避免用旧快照覆盖新改动；
-   * - 顺带物理清理满 30 天的**已同步**墓碑；
-   * - 落地后发出「外部变更」通知，供已渲染的收藏列表刷新。
+   * 把「已成功写入云端」的合并结果批量落地到当前账号（落地细节见 `favorites/merge`）。
    *
    * @param snapshotUpdatedAt 本次快照的 `updatedAt`（判断本地改动是否更新）
    * @param syncedAt 本次写入云端被服务端确认的时间（缺省用当前时间）
@@ -470,88 +297,9 @@ export class FavoritesStorageService {
     snapshotUpdatedAt: number,
     syncedAt?: number,
   ): Promise<void> {
-    if (!items || items.length === 0) return;
-    await this.ensureOwnerScope();
-    const owner = currentValidUid();
-    if (!owner) return;
-
-    const now = typeof syncedAt === "number" ? syncedAt : Date.now();
-    const existing = await readAllImpl();
-    const existingMap = new Map(existing.map((record) => [record.id, record]));
-
-    const nextRecords: FavoriteRecord[] = [];
-    for (const item of items) {
-      if (!item || typeof item.key !== "string") continue;
-      const storageId = toStorageId(owner, item.key);
-      const previous = existingMap.get(storageId);
-      const previousUpdatedAt = previous
-        ? (previous.updatedAt ?? previous.createdAt ?? 0)
-        : 0;
-      if (previous && previousUpdatedAt > snapshotUpdatedAt) continue;
-
-      if (item.record) {
-        nextRecords.push(
-          normalizeRecord({
-            ...item.record,
-            id: storageId,
-            ownerUid: owner,
-            deletedAt: undefined,
-            dirty: false,
-            syncedAt: now,
-          }),
-        );
-      } else if (item.deletedAt && previous) {
-        nextRecords.push(
-          normalizeRecord({
-            ...previous,
-            deletedAt: item.deletedAt,
-            updatedAt: item.deletedAt,
-            dirty: false,
-            syncedAt: now,
-          }),
-        );
-      }
-    }
-
-    if (dbState.useFallback) {
-      for (const record of nextRecords) {
-        dbState.memoryFallback.set(record.id, record);
-      }
-      rebuildFallbackIdCacheImpl();
-      this.emitExternalChange();
-      return;
-    }
-
-    const db = await dbState.dbPromise;
-    if (!db) {
-      for (const record of nextRecords) {
-        dbState.memoryFallback.set(record.id, record);
-      }
-      rebuildFallbackIdCacheImpl();
-      this.emitExternalChange();
-      return;
-    }
-
-    return new Promise((resolve) => {
-      try {
-        const tx = db.transaction(STORE_NAME, "readwrite");
-        const store = tx.objectStore(STORE_NAME);
-        this.purgeTombstones(store);
-        for (const record of nextRecords) {
-          store.put(record);
-        }
-        tx.oncomplete = () => {
-          void refreshIdCacheImpl(db).then(() => {
-            this.emitExternalChange();
-            resolve();
-          });
-        };
-        tx.onerror = () => resolve();
-        tx.onabort = () => resolve();
-      } catch {
-        resolve();
-      }
-    });
+    return applyRemoteMergeImpl(items, snapshotUpdatedAt, syncedAt, () =>
+      this.emitExternalChange(),
+    );
   }
 
   /**

@@ -3,6 +3,8 @@ import { GetBiliBiliAccount } from "../Account/BiliBili/GetBiliBili";
 import { ShowMessage } from "../iirose_func/ShowMessage";
 import { readJson } from "../storage/localStore";
 import { getNeteaseNode } from "./NeteaseAPI/Nodes";
+import * as fetchTransport from "./transports/fetchTransport";
+import * as xhrTransport from "./transports/xhrTransport";
 
 export class SendFetch {
   // public static cors = `http://localhost:9000/proxy?url=`;
@@ -28,34 +30,7 @@ export class SendFetch {
     warn: boolean = true,
     signal?: AbortSignal,
   ) {
-    const symbol = url.includes("?") ? "&" : "?";
-    const fullUrl = `${url}${symbol}${params.toString()}`;
-    if (!headers) headers = new Headers();
-    try {
-      const response = await fetch(fullUrl, {
-        method: "GET",
-        headers: {
-          // Headers 实例没有可枚举自有属性，展开会丢光所有请求头
-          ...Object.fromEntries(headers),
-          Origin: "https://iirose.com",
-        },
-        signal: signal,
-      });
-
-      if (!response.ok && warn) {
-        ShowMessage.show(
-          `GET请求失败，url: ${fullUrl} 状态码：${response.status}, 信息：${response.statusText}, params: ${params.toString()}`,
-        );
-      }
-
-      return response;
-    } catch (error) {
-      if (warn) {
-        ShowMessage.show(`GET请求失败，url: ${fullUrl} 信息：${error}`);
-        console.log(`GET请求失败，url: ${fullUrl} 信息：${error}`);
-      }
-      return null;
-    }
+    return fetchTransport.sendGet(url, params, headers, warn, signal);
   }
 
   public static async sendGetXHR(
@@ -63,30 +38,7 @@ export class SendFetch {
     params: URLSearchParams,
     headers: Headers,
   ) {
-    const fullUrl = `${url}?${params.toString()}`;
-
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-
-      headers.forEach((value, key) => {
-        xhr.setRequestHeader(key, value);
-      });
-
-      xhr.open("GET", fullUrl, true);
-      xhr.setRequestHeader("Origin", ""); // 设置 Origin 为空
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === XMLHttpRequest.DONE) {
-          if (xhr.status === 200) {
-            // 请求成功，将响应返回
-            resolve(xhr.responseText);
-          } else {
-            // 请求失败，返回错误信息
-            reject(new Error(`Request failed with status: ${xhr.status}`));
-          }
-        }
-      };
-      xhr.send();
-    });
+    return xhrTransport.sendGetXHR(url, params, headers);
   }
 
   public static async sendPost(
@@ -96,41 +48,7 @@ export class SendFetch {
     warn: boolean = true,
     signal?: AbortSignal,
   ) {
-    try {
-      if (!headers) headers = new Headers();
-      if (
-        window.iirosemedia &&
-        window.iirosemedia.cors !== undefined &&
-        headers
-      ) {
-        if (headers.get("cookie-trans")) {
-          headers.append("cookie", headers.get("cookie-trans") as string);
-        }
-      }
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          // Headers 实例没有可枚举自有属性，展开会丢光所有请求头
-          ...Object.fromEntries(headers),
-          Origin: "https://iirose.com",
-        },
-        body: params,
-        signal: signal,
-      });
-
-      if (!response.ok && warn) {
-        ShowMessage.show(
-          `POST请求失败，url: ${url} 状态码：${response.status}, 信息：${response.statusText}, params: ${params.toString()}`,
-        );
-      }
-
-      return response;
-    } catch (error) {
-      if (warn) {
-        ShowMessage.show(`POST请求失败，url: ${url} 信息：${error}`);
-      }
-      return null;
-    }
+    return fetchTransport.sendPost(url, params, headers, warn, signal);
   }
 
   public static async sendHead(
@@ -141,72 +59,22 @@ export class SendFetch {
     warn: boolean = true,
     signal?: AbortSignal,
   ) {
-    try {
-      if (window.iirosemedia && window.iirosemedia.cors !== undefined) {
-        if (headers.get("cookie-trans")) {
-          headers.append("cookie", headers.get("cookie-trans") as string);
-        }
-      }
-
-      const fullUrl = `${url}?${params.toString()}`;
-
-      const response = await fetch(fullUrl, {
-        method: "HEAD",
-        headers: headers,
-        redirect: followredirect ? "follow" : "manual",
-        signal: signal,
-      });
-
-      if (!response.ok && warn) {
-        ShowMessage.show(
-          `GET请求失败，url: ${url} 状态码：${response.status}, 信息：${response.statusText}, Cookie: ${headers.get("cookie-trans")}, params: ${params.toString()}`,
-        );
-      }
-
-      return response;
-    } catch (error) {
-      if (warn) {
-        ShowMessage.show(`HEAD请求失败，url: ${url} 信息：${error}`);
-      }
-      return null;
-    }
+    return fetchTransport.sendHead(
+      url,
+      params,
+      headers,
+      followredirect,
+      warn,
+      signal,
+    );
   }
 
   public static async tryGetWitchFetch(url: string) {
-    try {
-      const response = await fetch(url, {});
-
-      // 如果请求成功，检查状态码
-      if (response.ok || response.status === 200) {
-        return true;
-      } else {
-        return false;
-      }
-    } catch (error) {
-      console.log(error);
-      return true; // 处理其他错误
-    }
+    return fetchTransport.tryGetWitchFetch(url);
   }
 
   public static async tryGetWhithXhr(url: string): Promise<boolean> {
-    return new Promise((resolve) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("HEAD", url, true); // 使用 HEAD 请求方法
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(true); // 请求成功，返回 true
-        } else {
-          resolve(false); // 请求失败，返回 false
-        }
-      };
-      xhr.onerror = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(true); // 请求成功，返回 true
-        }
-        resolve(false); // 请求出错，返回 false
-      };
-      xhr.send(); // 发送请求
-    });
+    return xhrTransport.tryGetWhithXhr(url);
   }
 
   protected static returnBilibiliHeaders() {
