@@ -246,7 +246,7 @@ describe("网易云分页编排", () => {
     expect(state().updating).toBe(false);
   });
 
-  it("空关键词但页码命中缓存：先给缓存页而不是清空（空词判断在缓存之后）", async () => {
+  it("空关键词即使命中缓存也清空（空词判断在缓存分支之前）", async () => {
     const search = vi.spyOn(NetEasePlatform, "searchForMusicsBasicsData");
     const { ctx, state, page } = makeCtx({
       searchKeyword: "",
@@ -257,9 +257,7 @@ describe("网易云分页编排", () => {
     NetEaseService.searchMusic(ctx, 10);
 
     expect(search).not.toHaveBeenCalled();
-    expect((await page())?.platformData.map((item) => item.title)).toEqual([
-      "甲",
-    ]);
-    expect(state().mediaData).not.toBeNull();
+    expect(await page()).toBeNull();
+    expect(state().totalPage).toBe(0);
   });
 });

@@ -238,7 +238,7 @@ describe("直播搜索", () => {
     expect(state().totalPage).toBe(0);
   });
 
-  it("按当前页取直播，点播入口换成 LOD，落地后只写总页数", async () => {
+  it("按当前页取直播，点播入口换成 LOD，落地后写总页数并解除守卫", async () => {
     const data = Promise.resolve({
       platformData: rows("直播间"),
       totalPage: 6,
@@ -254,13 +254,14 @@ describe("直播搜索", () => {
     expect(state().mediaData).toBe(data);
     expect(state().currentOnDemandPlay).toBe(BilibiliPlatform.LOD);
     expect(state().requestToken).toBe(1);
-    // 直播不走 loadPage：不置 updating、不追加全局列表
-    expect(state().updating).toBe(false);
+    // 直播不走 loadPage：不追加全局列表，但同样要占用/解除 updating 守卫
+    expect(state().updating).toBe(true);
     expect(state().allMediaData).toEqual([]);
 
     await data;
     await Promise.resolve();
     expect(state().totalPage).toBe(6);
+    expect(state().updating).toBe(false);
   });
 
   it("票号被换掉：迟到的直播结果不写总页数", async () => {
@@ -281,7 +282,7 @@ describe("直播搜索", () => {
     expect(state().totalPage).toBe(0);
   });
 
-  it("没有 updating 守卫：连点两次各发一次请求，票号谁在前谁落地", async () => {
+  it("进行中再点不发第二次请求（与另两条搜索同一守卫）", () => {
     const search = vi
       .spyOn(BilibiliPlatform, "searchForLiveBasicsData")
       .mockResolvedValue({ platformData: rows("直播间"), totalPage: 3 });
@@ -290,10 +291,7 @@ describe("直播搜索", () => {
     BilibiliService.snbclickSearchLive(ctx);
     BilibiliService.snbclickSearchLive(ctx);
 
-    expect(search).toHaveBeenCalledTimes(2);
-    expect(state().requestToken).toBe(2);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(state().totalPage).toBe(3);
+    expect(search).toHaveBeenCalledTimes(1);
+    expect(state().requestToken).toBe(1);
   });
 });

@@ -3,6 +3,9 @@
 import { BilibiliPlatform } from "../../platforms/BilibiliPlatform";
 import { loadPage, showPage, sliceCachedPage } from "./pagedLoader";
 
+/** B 站搜索接口的每页条数（上游固定 50，与本地 itemsPerPage 无关）。 */
+const BILI_SEARCH_PAGE_SIZE = 50;
+
 export class BilibiliService {
   /**
    * 首页推荐
@@ -59,7 +62,9 @@ export class BilibiliService {
     // 网络请求
     else if (!updating) {
       const page =
-        currentPage !== 1 ? Math.floor(allMediaData.length / 50) + 1 : 1;
+        currentPage !== 1
+          ? Math.floor(allMediaData.length / BILI_SEARCH_PAGE_SIZE) + 1
+          : 1;
 
       loadPage(ctx, {
         fetch: () =>
@@ -74,13 +79,17 @@ export class BilibiliService {
    * @param ctx 核心操作上下文
    */
   static snbclickSearchLive(ctx: MainAppContainerActionContext) {
-    const { searchKeyword, currentPage, requestToken } = ctx.getState();
+    const { searchKeyword, currentPage, requestToken, updating } =
+      ctx.getState();
 
     // 1. 基础校验：如果搜索关键字为空，重置状态并返回
     if (searchKeyword === "") {
       ctx.setState({ mediaData: null, totalPage: 0 });
       return;
     }
+
+    // 与另两条搜索一致：进行中不叠加第二次请求。
+    if (updating) return;
 
     // 2. 准备请求：生成新的 Request Token 防止并发冲突
     const currentRequestToken = requestToken + 1;
@@ -96,17 +105,18 @@ export class BilibiliService {
       mediaData: dataPromise,
       currentOnDemandPlay: lod,
       requestToken: currentRequestToken,
+      updating: true,
     });
 
     // 4. 异步处理结果
-    dataPromise.then((res) => {
-      // 校验 Token：确保回调返回时，用户没有发起新的搜索请求
-      if (ctx.getState().requestToken !== currentRequestToken) {
-        return;
-      }
-
-      // 更新总页数
-      ctx.setState({ totalPage: res.totalPage });
-    });
+    // 成功与失败都要解除守卫；陈旧结果不动它（新请求自己会接管）。
+    const settle = (patch: Partial<MainAppContainerState>) => {
+      if (ctx.getState().requestToken !== currentRequestToken) return;
+      ctx.setState({ ...patch, updating: false });
+    };
+    dataPromise.then(
+      (res) => settle({ totalPage: res.totalPage }),
+      () => settle({}),
+    );
   }
 }

@@ -2,6 +2,9 @@
 import { AllVideosPlatform } from "../../platforms/AllVideosPlatform";
 import { loadPage, showPage, sliceCachedPage } from "./pagedLoader";
 
+/** 采集站接口的每页条数（上游固定 10，与本地 itemsPerPage 无关）。 */
+const COLLECT_SITE_PAGE_SIZE = 10;
+
 export class AllVideosService {
   /**
    * @description 多源剧集搜索逻辑
@@ -23,7 +26,7 @@ export class AllVideosService {
       return;
     }
 
-    // 2. 初始化总页数检查
+    // 2. 首屏（还没加载过）总页数归零；不要沿用上一轮搜索的 totalPage。
     if (!allMediaData.length) {
       ctx.setState({ totalPage: 0 });
     }
@@ -48,9 +51,11 @@ export class AllVideosService {
     }
     // 4. 逻辑 B: 处理异步网络请求
     else if (!updating) {
-      // 计算采集站对应的页码 (假设每页 10 条)
+      // 采集站每页 10 条（上游口径，与本地 itemsPerPage 无关）。
       const page =
-        currentPage !== 1 ? Math.floor(allMediaData.length / 10) + 1 : 1;
+        currentPage !== 1
+          ? Math.floor(allMediaData.length / COLLECT_SITE_PAGE_SIZE) + 1
+          : 1;
 
       // 落地后由加载器凭票号追加到全局列表
       loadPage(ctx, {
