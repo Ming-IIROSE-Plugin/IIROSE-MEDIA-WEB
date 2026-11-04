@@ -85,6 +85,7 @@ export function useDeck(): DeckModel | null {
       return undefined;
     }
     // 底条随面板常驻（面板关掉也留在树上）：它不能把轮询永久按在 250ms。
+    // 注意内页勾选时 SelectionBar 会原位取代 RoomDeck，底条连同这个会话一起离树。
     const active = new ProgressSession(session.bridge, setProgress, false);
     setProgressSession(active);
     setProgress(active.state);

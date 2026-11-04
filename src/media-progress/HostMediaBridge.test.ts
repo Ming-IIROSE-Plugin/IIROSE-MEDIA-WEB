@@ -717,7 +717,8 @@ describe("宿站桥接与交互生命周期", () => {
         return nested.apply(this, args);
       };
       host.shareMedia = external;
-      vi.advanceTimersByTime(250);
+      // 该用例只有直接订阅、没有活跃标签：轮询按 1s 节奏。
+      vi.advanceTimersByTime(1000);
       stop();
       const before = bridge.read().instance;
       expect(external.call(receiver)).toBe(receiver);

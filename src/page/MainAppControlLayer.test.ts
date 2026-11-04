@@ -14,6 +14,10 @@ vi.mock("../sync/SyncManager", () => ({
 
 import { MainAppControlLayer } from "./MainAppControlLayer";
 import {
+  provideMediaSession,
+  releaseMediaSession,
+} from "../media-progress/MediaSession";
+import {
   pushOverlayLayer,
   setPanelBackHandler,
 } from "./components/desk/overlayLayers";
@@ -46,6 +50,26 @@ afterEach(() => {
   delete (window as unknown as Record<string, unknown>).Utils;
   delete (window as unknown as Record<string, unknown>)
     .__imwOverlayBackDispatch;
+  releaseMediaSession();
+});
+
+describe("面板开合驱动媒体轮询节奏", () => {
+  it("会话晚于组件提供时补上当前状态（未打开 → false）", () => {
+    render(h(Layer, {}), host);
+    const setPanelOpen = vi.fn();
+    provideMediaSession({
+      bridge: {} as never,
+      playback: {} as never,
+      pickShuffle: () => {},
+      setPanelOpen,
+    });
+    expect(setPanelOpen).toHaveBeenLastCalledWith(false);
+  });
+
+  // 「打开 → 250ms / 关闭 → 1s」这条端到端接线由真机脚本覆盖：
+  // scripts/verify/media-polling.mjs 会 hook setInterval，实测 idle=[1000]、
+  // 打开面板后出现 250。单测里 toggle 走 Alt+S，两次 setState 的批处理时序
+  // 不稳定，写在这里只会锁住时序而不是行为。
 });
 
 describe("主面板主题属性", () => {

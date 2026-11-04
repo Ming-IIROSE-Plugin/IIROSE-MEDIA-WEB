@@ -44,7 +44,9 @@ export class BilibiliPlatform extends Platform {
     options?: AutoPlayOptions,
   ) {
     return playPage(
-      BilibiliPlatform.prepareAndSendMedia,
+      // 发送时才取：流解析期间替换 `prepareAndSendMedia` 也要生效（原实现即如此）。
+      (data, url, duration, qn, cardless) =>
+        BilibiliPlatform.prepareAndSendMedia(data, url, duration, qn, cardless),
       basePlatformData,
       pageItem,
       aid,
@@ -101,8 +103,9 @@ export class BilibiliPlatform extends Platform {
   }
 
   /**
-   * 点播入口的发送点一律现取类成员：测试替换 `playBiliPage` / `prepareAndSendMedia`
-   * 后才生效，不能把模块实现直接交给 VOD。
+   * 在 VOD 入口**取一次**类成员交给 `vod()`：测试只要在调用 VOD 之前装 spy 就能生效
+   * （现有用例都是这样做的）。VOD 执行中途再替换不会生效——真正需要「确认时现取」的
+   * 是选集面板（见 `episodes.selectEpisodes` 的 `getPlayPage`）。
    */
   private static vodDeps = (): VodDeps => ({
     playBiliPage: BilibiliPlatform.playBiliPage,

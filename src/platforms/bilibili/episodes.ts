@@ -123,7 +123,7 @@ export const vod = async (
       };
       // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
       await Announce.runSingleAnnounce(() =>
-        deps.playBiliPage(platformData, singlePage, aid, bvid),
+        deps.playBiliPage(platformData, singlePage, aid, bvid, options),
       );
       return;
     }
@@ -153,6 +153,7 @@ export const vod = async (
           { ...pages[0], part: platformData.title },
           aid,
           bvid,
+          options,
         ),
       );
     } else {

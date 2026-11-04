@@ -53,31 +53,33 @@ criteria: declared
 
 ## Action Items
 
-| #   | 项                                                                 | 证据     | 建议    |
-| --- | ------------------------------------------------------------------ | -------- | ------- |
-| A1  | 两条单集分支补传 `options`（cardless），并加「收藏随机不发卡」用例 | F1       | fix now |
-| A2  | `vodDeps()` 注释改成与实际一致（或改成真的现取）                   | F2       | fix now |
-| A3  | `playBiliPage` 里的 `prepareAndSendMedia` 改为发送时现取           | F3       | fix now |
-| A4  | `activeTags` 改为引用计数，或让每个读者用自己的 tag                | F4       | fix now |
-| A5  | `poke()` 补一条嵌套路径的测试（或加更硬的闸）                      | F5       | 提案    |
-| A6  | 补「点亮 → 播完 → 预发」的桥接级测试                               | F6       | fix now |
-| A7  | 面板开合驱动节奏的接线测试（用真实 `MainAppControlLayer`）         | F7       | 提案    |
-| A8  | `HostMediaBridge.test.ts:720` 的空推进改成实际会触发的时长         | F8       | fix now |
-| A9  | `stories.yaml` 的 CAP-3 引用改为 CAP-1                             | F9       | fix now |
-| A10 | `?raw` 守卫改为按目录枚举                                          | F10      | 提案    |
-| A11 | `useDeck` 注释补「内页勾选时会被 SelectionBar 取代」               | F11      | fix now |
-| A12 | 把真机 `setInterval` 验证固化成脚本（`scripts/verify/`）           | 验证缺口 | 提案    |
+> 2026-11-04 复盘后经维护者批准全修（A1–A12）。
+
+| # | 项 | 证据 | 状态 |
+|---|---|---|---|
+| A1 | 两条单集分支补传 `options`（cardless），加「收藏随机不发卡」两条用例 | F1 | 已修 |
+| A2 | `vodDeps()` 注释改成实际语义（入口取一次，不是现取） | F2 | 已修 |
+| A3 | `playBiliPage` 里的 `prepareAndSendMedia` 改为发送时现取 | F3 | 已修 |
+| A4 | 每个 `ProgressSession` 用自己的 tag（`progress:N`），不再互相撤标记 | F4 | 已修 |
+| A5 | `poke()` 重入路径补测试（订阅回调里再 poke 只触发一次） | F5 | 已修 |
+| A6 | 补桥接级「点亮 → 一拍 → 预发」测试（真实 bridge + 真实控制器，3 条） | F6 | 已修 |
+| A7 | 面板接线：单测保留「会话晚到重放」，端到端交给真机脚本 | F7 | 部分修 |
+| A8 | `HostMediaBridge.test.ts:720` 的空推进改成 1000ms | F8 | 已修 |
+| A9 | `stories.yaml` 的 CAP-3 引用改为「已撤回，不对应任何 CAP」 | F9 | 已修 |
+| A10 | `?raw` 守卫改为 `import.meta.glob` 按目录枚举 | F10 | 已修 |
+| A11 | `useDeck` 注释补「内页勾选时会被 SelectionBar 取代」 | F11 | 已修 |
+| A12 | 真机 `setInterval` 验证固化为 `scripts/verify/media-polling.mjs` | 验证缺口 | 已修（实测 `ok: true`） |
 
 ---
 
 ## Acceptance Verdict
 
-**accepted-with-open-items**
+**accepted**
 
 - CAP-1（拆分 ≤400 行）：达成——HEAD 实测 112 / 237 / 127 / 267 / 164 / 23，人工核对全部达标；但没有自动检查（守门已撤回，F8）。
-- CAP-2（空闲 1 s / 活跃 250 ms）：机制达成并经真机验证；但 SPEC 自己要求的「点亮后预发」证据缺失（F6），面板接线无测试（F7）。
+- CAP-2（空闲 1 s / 活跃 250 ms）：机制达成并经真机验证；「点亮后预发」已由桥接级测试补上（A6），面板接线有真机脚本兜底（A12）。
 - CAP-3：已按维护者要求撤回（story 3 `dropped`），SPEC 已删，仅 yaml 残留引用（F9）。
-- 发现一处真实功能缺陷（F1，收藏随机发卡），系既有缺陷而非本次引入。
+- 发现一处真实功能缺陷（F1，收藏随机发卡），系既有缺陷而非本次引入，已修并补两条用例。
 
 ## Assumptions
 

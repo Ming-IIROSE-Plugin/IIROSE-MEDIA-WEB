@@ -88,6 +88,20 @@ describe("媒体轮询节奏", () => {
     off();
   });
 
+  it("订阅回调里再次 poke 不会递归", () => {
+    const bridge = fixture();
+    let calls = 0;
+    const off = bridge.subscribe(() => {
+      calls += 1;
+      // 真实路径：定时器 emit → 控制器发报文 → Socket.observe → poke。
+      bridge.poke();
+    });
+    calls = 0;
+    bridge.poke();
+    expect(calls).toBe(1);
+    off();
+  });
+
   it("最后一个订阅者退订后停表，重新订阅按当前活跃标记起表", () => {
     const bridge = fixture();
     const first = vi.fn();

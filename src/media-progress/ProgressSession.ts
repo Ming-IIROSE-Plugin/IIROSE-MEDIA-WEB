@@ -18,6 +18,8 @@ export interface ProgressState {
 }
 
 // 将手势与发送边界集中管理，避免 pointerup / blur / keyup 重复提交。
+let progressSessionSeq = 0;
+
 export class ProgressSession {
   state: ProgressState;
   private gesture: {
@@ -37,6 +39,8 @@ export class ProgressSession {
   private timeout?: ReturnType<typeof setTimeout>;
   private unsubscribe: () => void;
   private disposed = false;
+  /** 每个会话一个独立 tag：同页可能同时有浮窗与面板底条，同名 tag 会互相撤标记。 */
+  private readonly activeTag = `progress:${++progressSessionSeq}`;
 
   constructor(
     private bridge: HostMediaBridge,
@@ -51,7 +55,7 @@ export class ProgressSession {
       message: "",
     };
     this.unsubscribe = bridge.subscribe((media) => this.receive(media));
-    if (this.readsProgress) bridge.setActive("progress", true);
+    if (this.readsProgress) bridge.setActive(this.activeTag, true);
   }
 
   private publish() {
@@ -227,6 +231,6 @@ export class ProgressSession {
     this.disposed = true;
     this.clearOperation();
     this.unsubscribe();
-    if (this.readsProgress) this.bridge.setActive("progress", false);
+    if (this.readsProgress) this.bridge.setActive(this.activeTag, false);
   }
 }

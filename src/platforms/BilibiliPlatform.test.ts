@@ -43,21 +43,14 @@ vi.mock(
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { BilibiliPlatform } from "./BilibiliPlatform";
 import openSource from "./BilibiliPlatform.ts?raw";
-import biliSearchSource from "./bilibili/search.ts?raw";
-import biliPagesSource from "./bilibili/pages.ts?raw";
-import biliPlaybackSource from "./bilibili/playback.ts?raw";
-import biliEpisodesSource from "./bilibili/episodes.ts?raw";
-import biliSharedSource from "./bilibili/shared.ts?raw";
+// 按目录枚举：新增/搬走子模块时守卫自动跟随，不会因为写死清单而漏掉。
+const biliSources = import.meta.glob("./bilibili/*.ts", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
 
-// 拆分后平台源码分散在主文件与子模块：守卫必须扫全部，否则搬走的部分不再受约束。
-const platformSources = [
-  openSource,
-  biliSearchSource,
-  biliPagesSource,
-  biliPlaybackSource,
-  biliEpisodesSource,
-  biliSharedSource,
-].join("\n");
+const platformSources = [openSource, ...Object.values(biliSources)].join("\n");
 import type { EpisodePickEntry } from "../page/components/episode-picker/EpisodePicker";
 
 const pages = [
@@ -259,6 +252,67 @@ describe("多 P 点播开选集面板", () => {
       },
     });
     await BilibiliPlatform.VOD(video, 1, { cardless: true });
+
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(
+      socketSend.mock.calls.map(([data]) => String(data).slice(0, 2)),
+    ).toEqual(["&1"]);
+    socketSend.mockRestore();
+  });
+
+  it("cardless（收藏随机）覆盖单集视频：只发报文，不发卡片", async () => {
+    // 复盘 F1：单集视频直接播放分支漏传 options，收藏随机会照发卡片。
+    playBiliPage.mockRestore();
+    const { Socket } = await import("../iirose_func/Socket");
+    const socketSend = vi
+      .spyOn(Socket.prototype, "send")
+      .mockImplementation(() => {});
+    videoApi.getBilibiliVideoData.mockResolvedValue({
+      code: 0,
+      data: { pages: [pages[0]], desc: "" },
+    });
+    videoApi.getBilibiliVideoStream.mockResolvedValue({
+      code: 0,
+      data: {
+        durl: [{ url: "https://x/1.m4s" }],
+        quality: 64,
+        timelength: 60_000,
+      },
+    });
+
+    await BilibiliPlatform.VOD(video, undefined, { cardless: true });
+
+    expect(announce.sendMediaCard).not.toHaveBeenCalled();
+    expect(
+      socketSend.mock.calls.map(([data]) => String(data).slice(0, 2)),
+    ).toEqual(["&1"]);
+    socketSend.mockRestore();
+  });
+
+  it("cardless（收藏随机）覆盖子级单集卡片：只发报文，不发卡片", async () => {
+    playBiliPage.mockRestore();
+    const { Socket } = await import("../iirose_func/Socket");
+    const socketSend = vi
+      .spyOn(Socket.prototype, "send")
+      .mockImplementation(() => {});
+    const single = {
+      ...video,
+      bilibili: { bvid: "BV1", cid: 101 },
+    } as unknown as PlatformData;
+    videoApi.getBilibiliVideoData.mockResolvedValue({
+      code: 0,
+      data: { pages: [pages[0]], desc: "" },
+    });
+    videoApi.getBilibiliVideoStream.mockResolvedValue({
+      code: 0,
+      data: {
+        durl: [{ url: "https://x/1.m4s" }],
+        quality: 64,
+        timelength: 60_000,
+      },
+    });
+
+    await BilibiliPlatform.VOD(single, undefined, { cardless: true });
 
     expect(announce.sendMediaCard).not.toHaveBeenCalled();
     expect(

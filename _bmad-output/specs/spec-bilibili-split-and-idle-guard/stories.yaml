@@ -29,7 +29,7 @@
   title: 产物体积守门
   description: >-
     新增构建后体积检查脚本并接入 CI：bundle.js 超过 450 kB 或 gzip 超过 134 kB 时失败，
-    并打印实测值，落实 CAP-3。
+    并打印实测值。该 story 已按维护者要求撤回，不再对应任何 CAP（SPEC 已无 CAP-3）。
   spec_checkpoint: false
   done_checkpoint: false
   invoke_dev_with: >-
