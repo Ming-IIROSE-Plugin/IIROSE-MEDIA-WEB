@@ -1,9 +1,9 @@
 // 哔哩哔哩链接直点：聊天输入框的链接拦截（`InputPlatformAnalysis`）与
 // 搜索栏粘贴的「带 `?p=` 的分 P 链接」共用这一份实现，不要在任一处另写一遍。
-// 链接的纯解析在 `page/components/desk/searchIntent` 的 `parseBilibiliLink`。
+// 链接的纯解析在同目录的 `bilibiliLinkParse`（视图层的 `searchIntent` 只是再导出）。
 
 import { BilibiliPlatform } from "./BilibiliPlatform";
-import { parseBilibiliLink } from "../page/components/desk/searchIntent";
+import { parseBilibiliLink } from "./bilibiliLinkParse";
 
 export interface BilibiliLinkPlayOptions {
   /** 只接管带 `?p=N` 的链接（搜索栏：不带分 P 的链接仍按搜索词提交）。 */

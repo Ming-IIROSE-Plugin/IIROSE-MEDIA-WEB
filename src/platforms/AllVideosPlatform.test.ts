@@ -25,10 +25,7 @@ const meta = vi.hoisted(() => ({
 const socket = vi.hoisted(() => ({ send: vi.fn(), sendMessage: vi.fn() }));
 
 vi.mock("../iirose_func/Socket/Announce", () => ({ Announce: announce }));
-vi.mock(
-  "../page/components/episode-picker/openEpisodePicker",
-  () => episodePicker,
-);
+vi.mock("./episodePickerPort", () => episodePicker);
 vi.mock("../tools/parseMediaMetaData", () => ({ ParseMediaMetaData: meta }));
 vi.mock("../iirose_func/Socket", () => ({ Socket: vi.fn(() => socket) }));
 

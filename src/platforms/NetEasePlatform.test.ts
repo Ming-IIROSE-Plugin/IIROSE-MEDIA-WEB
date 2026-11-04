@@ -22,10 +22,7 @@ vi.mock("../Api/NeteaseAPI/NeteaseMusic", () => ({
   NeteaseMusicAPI: neteaseMusic,
 }));
 vi.mock("../iirose_func/Socket/Announce", () => ({ Announce: announce }));
-vi.mock(
-  "../page/components/episode-picker/openEpisodePicker",
-  () => episodePicker,
-);
+vi.mock("./episodePickerPort", () => episodePicker);
 
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { ShowMessage } from "../iirose_func/ShowMessage";

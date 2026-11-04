@@ -1,8 +1,5 @@
 import { NeteaseMusicAPI } from "../../Api/NeteaseAPI/NeteaseMusic";
-import {
-  openEpisodePicker,
-  type EpisodePickEntry,
-} from "../../page/components/episode-picker/openEpisodePicker";
+import { openEpisodePicker, type EpisodePickEntry } from "../episodePickerPort";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
 import { playlistSkeleton } from "./collection";
 import { collectionKey, millisOrZero, type CollectionTrack } from "./shared";

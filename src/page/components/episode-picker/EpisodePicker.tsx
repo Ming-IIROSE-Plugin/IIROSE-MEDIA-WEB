@@ -38,18 +38,17 @@ import {
   typeRowTitle,
   touchMin,
 } from "../floating-panel/tokens";
+import type {
+  EpisodePickEntry,
+  EpisodePickOrder,
+} from "../../../platforms/episodePickerPort";
 
-/** 一条可选分集：id 由调用方保证在本次列表内唯一。 */
-export interface EpisodePickEntry {
-  id: string;
-  title: string;
-  /** 副行（B 站 / 多源留空，网易云放歌手）。 */
-  meta?: string;
-  /** 时长（秒）；缺省不渲染等宽时长。 */
-  duration?: number;
-}
-
-export type EpisodePickOrder = "asc" | "shuffle";
+// 这两个类型是平台层构造的数据形状，定义在 `platforms/episodePickerPort`：
+// 视图层从这里再导出，避免「平台层为了拿类型而 import 视图层」。
+export type {
+  EpisodePickEntry,
+  EpisodePickOrder,
+} from "../../../platforms/episodePickerPort";
 
 export type EpisodePickStatus = "loading" | "failed" | "ready";
 

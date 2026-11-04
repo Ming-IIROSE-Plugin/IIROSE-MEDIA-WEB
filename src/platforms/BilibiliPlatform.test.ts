@@ -35,10 +35,7 @@ vi.mock("../Api/BilibiliAPI/bilibili-course/BiliBiliCourseApi", () => ({
   BiliBiliCourseApi: courseApi,
 }));
 vi.mock("../iirose_func/Socket/Announce", () => ({ Announce: announce }));
-vi.mock(
-  "../page/components/episode-picker/openEpisodePicker",
-  () => episodePicker,
-);
+vi.mock("./episodePickerPort", () => episodePicker);
 
 import { IIROSEUtils } from "../iirose_func/IIROSEUtils";
 import { BilibiliPlatform } from "./BilibiliPlatform";

@@ -1,6 +1,6 @@
 // mainAppCategories.ts
 //
-// 视图层的映射：把「平台检索」的集中描述（`platforms/platformSearchSources`）翻成
+// 视图层的映射：把「平台检索」的集中描述（`page/platformSearchSources`）翻成
 // 点歌台要的 `Categories`。这里只做结构性映射，不写取数逻辑；平台与范围的增删改
 // 全在描述表里完成，新增平台不改这一层。
 
@@ -8,7 +8,7 @@ import {
   PLATFORM_SEARCH_SOURCES,
   type PlatformSearchRange,
   type PlatformSearchSource,
-} from "../platforms/platformSearchSources";
+} from "./platformSearchSources";
 
 /**
  * 分类表向容器要的那一口：表里的 `searchAction` 会在任意时刻被用户触发，

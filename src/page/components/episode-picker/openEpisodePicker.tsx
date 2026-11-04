@@ -6,6 +6,10 @@
 // `Esc` / 宿站返回键交给 `overlayLayers` 的层栈（新增 `episode` 层），不另开单槽位：
 // 两套槽位会在同一次返回里抢。
 import { render } from "preact";
+import {
+  setEpisodePickerOpener,
+  type OpenEpisodePickerOptions,
+} from "../../../platforms/episodePickerPort";
 import { hostIsDark } from "../../../iirose_func/HostTheme";
 import { restoreFocus } from "../desk/focusTrap";
 import { ensureOverlayBackHook, pushOverlayLayer } from "../desk/overlayLayers";
@@ -38,31 +42,6 @@ function isReturnTarget(element: Element | null): element is HTMLElement {
     element !== document.documentElement &&
     !element.closest?.("[data-imw-episode-picker]")
   );
-}
-
-export interface OpenEpisodePickerOptions {
-  /** 数量单位：视频 / 剧集「集」、网易云曲目「首」。 */
-  unit: string;
-  /** 打开后取分集；失败留在面板里可重试（不点播）。 */
-  load: () => Promise<EpisodePickEntry[]>;
-  /**
-   * 列表出来后的后台补充（如网易云大歌单的歌名）：`patch` 按 id 合并标题 / 副行 / 时长并刷新，
-   * `progress` 报进度；面板关闭（取消、确认、卸载）时 `signal` 触发中止，别再请求。
-   * 已点选的项不受影响（id 不变）。
-   */
-  enrich?: (
-    entries: readonly EpisodePickEntry[],
-    api: {
-      patch: (changes: Map<string, Partial<EpisodePickEntry>>) => void;
-      progress: (done: number, total: number) => void;
-      signal: AbortSignal;
-    },
-  ) => Promise<void>;
-  /** 确认：按播放顺序排好的条目（正序 = 点选顺序，乱序 = 随机置换）。 */
-  onConfirm: (entries: EpisodePickEntry[]) => void;
-  onCancel?: () => void;
-  /** 关闭后焦点交还的元素；缺省为打开时的焦点元素。 */
-  returnFocus?: HTMLElement | null;
 }
 
 interface PickerHandle {
@@ -279,3 +258,6 @@ export function openEpisodePicker(options: OpenEpisodePickerOptions): void {
   focusClose();
   void runLoad();
 }
+
+// 视图层加载即把实现接到端口上：平台层（VOD / MLOD / AOD）只依赖端口。
+setEpisodePickerOpener(openEpisodePicker);

@@ -1,6 +1,7 @@
 // platformSearchSources.ts
 //
-// 平台检索的集中描述（CAP-3）：「平台 → 范围 → 取数动作」只写在这一份数据里。
+// 点歌台的平台检索集中描述（CAP-3）：「平台 → 范围 → 取数动作」只写在这一份数据里。
+// 放在 page/ 而不是 platforms/：它依赖各平台的 Service（page 层），而 platforms 不该反向依赖 page。
 // 视图层（`page/mainAppCategories`）负责把它映射成 `Platform`（title / shortTitle /
 // sourceKey / subNavBarItems），自己不写任何取数逻辑。
 // 注意：新增一个平台仍要照 `AGENTS.md` 补三处（platforms 类、Api 客户端、settings），
@@ -11,18 +12,18 @@
 
 import { SendFetch } from "../Api";
 import { DESK_MODE_LIST, type DeskModeId } from "../settings/deskModeCatalog";
-import { AboutService } from "../page/MainAppContainerServices/AboutService";
-import { AllVideosService } from "../page/MainAppContainerServices/AllVideoService";
-import { BilibiliService } from "../page/MainAppContainerServices/BilibiliService";
+import { AboutService } from "./MainAppContainerServices/AboutService";
+import { AllVideosService } from "./MainAppContainerServices/AllVideoService";
+import { BilibiliService } from "./MainAppContainerServices/BilibiliService";
 import {
   FavoritesService,
   type FavoritePlatformFilter,
   type FavoriteRange,
-} from "../page/MainAppContainerServices/FavoritesService";
-import { NetEaseService } from "../page/MainAppContainerServices/NetEaseService";
-import { RadioService } from "../page/MainAppContainerServices/RadioService";
-import { RecentService } from "../page/MainAppContainerServices/RecentService";
-import { SettingsService } from "../page/MainAppContainerServices/SettingsService";
+} from "./MainAppContainerServices/FavoritesService";
+import { NetEaseService } from "./MainAppContainerServices/NetEaseService";
+import { RadioService } from "./MainAppContainerServices/RadioService";
+import { RecentService } from "./MainAppContainerServices/RecentService";
+import { SettingsService } from "./MainAppContainerServices/SettingsService";
 
 /** 哔哩哔哩「推荐」的刷新计数：读一次拿数据、翻一次给下一次，读写都由调用点提供。 */
 export interface SearchRefreshCounter {

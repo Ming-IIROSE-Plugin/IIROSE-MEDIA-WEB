@@ -1,9 +1,6 @@
 import { BiliBiliCourseApi } from "../../Api/BilibiliAPI/bilibili-course/BiliBiliCourseApi";
 import { BiliBiliVideoApi } from "../../Api/BilibiliAPI/BiliBiliVideoAPI";
-import {
-  openEpisodePicker,
-  type EpisodePickEntry,
-} from "../../page/components/episode-picker/openEpisodePicker";
+import { openEpisodePicker, type EpisodePickEntry } from "../episodePickerPort";
 import { ShowMessage } from "../../iirose_func/ShowMessage";
 import { reportFailure } from "../../tools/reportFailure";
 import { Announce } from "../../iirose_func/Socket/Announce";

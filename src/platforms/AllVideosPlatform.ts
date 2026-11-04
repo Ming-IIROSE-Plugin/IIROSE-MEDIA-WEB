@@ -1,8 +1,5 @@
 import { CMSAPI } from "../Api/AllVideosAPI/CMS";
-import {
-  openEpisodePicker,
-  type EpisodePickEntry,
-} from "../page/components/episode-picker/openEpisodePicker";
+import { openEpisodePicker, type EpisodePickEntry } from "./episodePickerPort";
 import { reportFailure } from "../tools/reportFailure";
 import { Socket } from "../iirose_func/Socket";
 import { Announce } from "../iirose_func/Socket/Announce";
