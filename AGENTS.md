@@ -1,5 +1,5 @@
 <!-- bmad:context -->
-<!-- Verified 2026-11-02 against 4e5542c (vite entry pitfall corrected). Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
+<!-- Verified 2026-11-04 against HEAD (new single points: localStore / pagedLoader / reportFailure / platformSearchSources / episodePickerPort / cloud function entries). Managed by bmad-project-context; edits inside this block are replaced on refresh. Keep anything you want preserved outside the markers. -->
 
 ## IIROSE-MEDIA-WEB
 
@@ -20,6 +20,12 @@
 - 新增音乐平台需同步三处：`src/platforms/`（平台类）、`src/Api/`（API 客户端）、`src/settings/`（平台设置），类型放 `src/types/`。
 - 宿站交互（WebSocket 媒体、消息）：`src/iirose_func/`。
 - 出网请求走 `src/environment/Environment.ts` 选定的阿里云 CORS 代理（ipinfo.io 判 CN/Global）；改 API 层时注意 fetch 是否需要过代理。
+- 本机键值只经 `src/storage/localStore.ts`（`readString` / `writeString` / `readJson` / `writeJson` / `removeKey` / `tryReadString`）；生产代码里不应再出现 `localStorage.` 直连，键名与落盘格式由调用方决定。
+- 失败提示统一走 `src/tools/reportFailure.ts`（`reportFailure(error, fallback?)`）；网易云节点切换与同因去重仍在 `SendFetch.neteaseRequest`，不要在平台层另写一套 catch + `ShowMessage`。
+- 分页结果编排在 `src/page/MainAppContainerServices/pagedLoader.ts`（`showPage` 命中缓存 / `showLocalList` 整表切片 / `loadPage` 翻页 + 票号）；`splitByPage` 全仓只有 `src/platforms/shared/splitByPage.ts` 一处。
+- 点歌台的「平台 → 范围 → 取数动作」集中在 `src/page/platformSearchSources.ts`（放在 page/ 而不是 platforms/：它依赖各平台的 Service，platforms 不该反向依赖 page）；`mainAppCategories.ts` 只做映射。
+- 平台层要弹选集面板时用 `src/platforms/episodePickerPort.ts` 的 `openEpisodePicker`，不要 import `page/components/episode-picker`；视图层在模块加载时用 `setEpisodePickerOpener` 注册实现。
+- 云函数侧：前端入口 `cloud/cors-anywhere/app.js`（CORS 转发，含 412 重试）与 `cloud/bundle/app.js`（gzip 响应）都随仓库维护，分别用 `scripts/deploy_function_package.py` / `scripts/deploy_scf.py` 部署；文档见 `docs/deployment/tencent-cloud-functions.md`。
 - 浮窗（播放进度、收藏随机）共用 `src/page/components/floating-panel/` 的样式常量与无状态组件（外框、头部、按钮、拖动手柄、事件隔离）；改两窗外观时改这里，不要在单个浮窗里另写一套。
 - 外观令牌唯一来源是 `src/page/components/floating-panel/tokens.ts`（DESIGN.md frontmatter 的落地）：颜色导出**浅深成对的完整 Tailwind 类串**（如 `deskSheet = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]"`），另有字号/圆角/间距、`deskFocusRing`（2px ink 外圈 + 2px 间隔）与内联 SVG 图标 `DeskIcon`。组件只拼令牌，**不得裸写颜色 / `rgba(` / `themed*` / `accentVar`**；需要新颜色先加令牌。`themed*` 与 `accentVar` 已全部退役（设置卡也已改用令牌），不要再引入。
 - 结果区组件键（`src/page/components/media-card-container/`）：曲目表 `TracklistRow` / `TracklistHeader`（桌面七列、手机五列：封面 / 标题 / 时长 / 收藏星 / 点播；手机没有操作条；歌单/专辑内页前加勾选列，桌面 8 / 手机 6，列模板 `selectableTrackColumns`）· 多选 `SelectBox` / `SelectionBar` · 音乐网格 `MusicTile` · 视频卡 `VideoTile`（时长胶囊 / 直播徽章）· 专辑歌单行 `CollectionRow` · 内页头 `CollectionHeader` + 顺序菜单 `OrderMenu` · 收藏星 `FavoriteStar` · 状态 `StateMessage` / `Skeletons` · 容器 `ResultsArea`（Promise 状态机 + 形态派生），共用 `Cover`（https 升级 + onerror 回退）与纯函数 `mediaFormat.ts`。新增结果形态改这些文件，不要回到 `MediaCard`（已删除）。
@@ -59,6 +65,9 @@
 
 ## Known pitfalls
 
+- 腾讯云 SCF 的函数 URL 网关会把请求头 `Accept-Encoding` 改写成 `identity`：按它协商压缩永远不命中，前端入口只能默认发 gzip（明文诊断用 `/bundle.js?plain=1`）。
+- B 站按 UA 分流且两个接口偏好相反：`x/web-interface/view` 用浏览器 UA 会 412、用 `curl/*` 正常；`wbi/search/type` 反过来。不要统一改 UA，代理只在真的吃到 412 时用 `curl/8.14.1` 重放一次（`cloud/cors-anywhere/app.js`）。
+- 云函数代码包只放实际用到的文件：`Cors-Anywhere` 历史上带着 8.2 MB 无用 `node_modules`（express/jade 等），清掉后包从 1.9 MB 降到 3.3 KB、冷启动明显变快。
 - `vite.config.ts` 的库入口现在指向真实文件 `src/main.ts`（此前误写为 `src/main.js`，构建靠扩展名解析才没炸，2026-11-02 修正）；入口只有一个落点，不要再按旧笔记找第二处。
 - 网易云新增/修改端点必须走 `SendFetch.neteaseRequest`（节点切换、5s 超时、失败提示的唯一入口）；照 B 站写法自己拼 `${this.cors}` 会叠成双层代理前缀，并把失败退化成静默空列表。风控码（`-462/-460/460`）、HTTP 433 与超时各自归类，重试过程静默、全节点失败才提示一次；批量端点（逐曲歌词）失败按同因 10 秒窗口去重，否则一次点播会刷出上百条提示。
 - 首次注入会弹插件自己的用户协议（宿站 `#syncAlertHolder`），挡住一切交互——先点它的「确定」。
