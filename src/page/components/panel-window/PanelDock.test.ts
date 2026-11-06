@@ -220,6 +220,36 @@ describe("拖动", () => {
     expect(onPlaced).toHaveBeenCalledTimes(2);
   });
 
+  it("存储写不进去：拖完的位置不会被下一次跟随覆盖回默认位置", () => {
+    addInput(input);
+    mount();
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    try {
+      dragBy(100, -200);
+      expect(position()).toEqual({ x: 412, y: 594 });
+      window.dispatchEvent(new Event("resize"));
+      expect(position()).toEqual({ x: 412, y: 594 });
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
+  it("拖拽被取消、没有随后的点击：之后的键盘激活仍能打开", () => {
+    vi.useFakeTimers();
+    addInput(input);
+    mount();
+    pointer("pointerdown", restore(), 400, 700);
+    pointer("pointermove", restore(), 500, 600);
+    pointer("pointercancel", restore(), 500, 600);
+    vi.advanceTimersByTime(150);
+    restore().click();
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
   it("往下拖进不了输入框", () => {
     addInput(input);
     mount();
@@ -465,7 +495,7 @@ describe("样式表", () => {
     expect(openRule).toMatch(/translate: none/);
     expect(openRule).toMatch(/scale: none/);
     expect(openRule).not.toMatch(/\btransform:/);
-    expect(css).not.toContain("translateX(100%);\n  visibility");
+    expect(css).not.toContain("translateX(100%)");
     expect(css).not.toContain("hidemainHolder");
   });
 });

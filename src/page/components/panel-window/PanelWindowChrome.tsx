@@ -1,4 +1,4 @@
-// 窗口模式的外框控件：标题栏（名称、最小化钮、关闭钮）和八个缩放抓取区。
+// 窗口模式的外框控件：标题栏（名称、最小化钮）和八个缩放抓取区。
 // 只在窗口态渲染，几何与手势都在 `PanelWindowPlacement`；尺寸见 `app.css` 的窗口态规则。
 import { dragHandleClass } from "../floating-panel/floatingPanel";
 import {

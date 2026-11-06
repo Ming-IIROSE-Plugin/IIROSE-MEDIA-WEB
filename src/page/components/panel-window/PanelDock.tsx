@@ -45,6 +45,7 @@ import {
   type DockEdge,
   type DockPoint,
   type DockSize,
+  type StoredDock,
 } from "./dockPlacement";
 import type { PanelRect, PanelViewport } from "./geometry";
 
@@ -107,8 +108,13 @@ function dockSize(element: HTMLElement): DockSize {
   };
 }
 
+/** 存储写不进去（隐私模式、被禁用）时的内存兜底：否则拖完的位置会在下一次轮询被默认位置覆盖。 */
+let unsavedDock: StoredDock | null = null;
+
 function readStoredDock() {
-  return normalizeStoredDock(readJson(PANEL_DOCK_POSITION_KEY, null));
+  return (
+    normalizeStoredDock(readJson(PANEL_DOCK_POSITION_KEY, null)) ?? unsavedDock
+  );
 }
 
 /** 吸附在边缘的胶囊由 `app.css` 收起，悬停时伸出。 */
@@ -340,6 +346,10 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     element.removeAttribute("data-imw-dock-dragging");
     if (!finished?.moved) return;
     justDragged.current = true;
+    // 取消拖拽后不会再有点击：标记不清掉的话，下一次键盘激活会被吞一次
+    window.setTimeout(() => {
+      justDragged.current = false;
+    }, 100);
     const size = dockSize(element);
     const { anchor, viewport } = dockFrame(reference());
     const point = {
@@ -372,7 +382,8 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     } else if (!neckFrame.current) {
       writeNeck("");
     }
-    writeJson(PANEL_DOCK_POSITION_KEY, edge ? { ...final, edge } : final);
+    const saved: StoredDock = edge ? { ...final, edge } : final;
+    unsavedDock = writeJson(PANEL_DOCK_POSITION_KEY, saved) ? null : saved;
     onPlaced();
   };
 
@@ -507,6 +518,7 @@ export function mountPanelDock(props: PanelDockProps): () => void {
 }
 
 export function releasePanelDock(): void {
+  unsavedDock = null;
   for (const node of document.querySelectorAll(`#${PANEL_DOCK_ROOT_ID}`)) {
     // 先卸载：停掉跟随用的定时器和视口监听
     render(null, node);
