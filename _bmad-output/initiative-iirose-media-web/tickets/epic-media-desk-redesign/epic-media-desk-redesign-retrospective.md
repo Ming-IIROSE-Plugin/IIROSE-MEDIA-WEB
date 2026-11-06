@@ -140,3 +140,35 @@ headless: false
 1. F4：迁移已按「统一回落到音乐」落地，若维护者后来想按旧含义映射，需要再改一次迁移分支。
 2. F10：`SearchBar.panelVisible` 读 DOM class 与 `active` prop 双源，改成单源需要先定可见性的权威来源（prop / 状态容器）。
 3. 行为变化需告知用户：粘贴带分 P 的链接改为直达点播；旧版默认页面设置会被重置一次。
+
+## Post-epic 核对（2026-11-06，增补）
+
+只做对照 HEAD（`d41652b`）的核对，不重做上面的分析，verdict 不变。范围：`841b8ad..HEAD`（上文修复收口之后）共 `198` 个 `src` 文件变动；这一段里 `mediaDesk` 相关目录（`media-card-container`、`desk`、`room-deck`）自 `981db68` 起另被 44 个提交触及。
+
+**F1–F10 在 HEAD 上是否仍成立**
+
+| 项 | 结论 | 证据 |
+|---|---|---|
+| F1 `OrderMenu` 手势隔离 | 仍修复 | `OrderMenu.tsx` 中 `stopHostGestures` 4 处 |
+| F2 `idle` 假空态 | 仍修复（结构变了） | `ResultsArea.tsx:214` 改为 `load.status !== "ready"` 一律走占位，`idle` 不会落到空态；`ResultsArea` 已拆出 `ResultsPlaceholder/Rows/Tiles` |
+| F3 收藏查询失败 | 仍修复 | `FavoritesService.ts:104-111` 有 `try/catch` |
+| F4 默认页面 | 仍修复 | `src/settings/deskModeCatalog.ts`、`loadSettings.ts:28` 的 `imwSettingsRev` |
+| F5 历史节流 | 仍修复 | `RequestHistory.ts` 的 `flush` 与 `pagehide` 监听 |
+| F6 电台 | 未逐行复核 | 不在本次核对范围；有对应用例随测试套件通过 |
+| F7/F8 粘贴识别 | 仍修复 | `searchIntent.ts:11` 词界正则；`src/platforms/bilibiliLink.ts` 存在 |
+| F9 断点订阅 | 仍修复 | `OrderMenu.tsx:65-68` 订阅 `change` |
+| **F10 `panelVisible` 双源** | **已关闭** | `c7aaab2`（11-01）把它改成 `active` prop 单源；`SearchBar.tsx:71,138` 与注释写明「别去读 DOM class」。**上文 Open questions 第 2 条作废** |
+| V1 导航契约测试 | 仍在 | `src/page/MainApp.test.ts` |
+
+**聚合视图更新**
+
+- **A1 神类**：已解决。`MainAppContainer.tsx` 1290 → 398 行，`NetEasePlatform.ts` 1187 → 367 行（`24300c8`、`81ee86c`，epic `large-file-decomposition` 的成果），上文「defer（已排程）」已兑现。
+- **A5 收尾稳定性**：epic 结束到 F1–F10 修复收口后，`media-desk` 目录仍在 11-01 有一批同类修补（44 个提交里的 11-01 部分：手机 44px 目标、内页返回钮、搜索提示、取消滑动翻页等），之后 11-02 至 11-04 的改动是拆分与性能，不再回头改这一层的行为。可判定：**约两到三日后收敛**，与 AGENTS.md「观察两日」的约定一致。
+
+**这段时间进入面板外壳的新东西（不属本 epic，但共用同一批文件）**
+
+窗口模式、常驻胶囊、吸附与蜂蜜拉丝（`0498428..7ff089d`，11-06）。它们改了 `MainAppControlLayer.tsx`、`app.css`，新增 `panel-window/`。这批工作**没有对应的 epic 或票**，只有 `plan-main-panel-window-mode.md` 和 `plan-panel-window-minimize.md` 两份树外 plan，也没有做过独立的 bmad 代码审查。属于流程缺口，建议另立 epic 后再单独回顾。
+
+**验证**：`npm test` 91 个文件 / 1518 个用例通过（HEAD `d41652b`）。本次**没有**跑真站，也没有复验上文列出的三个「仍未实测」项。
+
+**Open questions 更新**：第 2 条（F10）关闭；第 1、3 条不变。
