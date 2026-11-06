@@ -98,7 +98,7 @@
 - **cut 结束后的状态**：`isShareMediaPlaying()` 变 false、`shareMediaCurrentTime` 变 `-1`、点播者字段仍可能是本人。自动重播必须**在可用性刷新之前**处理，否则「暂无播放内容」会先把已点亮的模式熄灭，重播分支永远走不到。
 - **播放需要真实用户手势**：合成 `click()` 不满足自动播放策略，宿站不会起播。自动化必须用 Playwright 的真实点击（坐标点击也可），或在同一 document 内先做一次真实点击再发报文。
 - **`browser_reload` 可能没真正重载**：本会话出现过重复注入返回 `already`、却以为已刷新，导致一直测试旧 bundle。改 bundle 后用 `page.reload({ waitUntil: "load" })`，并断言 `.IIROSE_MEDIA_CONTAINER` 不存在再注入。
-- **聊天输入框在自动化里是隐藏的**：`#mainHolder` 与 `#msgholderDisplay` 为 `display:none`，`#moveinput` 尺寸为 0。要先置 `display:block` 并给输入框尺寸，`focus()` 成功后才能用真实键盘输入。
+- **聊天输入框在大厅和房间公告页是隐藏的**：`#mainHolder` 与 `#msgholderDisplay` 为 `display:none`，`#moveinput` 尺寸为 0。这不是自动化的限制：进房后点左上角返回键关掉「房间公告」（坐标约 20,20），聊天区就会显示，输入框可以直接真实点击和键入，不必再强制改 `display`（强制显示时布局和真实房间不同）。
 - **本地 HTTP 注入会被 CSP 拦**：`fetch("http://127.0.0.1:.../bundle.js")` 在 messages.html 里报 `Failed to fetch`。可行方式仍是把 bundle 源码内嵌进 Playwright 代码文件，在 `messages.html` frame 里 `new Function(src)()` 执行。
 - **房间的媒体能力不同**：`window.mediaShareRoom` 为 false 的房间（如「空间站」）发点播报文不起播；「练歌房」这类视频分享房可播，且对普通账号（`identity=0`/`rank=4`）开放。
 - **重播用缓存报文本身是有效的**：同曲重发 `m__4` 卡片 + `&1` 报文能让宿站重新起播（用户实测 + 本地复现）。报文缓存按房间落在 `sessionStorage` 的 `imwMediaPayload`，刷新后恢复；命中校验房间与 6 小时有效期。
