@@ -74,11 +74,13 @@ function readAnchor(scale: number): DockAnchor | null {
   const anchor = document.getElementById(DOCK_ANCHOR_ID);
   if (!anchor || getComputedStyle(anchor).visibility === "hidden") return null;
   const { left, top, right, bottom } = anchor.getBoundingClientRect();
+  // 宿站侧栏打开时平移整个 body，胶囊也在 body 里：要换算成相对 body 的坐标，不然平移会算两次
+  const body = document.body.getBoundingClientRect();
   return {
-    left: left / scale,
-    top: top / scale,
-    right: right / scale,
-    bottom: bottom / scale,
+    left: (left - body.left) / scale,
+    top: (top - body.top) / scale,
+    right: (right - body.left) / scale,
+    bottom: (bottom - body.top) / scale,
   };
 }
 
@@ -380,7 +382,8 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     <div
       ref={layer}
       data-imw-dock-layer="true"
-      className={`pointer-events-none fixed inset-0 z-[90009] ${deskDockShadow}`}
+      // overflow-hidden：收起靠裁切。宿站侧栏把 body 推走时，屏幕边缘裁不到它，藏着的部分会露在侧栏上
+      className={`pointer-events-none fixed inset-0 z-[90009] overflow-hidden ${deskDockShadow}`}
     >
       {/* 只占 1px、靠 overflow 画出去：铺满全屏的话，外层投影滤镜每帧都要处理整个屏幕，拖动会卡 */}
       <svg

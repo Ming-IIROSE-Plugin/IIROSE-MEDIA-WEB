@@ -88,6 +88,7 @@
 
 <!-- /bmad:context -->
 
+- **宿站侧栏打开时给 `body` 加 `translateX(275px)`（`Probe.functionHolderAnimate`）**：`body` 里的 `fixed` 全部跟着平移，屏幕边缘不再裁得到贴边收起的胶囊，所以胶囊的层自带 `overflow-hidden`；从 `getBoundingClientRect` 读宿站元素来算胶囊位置时要减去 `body` 的偏移。
 - **面板停稳时不能带 `transform`**（`scale` 也必须是 `none`，写 `1` 同样会改变 `fixed` 的基准；缩放只在开合动画期间存在；`transform: none` 和 `scale: none` 不能写在同一条规则，lightningcss 会合并成 `transform: scale(1)`）：`OrderMenu` 的坐标和菜单的 `fixed inset-0` 遮罩都靠「`fixed` 以视口为基准」，带上就会菜单错位、点窗口外收不起来。容器也不设 `overflow: hidden`（抓取区伸在窗口外），圆角裁切放在标题栏和 `#IIROSE_MEDIA` 上；抓取区 `z-20` 必须低于菜单遮罩 `z-30`。判断面板开合看 `ShowIIROSE_MEDIA_CONTAINER` 类，打开时的计算 `transform` 是 `none`，不是 skill 里写的单位矩阵。
 - **`viewportMetrics` 量的是宿站缩放，元素自身的 `scale` 要除掉**：收起的窗口带 `scale: 0.2`，不除的话视口被算大 5 倍，放不下也判成窗口。另外 `offsetWidth` 是取整的，别拿小元素量（胶囊约 113px，1.15 倍下差 4px），要量就用宽的参照物。
 - **窗口模式下焦点可能在宿站输入框**：新增面板级键盘处理要先问 `isHostTextTarget(event.target)`，别抢聊天框的按键；聊天框 `@词` 在面板已开时只搜索不切换开合（`isPanelOpen`）。

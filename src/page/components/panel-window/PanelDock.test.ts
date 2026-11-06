@@ -61,6 +61,18 @@ describe("停靠件定位", () => {
     expect(position()).toEqual({ x: 312, y: 794 });
   });
 
+  it("宿站侧栏平移 body：位置不变，层自己裁切藏着的部分", () => {
+    // body 和里面的输入框一起被推了 275
+    addInput({ left: 575, top: 800, right: 1675, bottom: 850 });
+    const rect = vi
+      .spyOn(document.body, "getBoundingClientRect")
+      .mockReturnValue({ left: 275, top: 0 } as DOMRect);
+    mount();
+    expect(position()).toEqual({ x: 312, y: 794 });
+    expect(dock().parentElement!.className).toContain("overflow-hidden");
+    rect.mockRestore();
+  });
+
   it("没有输入框 / 尺寸为 0：底部居中留 12px", () => {
     mount();
     expect(position()).toEqual({ x: 756.5, y: 888 });
