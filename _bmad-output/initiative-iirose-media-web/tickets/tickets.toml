@@ -76,3 +76,10 @@ slug = "epic-main-panel-visual-unify"
 title = "插件主面板与浮窗审美统一"
 description = "在真站 1280×720 与 400×800、宿站浅色与深色下，打开主面板、收藏随机与播放进度并排对比：表面色、文字色、描边、圆角、按钮与标签样式、强调色一致；主面板所有页面无品牌色整条底、无木纹透出；既有功能与 AGENTS.md 布局约定的尺寸实测不变。"
 covers = []
+
+[[epic]]
+id = 12
+slug = "epic-panel-dock"
+title = "点歌台窗口模式与常驻胶囊"
+description = "窗口、全屏、手机三种形态的开合都从常驻胶囊出发、回到胶囊，面板上只有最小化；胶囊可拖动、记住位置、贴边吸附并有蜂蜜般的粘连感且始终 1:1 跟手；`npm test`、构建与真站脚本 `scripts/verify/dock.mjs` 全部通过。"
+covers = []

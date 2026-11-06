@@ -1,0 +1,68 @@
+# 事后登记：2026-11-06 一天内完成的窗口模式与常驻胶囊，六张票全部 done。
+
+[[entry]]
+id = 1
+type = "story"
+title = "窗口模式"
+description = "给主面板加可选窗口模式：可拖动、八向缩放、记住矩形，视口放不下自动全屏；开合有动画，标题栏只留一个收起入口。"
+verify = "开启窗口模式后，在真站 >768px 视口里面板以窗口显示，可拖动缩放、重载后位置不变；关闭 / 打开有动画；视口缩小到放不下时自动全屏。"
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 2
+type = "story"
+title = "最小化为输入框上方的胶囊"
+description = "窗口标题栏加最小化钮；最小化时窗口缩向输入框并隐藏，输入框左上方留下一个可还原的胶囊。"
+verify = "真站窗口态点最小化后，面板缩向输入框、胶囊出现在输入框左上方；点胶囊或 Alt+S 还原，内容不变；宿站返回键与 Esc 在最小化中交还宿站。"
+covers = ["R2"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "常驻胶囊：拖动、记住位置、全屏原地展开"
+description = "胶囊在面板没开着的任何形态下常驻，可自由拖动并记住位置（不能进输入框）；面板上去掉 X 只留最小化；全屏从胶囊原地展开、不再推走宿站聊天区。"
+verify = "真站三种形态下刷新后胶囊仍在；拖动后位置重载保留，往下拖停在输入框顶边；全屏打开不滑动、宿站聊天区不被推走；面板上没有 X。"
+covers = ["R3"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "边缘吸附与收起"
+description = "胶囊松手时离可停靠范围边缘不到 24px 就吸附并收起：左右滑出只露图标，上下缩成圆钮，悬停 / 按住 / 聚焦展开，触屏也收起；宿站侧栏打开时仍被裁住。"
+verify = "真站贴右边只露约 34px、悬停后展开约 87px；宿站侧栏（body 平移 275px）打开时，贴左的胶囊仍只露一小截且层贴在侧栏右缘。"
+covers = ["R4"]
+after = [3]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "蜂蜜拉丝与手机放大"
+description = "贴边的胶囊被拉出时，边与胶囊之间拉出一根蜂蜜般的丝，56px 内断开；胶囊始终 1:1 跟手，没有阻尼或追赶；手机上胶囊更大。"
+verify = "真站从贴边拉出，胶囊中心与指针最大偏差 ≤ 2px（量 `getBoundingClientRect`）；手机尺寸胶囊高度 ≥ 52px；松手前没断会弹回。"
+covers = ["R5"]
+after = [4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "审查收口与真站回归脚本"
+description = "对上面五张票的实现做一轮独立审查（4 个审查者），修掉核实成立的问题，并把真站手感验证沉淀成仓库里可重跑的脚本。"
+verify = "`node scripts/verify/dock.mjs` 在真站输出 6 项全 PASS；存储被禁用时拖完的胶囊不弹回；取消拖拽后键盘 Enter 仍能打开。"
+covers = ["R3", "R4", "R5"]
+after = [5]
+hitl = false
+risk = "low"
+
