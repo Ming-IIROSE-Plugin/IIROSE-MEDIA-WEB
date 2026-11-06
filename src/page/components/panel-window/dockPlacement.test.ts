@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { dockFlight, dockPosition } from "./dockPlacement";
+import {
+  clampDockPoint,
+  dockFlight,
+  dockPosition,
+  normalizeStoredDock,
+} from "./dockPlacement";
 
 const size = { width: 120, height: 36 };
 const viewport = { width: 1600, height: 900, offsetX: 0, offsetY: 0 };
@@ -44,6 +49,43 @@ describe("dockPosition", () => {
   it("可视视口平移（键盘、捏合）：跟着偏移", () => {
     const shifted = { ...viewport, offsetX: 20, offsetY: 30 };
     expect(dockPosition(null, size, shifted)).toEqual({ x: 760, y: 882 });
+  });
+});
+
+describe("拖动范围与存档", () => {
+  it("存档优先于默认位置", () => {
+    expect(dockPosition(anchor, size, viewport, { x: 500, y: 300 })).toEqual({
+      x: 500,
+      y: 300,
+    });
+  });
+
+  it("不能进入或越过输入框：底缘停在顶边上方 6px", () => {
+    for (const y of [770, 900, 5000])
+      expect(clampDockPoint({ x: 500, y }, anchor, size, viewport).y).toBe(758);
+  });
+
+  it("不能拖出视口", () => {
+    expect(clampDockPoint({ x: -50, y: -50 }, anchor, size, viewport)).toEqual({
+      x: 0,
+      y: 0,
+    });
+    expect(clampDockPoint({ x: 5000, y: 10 }, anchor, size, viewport).x).toBe(
+      1480,
+    );
+  });
+
+  it("没有输入框：只限制在视口内", () => {
+    expect(clampDockPoint({ x: 10, y: 5000 }, null, size, viewport).y).toBe(
+      864,
+    );
+  });
+
+  it("坏存档按没有处理", () => {
+    expect(normalizeStoredDock(null)).toBeNull();
+    expect(normalizeStoredDock({ x: 1 })).toBeNull();
+    expect(normalizeStoredDock({ x: "1", y: 2 })).toBeNull();
+    expect(normalizeStoredDock({ x: 1, y: 2 })).toEqual({ x: 1, y: 2 });
   });
 });
 

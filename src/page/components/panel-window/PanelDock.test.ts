@@ -5,6 +5,7 @@ import { act } from "preact/test-utils";
 import {
   clearDockFlight,
   mountPanelDock,
+  PANEL_DOCK_POSITION_KEY,
   PANEL_DOCK_ROOT_ID,
   releasePanelDock,
   writeDockFlight,
@@ -47,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   releasePanelDock();
+  localStorage.removeItem(PANEL_DOCK_POSITION_KEY);
   document.getElementById("moveinputDisplay")?.remove();
   delete (window as Window & { theme?: unknown }).theme;
   vi.useRealTimers();
@@ -157,6 +159,107 @@ describe("飞行变量", () => {
     expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("375px");
     clearDockFlight(panel);
     expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("");
+  });
+});
+
+describe("拖动", () => {
+  const input = { left: 300, top: 800, right: 1400, bottom: 850 };
+  const pointer = (type: string, target: Element, x: number, y: number) => {
+    const event = new MouseEvent(type, {
+      bubbles: true,
+      clientX: x,
+      clientY: y,
+      button: 0,
+    });
+    Object.assign(event, { isPrimary: true, pointerId: 1 });
+    target.dispatchEvent(event);
+  };
+  const restore = () =>
+    dock().querySelector('[aria-label="还原点歌台"]') as HTMLElement;
+  const closeButton = () =>
+    dock().querySelector('[aria-label="关闭点歌台"]') as HTMLElement;
+  const stored = () =>
+    JSON.parse(localStorage.getItem(PANEL_DOCK_POSITION_KEY) ?? "null");
+  /** 从胶囊上按下、移动、松手，再触发浏览器随后的点击。 */
+  const dragBy = (dx: number, dy: number) => {
+    pointer("pointerdown", restore(), 400, 700);
+    pointer("pointermove", restore(), 400 + dx, 700 + dy);
+    pointer("pointerup", restore(), 400 + dx, 700 + dy);
+    restore().click();
+  };
+
+  it("拖动跟手、松手写盘，随后的点击不还原", () => {
+    addInput(input);
+    mount();
+    dragBy(100, -200);
+    expect(position()).toEqual({ x: 412, y: 594 });
+    expect(stored()).toEqual({ x: 412, y: 594 });
+    expect(onRestore).not.toHaveBeenCalled();
+  });
+
+  it("往下拖进不了输入框", () => {
+    addInput(input);
+    mount();
+    dragBy(0, 500);
+    expect(position().y).toBe(794);
+    expect(stored().y).toBe(794);
+  });
+
+  it("移动不到 4px 算点击：还原，不写盘", () => {
+    addInput(input);
+    mount();
+    dragBy(2, 1);
+    expect(onRestore).toHaveBeenCalledTimes(1);
+    expect(stored()).toBeNull();
+  });
+
+  it("重新挂载（含刷新后）回到存档位置；存档用于窗口的缩向终点", () => {
+    addInput(input);
+    localStorage.setItem(
+      PANEL_DOCK_POSITION_KEY,
+      JSON.stringify({ x: 500, y: 300 }),
+    );
+    mount();
+    expect(position()).toEqual({ x: 500, y: 300 });
+    const panel = document.createElement("div");
+    panel.getBoundingClientRect = () =>
+      ({ left: 100, top: 100, width: 1000, height: 600 }) as DOMRect;
+    Object.defineProperty(panel, "offsetWidth", { value: 1000 });
+    writeDockFlight(panel);
+    // 胶囊标称 114×38：中心 (557, 319)，窗口中心 (600, 400)
+    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-43px");
+    expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("-81px");
+  });
+
+  it("输入框升高只改显示，存档不动；降回去恢复", () => {
+    vi.useFakeTimers();
+    const box = addInput(input);
+    localStorage.setItem(
+      PANEL_DOCK_POSITION_KEY,
+      JSON.stringify({ x: 500, y: 700 }),
+    );
+    mount();
+    box.getBoundingClientRect = () =>
+      ({ left: 300, top: 600, right: 1400, bottom: 650 }) as DOMRect;
+    vi.advanceTimersByTime(600);
+    expect(position().y).toBe(594);
+    expect(stored()).toEqual({ x: 500, y: 700 });
+    box.getBoundingClientRect = () => input as DOMRect;
+    vi.advanceTimersByTime(600);
+    expect(position().y).toBe(700);
+  });
+
+  it("从关闭钮按下不拖动，点击只关闭", () => {
+    addInput(input);
+    mount();
+    pointer("pointerdown", closeButton(), 400, 700);
+    pointer("pointermove", closeButton(), 500, 500);
+    pointer("pointerup", closeButton(), 500, 500);
+    closeButton().click();
+    expect(position()).toEqual({ x: 312, y: 794 });
+    expect(stored()).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onRestore).not.toHaveBeenCalled();
   });
 });
 

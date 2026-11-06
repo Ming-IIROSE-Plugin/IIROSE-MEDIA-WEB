@@ -37,12 +37,43 @@ function usableAnchor(
   return inView && anchor.top - DOCK_GAP - size.height >= viewport.offsetY;
 }
 
-/** 胶囊左上角：在输入框左上方，左边留 12px、底缘在它上方；没有输入框时视口底部居中，留 12px。 */
-export function dockPosition(
+/** 存档校验：坏数据按没有存档处理。 */
+export function normalizeStoredDock(raw: unknown): DockPoint | null {
+  if (!raw || typeof raw !== "object") return null;
+  const { x, y } = raw as Record<string, unknown>;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y } as DockPoint;
+}
+
+/** 限制在视口内，且底缘不越过输入框顶边（间距 `DOCK_GAP`）；输入框不能当锚时只限制在视口内。 */
+export function clampDockPoint(
+  point: DockPoint,
   anchor: DockAnchor | null,
   size: DockSize,
   viewport: PanelViewport,
 ): DockPoint {
+  const maxX = viewport.offsetX + viewport.width - size.width;
+  const viewportMaxY = viewport.offsetY + viewport.height - size.height;
+  const maxY = usableAnchor(anchor, size, viewport)
+    ? Math.min(viewportMaxY, anchor.top - DOCK_GAP - size.height)
+    : viewportMaxY;
+  return {
+    x: Math.max(viewport.offsetX, Math.min(point.x, maxX)),
+    y: Math.max(viewport.offsetY, Math.min(point.y, maxY)),
+  };
+}
+
+/**
+ * 胶囊左上角：有存档时用存档（只改显示，不动存档）；否则在输入框左上方，左边留 12px、
+ * 底缘在它上方；没有输入框时视口底部居中，留 12px。
+ */
+export function dockPosition(
+  anchor: DockAnchor | null,
+  size: DockSize,
+  viewport: PanelViewport,
+  stored: DockPoint | null = null,
+): DockPoint {
+  if (stored) return clampDockPoint(stored, anchor, size, viewport);
   if (!usableAnchor(anchor, size, viewport))
     return {
       x: viewport.offsetX + (viewport.width - size.width) / 2,
