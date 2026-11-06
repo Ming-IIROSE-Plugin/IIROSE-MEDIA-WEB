@@ -103,7 +103,7 @@
 - **本地 HTTP 注入会被 CSP 拦**：`fetch("http://127.0.0.1:.../bundle.js")` 在 messages.html 里报 `Failed to fetch`。可行方式仍是把 bundle 源码内嵌进 Playwright 代码文件，在 `messages.html` frame 里 `new Function(src)()` 执行。
 - **房间的媒体能力不同**：`window.mediaShareRoom` 为 false 的房间（如「空间站」）发点播报文不起播；「练歌房」这类视频分享房可播，且对普通账号（`identity=0`/`rank=4`）开放。
 - **重播用缓存报文本身是有效的**：同曲重发 `m__4` 卡片 + `&1` 报文能让宿站重新起播（用户实测 + 本地复现）。报文缓存按房间落在 `sessionStorage` 的 `imwMediaPayload`，刷新后恢复；命中校验房间与 6 小时有效期。
-- **循环重播与收藏随机永不发卡片**（`_bmad-output/specs/spec-auto-playback-no-card/`）：卡片会抬高平台活跃度，无人值守的自动点播连发卡片会被当作刷活跃度。实现方式是显式 `cardless` 选项——`NetEasePlatform.MOD(data, { cardless: true })` / `BilibiliPlatform.VOD(data, 1, { cardless: true })` 逐层传到 `sendSongs` / `prepareAndSendMedia`，只发 `&1` 报文；`LoopIo` 已无 `sendCard`，不要再接回。不要用全局作用域或改 `announceMode` 实现：前者会被 `await` 打穿，后者会写盘污染用户选择。
+- **循环重播与收藏随机永不发卡片**（`_bmad-output/backlog/story-auto-playback-no-card.md`）：卡片会抬高平台活跃度，无人值守的自动点播连发卡片会被当作刷活跃度。实现方式是显式 `cardless` 选项——`NetEasePlatform.MOD(data, { cardless: true })` / `BilibiliPlatform.VOD(data, 1, { cardless: true })` 逐层传到 `sendSongs` / `prepareAndSendMedia`，只发 `&1` 报文；`LoopIo` 已无 `sendCard`，不要再接回。不要用全局作用域或改 `announceMode` 实现：前者会被 `await` 打穿，后者会写盘污染用户选择。
 
 ## 提交纪律
 
@@ -113,6 +113,6 @@
 
 ## BMAD 流程约定
 
-- **defer 一项能力必须同轮改契约**：把某条能力推迟、降级或标为非目标时，必须在同一轮内同步改写 `_bmad-output/specs/**` 下的 SPEC 与 companion（例如 `sync-protocol.md`），写清「未实现 / 非目标 / 计划轮次」。只在代码或 deferred-work 里记一句，会让下一轮复盘把「文档已承诺、代码未实现」重新判成缺陷（见 `spec-favorites-cloud-sync` 第 2 轮复盘 R2-2/R2-8）。
+- **defer 一项能力必须同轮改契约**：把某条能力推迟、降级或标为非目标时，必须在同一轮内同步改写 `_bmad-output/initiative-iirose-media-web/` 下 epic（`tickets/epic-*/`）、`backlog/` 里的 story 及其 companion（例如 `sync-protocol.md`），写清「未实现 / 非目标 / 计划轮次」。只在代码或 deferred-work 里记一句，会让下一轮复盘把「文档已承诺、代码未实现」重新判成缺陷（见 `epic-favorites-cloud-sync` 第 2 轮复盘 R2-2/R2-8）。
 - **审查结论汇总前先对 HEAD 复核**：审查层读的是历史 diff，而工作区可能已在其后走了几十个提交。`spec-media-desk-redesign` 复盘里有 5 条审查意见在 HEAD 上已不成立（模块被删、函数不再存在、实现已换源）。逐条到 HEAD 核验「这段代码是否还在、这条路径是否仍可达」，再决定修或不修；未复核的条目不得进修复清单。
 - **设计 / 重构型 epic 收尾后观察两日再判「稳定」**：`spec-media-desk-redesign` 的 8 个 story 全绿之后，同一批文件又被 31 个提交继续修补两天才真正收敛。这类 epic 的最后一篇 story 不能只看测试全绿，复盘时把 epic 结束后的提交单列成一个视图（post-epic 收尾），据此判断是否还有同类缺陷在冒。
