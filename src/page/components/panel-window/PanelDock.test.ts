@@ -324,6 +324,63 @@ describe("拖动", () => {
         JSON.stringify({ x, y, edge }),
       );
 
+    describe("胶囊宽度变化时", () => {
+      let resized: (() => void) | undefined;
+      let disconnect: ReturnType<typeof vi.fn>;
+      beforeEach(() => {
+        disconnect = vi.fn();
+        vi.stubGlobal(
+          "ResizeObserver",
+          class {
+            constructor(callback: () => void) {
+              resized = callback;
+            }
+            observe() {}
+            disconnect = disconnect;
+          },
+        );
+      });
+      afterEach(() => {
+        vi.unstubAllGlobals();
+        resized = undefined;
+      });
+      const widen = () =>
+        Object.defineProperty(dock(), "offsetWidth", {
+          configurable: true,
+          value: 87,
+        });
+
+      it("上边：颈的中心当场跟上胶囊，不等轮询", () => {
+        addInput(input);
+        seedEdge("top", 500, 0);
+        mount();
+        const before = neck().getAttribute("d");
+        widen();
+        resized?.();
+        expect(neck().getAttribute("d")).not.toBe(before);
+      });
+
+      it("拖动中不重画：那时的颈归拖动管", () => {
+        addInput(input);
+        seedEdge("top", 500, 0);
+        mount();
+        pointer("pointerdown", restore(), 500, 10);
+        const before = neck().getAttribute("d");
+        widen();
+        resized?.();
+        expect(neck().getAttribute("d")).toBe(before);
+        pointer("pointerup", restore(), 500, 10);
+      });
+
+      it("卸载时断开监听", () => {
+        addInput(input);
+        seedEdge("top", 500, 0);
+        mount();
+        releasePanelDock();
+        expect(disconnect).toHaveBeenCalled();
+      });
+    });
+
     it("贴边静止就有弯月面；离开边缘和贴下边都没有", () => {
       addInput(input);
       seedEdge("left");

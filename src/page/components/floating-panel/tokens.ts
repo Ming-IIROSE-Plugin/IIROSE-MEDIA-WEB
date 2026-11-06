@@ -165,7 +165,7 @@ export const deskMenuShadow =
   "shadow-[0_10px_30px_#1C19161F] imw-dark:shadow-[0_10px_30px_#00000080]";
 /** 胶囊和粘在边缘的颈共用一层投影：分开投会在接缝处压出一道弧。 */
 export const deskDockShadow =
-  "[filter:drop-shadow(0_6px_14px_#1C191633)] imw-dark:[filter:drop-shadow(0_6px_14px_#00000080)]";
+  "[filter:drop-shadow(0_1px_6px_#1C191626)] imw-dark:[filter:drop-shadow(0_1px_6px_#00000059)]";
 /** 面板提示条：浮在结果区上方的柔和投影。 */
 export const deskToastShadow = "shadow-[0_6px_20px_#0000002E]";
 

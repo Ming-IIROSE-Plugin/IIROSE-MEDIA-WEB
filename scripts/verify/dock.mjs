@@ -13,6 +13,8 @@
 //   5. 宿站主题：浅色 / 深色下胶囊底色分别是纸色 / 墨色
 //   6. 手机尺寸下宿站侧栏打开：贴左的胶囊仍被层的左缘裁住
 //
+//   8. 上边：悬停展开和缩回的每一帧，颈的中心都对着胶囊（≤ 1.5px），不露出方块
+//
 // 前置：测试账号已在持久化 profile 里登录并能进房（凭据在 .secrets/，不进脚本）。
 
 import { createRequire } from "module";
@@ -212,6 +214,65 @@ try {
   await frame.evaluate(() => {
     document.body.style.transform = "";
   });
+
+  // ── 8. 上边：颈逐帧跟着胶囊 ────────────────────────────────
+  await store({ x: 500, y: 0, edge: "top" });
+  await page.mouse.move(5, 300);
+  await page.waitForTimeout(900);
+  // 量法要紧：rAF 在布局之前跑，读到的是上一帧的颈配这一帧的胶囊，差出来的不是真的。
+  // 自己的 ResizeObserver 排在胶囊的后面、绘制之前，读到的才是画到屏幕上的样子。
+  const sampleNeck = (ms) =>
+    frame.evaluate(
+      ([sel, duration]) =>
+        new Promise((resolve) => {
+          const pill = document.querySelector(sel);
+          let worst = 0;
+          let frames = 0;
+          const observer = new ResizeObserver(() => {
+            const pillBox = pill.getBoundingClientRect();
+            const neckBox = document
+              .querySelector("[data-imw-dock-layer] svg path")
+              .getBBox();
+            worst = Math.max(
+              worst,
+              Math.abs(
+                neckBox.x +
+                  neckBox.width / 2 -
+                  (pillBox.left + pillBox.width / 2),
+              ),
+            );
+            frames += 1;
+          });
+          observer.observe(pill);
+          setTimeout(() => {
+            observer.disconnect();
+            resolve({ worst, frames });
+          }, duration);
+        }),
+      [PILL, ms],
+    );
+  const topRest = await pillRect();
+  const topCenter = await toPage(
+    topRest.left + topRest.width / 2,
+    topRest.top + topRest.height / 2,
+  );
+  let sampling = sampleNeck(700);
+  await page.mouse.move(topCenter.x, topCenter.y);
+  const topIn = await sampling;
+  check(
+    "上边悬停展开：颈逐帧对着胶囊",
+    topIn.worst <= 1.5,
+    `最大偏差 ${topIn.worst.toFixed(2)}px / ${topIn.frames} 帧`,
+  );
+  await page.waitForTimeout(200);
+  sampling = sampleNeck(700);
+  await page.mouse.move(5, 300);
+  const topOut = await sampling;
+  check(
+    "上边移开缩回：颈逐帧对着胶囊",
+    topOut.worst <= 1.5,
+    `最大偏差 ${topOut.worst.toFixed(2)}px / ${topOut.frames} 帧`,
+  );
 
   // ── 4. 手机尺寸 ────────────────────────────────────────────
   await store(null);

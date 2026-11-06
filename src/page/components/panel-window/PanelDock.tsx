@@ -131,7 +131,19 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     window.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("scroll", sync);
+    // 悬停展开和缩回时胶囊的宽度逐帧变：颈要同一帧跟上，等轮询的话会有约半秒露出一块方形
+    const resizes = window.ResizeObserver
+      ? new ResizeObserver(() => {
+          if (drag.current || animating()) return;
+          const edge = element.getAttribute(
+            "data-imw-dock-edge",
+          ) as DockEdge | null;
+          if (isStickyEdge(edge)) drawNeck(element, edge, 0);
+        })
+      : null;
+    resizes?.observe(element);
     return () => {
+      resizes?.disconnect();
       window.clearInterval(timer);
       cancelSettle();
       stopNeckAnimation();
