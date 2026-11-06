@@ -13,9 +13,15 @@ import { SyncManager } from "../sync/SyncManager";
 import { hostIsDark } from "../iirose_func/HostTheme";
 import { themeAttr } from "./components/floating-panel/floatingPanel";
 import {
+  closePanelTier,
   hasOverlayLayers,
   setPanelBackHandler,
 } from "./components/desk/overlayLayers";
+import {
+  clearDockFlight,
+  mountPanelDock,
+  writeDockFlight,
+} from "./components/panel-window/PanelDock";
 import { PanelWindowChrome } from "./components/panel-window/PanelWindowChrome";
 import { PanelWindowPlacement } from "./components/panel-window/PanelWindowPlacement";
 import {
@@ -30,6 +36,11 @@ interface MainAppControlLayerState {
   searchKeyword: string;
   /** 面板按窗口显示（设置开启且视口放得下）；由 `PanelWindowPlacement` 回报。 */
   windowed: boolean;
+  /**
+   * 最小化中：数据上就是关闭（`mainAppDisplay=false`），只多一个停靠件。不写盘，
+   * 任何一次普通开合都清掉它。
+   */
+  minimized: boolean;
 }
 
 /** 窗口态的容器外观：状态类见 `app.css`，颜色只拼令牌。 */
@@ -43,6 +54,7 @@ export class MainAppControlLayer extends Component<
   private unsubscribeSession?: () => void;
   private placement?: PanelWindowPlacement;
   private unsubscribePanelDisplay?: () => void;
+  private unmountDock?: () => void;
   constructor(props: undefined) {
     super(props);
   }
@@ -52,10 +64,12 @@ export class MainAppControlLayer extends Component<
     init: false,
     searchKeyword: "",
     windowed: false,
+    minimized: false,
   };
 
   render(): ComponentChild {
-    const { mainAppDisplay, init, searchKeyword, windowed } = this.state;
+    const { mainAppDisplay, init, searchKeyword, windowed, minimized } =
+      this.state;
     const { changeSearchKeyword } = this.controller;
     const activeClass = mainAppDisplay
       ? "ShowIIROSE_MEDIA_CONTAINER"
@@ -63,7 +77,7 @@ export class MainAppControlLayer extends Component<
     return (
       <div
         id="IIROSE_MEDIA_CONTAINER"
-        class={`IIROSE_MEDIA_CONTAINER ${activeClass} ${windowed ? WINDOW_CLASS : ""}`}
+        class={`IIROSE_MEDIA_CONTAINER ${activeClass} ${windowed ? WINDOW_CLASS : ""} ${windowed && minimized ? "imw-panel-minimized" : ""}`}
         // 窗口态的事件隔离：范围与全屏时 body 上的拦截一致，窗口外的宿站不受影响
         onMouseDown={windowed ? Gesture.IMCActiveEventHandler : undefined}
         onTouchStart={windowed ? Gesture.IMCActiveEventHandler : undefined}
@@ -71,6 +85,7 @@ export class MainAppControlLayer extends Component<
         {init && windowed && this.placement ? (
           <PanelWindowChrome
             placement={this.placement}
+            onMinimize={this.minimize}
             onClose={this.closeFromHostBack}
           />
         ) : null}
@@ -109,7 +124,28 @@ export class MainAppControlLayer extends Component<
     window.addEventListener("touchend", Gesture.touchEnd);
   }
 
+  componentDidUpdate(
+    _previousProps: object,
+    previousState: MainAppControlLayerState,
+  ): void {
+    if (previousState.minimized === this.state.minimized) return;
+    if (this.state.minimized) {
+      this.unmountDock = mountPanelDock({
+        onRestore: this.restoreFromDock,
+        onClose: this.closeFromDock,
+      });
+      return;
+    }
+    this.unmountDock?.();
+    this.unmountDock = undefined;
+    const container = document.getElementById("IIROSE_MEDIA_CONTAINER");
+    if (container) clearDockFlight(container);
+  }
+
   componentWillUnmount(): void {
+    this.unmountDock?.();
+    this.unmountDock = undefined;
+
     // 卸载时面板一定不可见：撤掉 250ms 的活跃标记。
     this.unsubscribeSession?.();
     this.unsubscribeSession = undefined;
@@ -270,7 +306,26 @@ export class MainAppControlLayer extends Component<
   private ShowHideMainApp = async () => {
     const { mainAppDisplay, init } = this.state;
     if (!init) await this.setState({ init: true });
-    this.setState({ mainAppDisplay: !mainAppDisplay }); // 这里触发 SCU
+    // 最小化中 `mainAppDisplay` 是 false：Alt+S、手势、`@词` 走到这里都是还原
+    this.setState({ mainAppDisplay: !mainAppDisplay, minimized: false }); // 这里触发 SCU
+  };
+
+  /** 标题栏的最小化钮：只有窗口态才有。飞行终点要在窗口还没收起时量。 */
+  private minimize = () => {
+    if (!this.state.mainAppDisplay || !this.state.windowed) return;
+    // 键盘能绕过菜单遮罩点到这里：留着菜单的层，返回键和 Esc 就交还不了宿站
+    closePanelTier("inner");
+    const container = document.getElementById("IIROSE_MEDIA_CONTAINER");
+    if (container) writeDockFlight(container);
+    this.setState({ mainAppDisplay: false, minimized: true });
+  };
+
+  private restoreFromDock = () => {
+    this.setState({ mainAppDisplay: true, minimized: false });
+  };
+
+  private closeFromDock = () => {
+    this.setState({ minimized: false });
   };
 
   /** 宿站返回键：面板开着时接管（层由层级栈先处理），关着时交还宿站。 */
@@ -280,7 +335,7 @@ export class MainAppControlLayer extends Component<
 
   /** 宿站返回键落在面板上时的处理器：只关面板（层与浮层由层级栈先处理）。 */
   private closeFromHostBack = () => {
-    this.setState({ mainAppDisplay: false });
+    this.setState({ mainAppDisplay: false, minimized: false });
   };
 
   controller = {
@@ -313,10 +368,12 @@ export class MainAppControlLayer extends Component<
       // 层级栈非空时由栈在捕获阶段处理并拦下（外来浮层根的事件也要放行给它）；
       // 组合输入中的 Esc 不算关闭手势。
       if (event.defaultPrevented || event.isComposing) return;
+      // 面板关着（含最小化）：这个 Esc 与面板无关，也不能收掉停靠件
+      if (!this.state.mainAppDisplay) return;
       if (hasOverlayLayers()) return;
       // 窗口开着、焦点在聊天框：这个 Esc 归宿站
       if (isHostTextTarget(event.target)) return;
-      this.setState({ mainAppDisplay: false });
+      this.setState({ mainAppDisplay: false, minimized: false });
     }
   };
 }

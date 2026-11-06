@@ -298,6 +298,7 @@ export type DeskIconName =
   | "play"
   | "send"
   | "close"
+  | "minimize"
   | "mark"
   | "list"
   | "grid"
@@ -343,6 +344,7 @@ export const DESK_ICON_NAMES: readonly DeskIconName[] = [
   "play",
   "send",
   "close",
+  "minimize",
   "mark",
   "list",
   "grid",
@@ -399,6 +401,8 @@ const ICON_INNER: Record<DeskIconName, string> = {
   send: '<path d="M20.4 4.2L3.9 11.1l6.3 2.6 2.6 6.3z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M20.4 4.2l-10.2 9.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   close:
     '<path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  minimize:
+    '<path d="M6 17h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   mark: '<path d="M12 4.5c2.2 1.6 3.4 3.6 3.4 5.6 0 1.9-1.5 3.4-3.4 3.4s-3.4-1.5-3.4-3.4c0-2 1.2-4 3.4-5.6zM12 13.5v6M12 17c-1.8-1.6-3.6-2-5-1.6M12 17c1.8-1.6 3.6-2 5-1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
   list: '<path d="M5 7h14M5 12h14M5 17h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   grid: '<rect x="4.5" y="4.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13.5" y="4.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="4.5" y="13.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="13.5" y="13.5" width="6" height="6" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/>',

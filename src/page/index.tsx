@@ -2,6 +2,7 @@ import { noteMediaSent } from "../playback/RequestGuard";
 import { mountBatchProgress } from "./components/batch-progress/BatchProgressStack";
 import { render } from "preact";
 import { MainAppControlLayer } from "./MainAppControlLayer";
+import { releasePanelDock } from "./components/panel-window/PanelDock";
 import { MediaProgress } from "./components/media-progress/MediaProgress";
 import { HostMediaBridge } from "../media-progress/HostMediaBridge";
 import { SidebarMediaEntry } from "../media-progress/SidebarMediaEntry";
@@ -287,6 +288,7 @@ function releaseMainPanel(page: PanelWindow) {
   } catch {
     /* 旧实例已不可用；残留容器由下面清除 */
   }
+  releasePanelDock();
   // 没有单例键的旧版 bundle 只能清 DOM：至少不让同页出现两个主面板。
   for (const panel of document.querySelectorAll("#IIROSE_MEDIA_CONTAINER"))
     (panel.parentElement ?? panel).remove();

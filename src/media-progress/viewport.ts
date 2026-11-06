@@ -9,7 +9,9 @@ export type ViewportMetrics = {
 
 export function viewportMetrics(element: HTMLElement): ViewportMetrics {
   const rect = element.getBoundingClientRect();
-  const scale = rect.width / element.offsetWidth || 1;
+  // 量的是宿站缩放：元素自身的 `scale`（窗口开合、最小化的收缩）要除掉，否则视口会被算大。
+  const ownScale = parseFloat(getComputedStyle(element).scale) || 1;
+  const scale = rect.width / (element.offsetWidth * ownScale) || 1;
   const viewport = window.visualViewport;
   return {
     scale,

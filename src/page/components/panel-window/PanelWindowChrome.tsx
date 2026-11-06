@@ -1,4 +1,4 @@
-// 窗口模式的外框控件：标题栏（名称、关闭钮）和八个缩放抓取区。
+// 窗口模式的外框控件：标题栏（名称、最小化钮、关闭钮）和八个缩放抓取区。
 // 只在窗口态渲染，几何与手势都在 `PanelWindowPlacement`；尺寸见 `app.css` 的窗口态规则。
 import { dragHandleClass } from "../floating-panel/floatingPanel";
 import {
@@ -15,11 +15,13 @@ import type { PanelWindowPlacement } from "./PanelWindowPlacement";
 
 export interface PanelWindowChromeProps {
   placement: PanelWindowPlacement;
+  onMinimize: () => void;
   onClose: () => void;
 }
 
 export function PanelWindowChrome({
   placement,
+  onMinimize,
   onClose,
 }: PanelWindowChromeProps) {
   return (
@@ -33,6 +35,14 @@ export function PanelWindowChrome({
           点歌台
         </span>
         {/* 压在角落的抓取区之上（粗指针下抓取区会伸进标题栏） */}
+        <button
+          type="button"
+          aria-label="最小化窗口"
+          className={`relative z-[21] flex h-full w-11 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-inherit ${deskPressTone} ${deskFocusRing}`}
+          onClick={onMinimize}
+        >
+          <DeskIcon name="minimize" size={18} />
+        </button>
         <button
           type="button"
           aria-label="关闭窗口"

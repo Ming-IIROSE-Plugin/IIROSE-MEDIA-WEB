@@ -17,8 +17,21 @@ vi.mock("./MainApp", async () => {
     },
   };
 });
+const inputModule = vi.hoisted(() => ({
+  changeSearchKeyword: undefined as
+    ((keyword: string | null) => void) | undefined,
+  showOrHide: undefined as (() => Promise<void>) | undefined,
+}));
 vi.mock("../input-behavior-module/Input-Behavior-Module", () => ({
-  Input_Behavior_Module: { init: () => {} },
+  Input_Behavior_Module: {
+    init: (
+      changeSearchKeyword: (keyword: string | null) => void,
+      showOrHide: () => Promise<void>,
+    ) => {
+      inputModule.changeSearchKeyword = changeSearchKeyword;
+      inputModule.showOrHide = showOrHide;
+    },
+  },
 }));
 vi.mock("../iirose_func/CloseSideBar", () => ({ closeSidebar: () => {} }));
 vi.mock("../sync/SyncManager", () => ({
@@ -37,6 +50,7 @@ import {
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import { isPanelOpen, isPanelWindowed } from "../listener/panelPresence";
 import { PANEL_WINDOW_RECT_KEY } from "./components/panel-window/PanelWindowPlacement";
+import { InputPlatformAnalysis } from "../input-behavior-module/InputPlatformAnalysis";
 
 // 构造函数签名写的是 props: undefined，这里只按无 props 组件挂载。
 const Layer = MainAppControlLayer as unknown as ComponentType<object>;
@@ -433,5 +447,195 @@ describe("窗口模式", () => {
     expect(container.style.left).toBe("");
     expect(isPanelOpen()).toBe(false);
     expect(isPanelWindowed()).toBe(false);
+  });
+
+  describe("最小化", () => {
+    const button = (label: string) =>
+      document.querySelector(
+        `button[aria-label="${label}"]`,
+      ) as HTMLButtonElement | null;
+    const click = async (label: string) => {
+      await act(async () => button(label)!.click());
+    };
+    const dock = () => document.querySelector("[data-imw-panel-dock]");
+    const isMinimized = () => panel().classList.contains("imw-panel-minimized");
+    const openAndMinimize = async () => {
+      seedDisplay("window");
+      await mount();
+      await open();
+      await click("最小化窗口");
+    };
+
+    it("最小化等同关闭：藏窗口、出停靠件，保留挂载、不写盘", async () => {
+      const saved = { x: 40, y: 50, width: 900, height: 600 };
+      localStorage.setItem(PANEL_WINDOW_RECT_KEY, JSON.stringify(saved));
+      seedDisplay("window");
+      await mount();
+      await open();
+      const mounts = mainAppMounts.count;
+      const setPanelOpen = vi.fn();
+      provideMediaSession({
+        bridge: {} as never,
+        playback: {} as never,
+        pickShuffle: () => {},
+        setPanelOpen,
+      });
+      const before = { ...localStorage };
+
+      await click("最小化窗口");
+      expect(isOpen()).toBe(false);
+      expect(isPanelOpen()).toBe(false);
+      expect(isMinimized()).toBe(true);
+      expect(dock()).not.toBeNull();
+      expect(setPanelOpen).toHaveBeenLastCalledWith(false);
+      expect(mainAppMounts.count).toBe(mounts);
+      expect({ ...localStorage }).toEqual(before);
+      // 还留着窗口几何：还原时回原位
+      expect(panel().style.left).toBe("40px");
+    });
+
+    it("点还原：停靠件消失，窗口回原位，飞行变量撤掉", async () => {
+      await openAndMinimize();
+      expect(panel().style.getPropertyValue("--imw-dock-x")).not.toBe("");
+      const { left, width } = panel().style;
+      await click("还原点歌台");
+      expect(isOpen()).toBe(true);
+      expect(isPanelOpen()).toBe(true);
+      expect(isMinimized()).toBe(false);
+      expect(dock()).toBeNull();
+      expect(document.getElementById("imw-panel-dock-root")).toBeNull();
+      expect(panel().style.left).toBe(left);
+      expect(panel().style.width).toBe(width);
+      expect(panel().style.getPropertyValue("--imw-dock-x")).toBe("");
+    });
+
+    it("Alt+S 先还原，再按才关闭，且不再出现停靠件", async () => {
+      await openAndMinimize();
+      await toggle();
+      expect(isOpen()).toBe(true);
+      expect(dock()).toBeNull();
+      await toggle();
+      expect(isOpen()).toBe(false);
+      expect(dock()).toBeNull();
+    });
+
+    it("`@词` 还原并带上搜索词", async () => {
+      const ref = createRef<MainAppControlLayer>();
+      seedDisplay("window");
+      await act(async () => {
+        render(h(Layer, { ref } as object), host);
+      });
+      await open();
+      await click("最小化窗口");
+      await act(async () => {
+        await InputPlatformAnalysis.Analysis(
+          "@晴天",
+          () => {},
+          undefined,
+          inputModule.changeSearchKeyword,
+          inputModule.showOrHide,
+        );
+      });
+      expect(isOpen()).toBe(true);
+      expect(dock()).toBeNull();
+      expect(ref.current!.state.searchKeyword).toBe("晴天");
+    });
+
+    it("停靠件的关闭钮：回到普通关闭态，Alt+S 正常打开", async () => {
+      await openAndMinimize();
+      await click("关闭点歌台");
+      expect(dock()).toBeNull();
+      expect(isOpen()).toBe(false);
+      expect(isMinimized()).toBe(false);
+      await toggle();
+      expect(isOpen()).toBe(true);
+      expect(dock()).toBeNull();
+    });
+
+    it("标题栏的关闭钮不出现停靠件", async () => {
+      seedDisplay("window");
+      await mount();
+      await open();
+      await click("关闭窗口");
+      expect(isOpen()).toBe(false);
+      expect(dock()).toBeNull();
+    });
+
+    it("全屏态没有最小化钮", async () => {
+      await mount();
+      await open();
+      expect(isOpen()).toBe(true);
+      expect(button("最小化窗口")).toBeNull();
+    });
+
+    it("视口放不下：停靠件保留；还原时按现有规则全屏", async () => {
+      await openAndMinimize();
+      setWidth(800);
+      await act(async () => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      expect(dock()).not.toBeNull();
+      expect(isWindow()).toBe(false);
+      expect(isMinimized()).toBe(false);
+      await click("还原点歌台");
+      expect(isOpen()).toBe(true);
+      expect(isWindow()).toBe(false);
+      expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
+      expect(hostGetsMouseDown(chat)).toBe(false);
+    });
+
+    it("聊天全归宿站：点击、Esc、返回键都不被拦，停靠件也不被 Esc 收掉", async () => {
+      const hostBackward = vi.fn();
+      const hostWindow = window as unknown as Record<string, unknown>;
+      hostWindow.Utils = { backward: hostBackward };
+      await openAndMinimize();
+      expect(hostGetsMouseDown(chat)).toBe(true);
+      expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
+      // 停靠件自己的按下不漏给宿站的手势识别
+      expect(hostGetsMouseDown(dock()!)).toBe(false);
+
+      const escape = new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => {
+        chat.dispatchEvent(escape);
+      });
+      expect(escape.defaultPrevented).toBe(false);
+      expect(dock()).not.toBeNull();
+
+      await act(async () => {
+        (hostWindow.Utils as { backward: () => unknown }).backward();
+      });
+      expect(hostBackward).toHaveBeenCalledOnce();
+      expect(dock()).not.toBeNull();
+    });
+
+    it("开着的菜单随最小化收起，返回键不会先落到它身上", async () => {
+      seedDisplay("window");
+      await mount();
+      await open();
+      const dismiss = vi.fn();
+      const release = pushOverlayLayer("source", dismiss);
+      await click("最小化窗口");
+      expect(dismiss).toHaveBeenCalledOnce();
+      release();
+    });
+
+    it("卸载时带走停靠件", async () => {
+      await openAndMinimize();
+      render(null, host);
+      expect(document.getElementById("imw-panel-dock-root")).toBeNull();
+    });
+
+    it("刷新后是普通关闭态（新实例不恢复最小化）", async () => {
+      await openAndMinimize();
+      render(null, host);
+      await mount();
+      expect(isOpen()).toBe(false);
+      expect(isMinimized()).toBe(false);
+      expect(dock()).toBeNull();
+    });
   });
 });
