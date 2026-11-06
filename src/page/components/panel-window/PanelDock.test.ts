@@ -510,4 +510,20 @@ describe("样式表", () => {
     expect(css).not.toContain("translateX(100%)");
     expect(css).not.toContain("hidemainHolder");
   });
+
+  it("弯月面：悬停 / 聚焦展开时淡出，按住、拖动、落定动画期间保留", () => {
+    const hide = css.indexOf("弯月面（贴边时胶囊和边之间");
+    expect(hide).toBeGreaterThan(-1);
+    const block = css.slice(hide, css.indexOf("prefers-reduced-motion", hide));
+    expect(block).toMatch(/\[data-imw-dock-neck\] \{\s*transition: opacity/);
+    // 不能用裸的 `path`：胶囊里的图标也是 path，会跟着淡出
+    expect(block).not.toMatch(/\bpath\b\s*\{/);
+    expect(block).toMatch(/:hover:not\(/);
+    expect(block).toMatch(/:has\(:focus-visible\)/);
+    for (const keep of ["held", "dragging", "settling"])
+      expect(block).toContain(`[data-imw-dock-${keep}]`);
+    expect(block).toMatch(/opacity: 0;/);
+    // 悬停只在有悬停的设备上生效
+    expect(block).toMatch(/@media \(hover: hover\)/);
+  });
 });

@@ -694,12 +694,43 @@
   }
 }
 
+/* 弯月面（贴边时胶囊和边之间的那两小块圆弧）只在收起时有：悬停 / 键盘聚焦展开时先淡出，
+   留一个干净的胶囊；按住、拖动和松手后的落定动画期间要留着，不然蜂蜜拉丝就看不见了。 */
+[data-imw-dock-neck] {
+  transition: opacity var(--imw-fast, 120ms) ease-out;
+}
+
+[data-imw-dock-layer]:has(
+    [data-imw-panel-dock][data-imw-dock-edge]:not(
+        [data-imw-dock-held],
+        [data-imw-dock-dragging],
+        [data-imw-dock-settling]
+      ):has(:focus-visible)
+  )
+  [data-imw-dock-neck] {
+  opacity: 0;
+}
+
+@media (hover: hover) {
+  [data-imw-dock-layer]:has(
+      [data-imw-panel-dock][data-imw-dock-edge]:hover:not(
+          [data-imw-dock-held],
+          [data-imw-dock-dragging],
+          [data-imw-dock-settling]
+        )
+    )
+    [data-imw-dock-neck] {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-imw-panel-dock],
   [data-imw-panel-dock][data-imw-dock-settling="place"],
   [data-imw-panel-dock][data-imw-dock-dragging][data-imw-dock-settling="scale"],
   [data-imw-panel-dock] button,
-  [data-imw-dock-label] {
+  [data-imw-dock-label],
+  [data-imw-dock-neck] {
     transition: none;
   }
 }
