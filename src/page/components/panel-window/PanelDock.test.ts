@@ -421,6 +421,12 @@ describe("样式表", () => {
     expect(block).toMatch(/\[data-imw-dock-held\],\s*:has\(:focus-visible\)/);
   });
 
+  it("收起时文字淡出，不露半个字", () => {
+    expect(css).toMatch(
+      /\[data-imw-panel-dock\]\[data-imw-dock-edge\] \[data-imw-dock-label\] \{\s*opacity: 0/,
+    );
+  });
+
   it("独立根进了边框基线和盒模型两条选择器", () => {
     expect(css).toMatch(/#imw-panel-dock-root \* \{\s*border: 0 solid/);
     expect(css).toMatch(/#imw-panel-dock-root \*::after \{\s*box-sizing/);

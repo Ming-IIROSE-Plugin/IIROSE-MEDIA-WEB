@@ -604,6 +604,11 @@
   translate: calc(var(--imw-dock-peek) - 100%) 0;
 }
 
+/* 收起时文字淡出：粗指针露出 44px，不淡出就会带出半个字 */
+[data-imw-panel-dock][data-imw-dock-edge] [data-imw-dock-label] {
+  opacity: 0;
+}
+
 /* 下面压 button 的规则带 !important：项目的 Tailwind 工具类都是 important */
 
 /* 左边缘露出的是胶囊右端：图标换到右边 */
