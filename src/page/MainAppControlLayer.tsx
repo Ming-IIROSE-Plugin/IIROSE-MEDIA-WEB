@@ -99,6 +99,7 @@ export class MainAppControlLayer extends Component<
     this.mainHolder = document.getElementById("mainHolder");
     this.applyTheme();
     this.startPlacement();
+    this.syncDock();
 
     // 2. 初始化其他模块
     const { changeSearchKeyword } = this.controller;
@@ -119,9 +120,9 @@ export class MainAppControlLayer extends Component<
     this.syncDock();
   }
 
-  /** 窗口模式下胶囊常驻：窗口没开着就显示，点它打开；全屏档没有胶囊。 */
+  /** 胶囊常驻：面板没开着就显示，点它打开。 */
   private syncDock() {
-    const wanted = this.state.windowed && !this.state.mainAppDisplay;
+    const wanted = !this.state.mainAppDisplay;
     if (wanted === !!this.unmountDock) return;
     if (wanted) {
       this.unmountDock = mountPanelDock({
@@ -134,11 +135,10 @@ export class MainAppControlLayer extends Component<
     this.unmountDock = undefined;
   }
 
-  /** 窗口开合时缩放的终点是胶囊。 */
+  /** 面板开合时缩放的终点是胶囊。 */
   private writeFlight = () => {
     const container = document.getElementById("IIROSE_MEDIA_CONTAINER");
-    const rect = this.placement?.rect;
-    if (container && rect) writeDockFlight(container, rect);
+    if (container) writeDockFlight(container, this.placement?.rect ?? null);
   };
 
   componentWillUnmount(): void {
@@ -165,8 +165,7 @@ export class MainAppControlLayer extends Component<
       Gesture.IMCActiveEventHandler,
     );
 
-    // 3. 面板开着时被卸载（重复注入接管）：归还宿站聊天区，否则会一直隐藏
-    this.mainHolder?.classList.remove("hidemainHolder");
+    // 3. 窗口摆放收尾
     this.unsubscribePanelDisplay?.();
     this.unsubscribePanelDisplay = undefined;
     this.placement?.dispose();
@@ -203,11 +202,9 @@ export class MainAppControlLayer extends Component<
     );
   }
 
-  /** 全屏打开时藏聊天区并拦截页面事件；窗口态和关闭时都交还宿站。 */
+  /** 全屏打开时拦截页面事件（聊天区被面板盖住，不挪动它）；窗口态和关闭时都交还宿站。 */
   private applyHostCover(isShowing: boolean, windowed: boolean) {
-    if (!this.mainHolder) return;
     if (isShowing && !windowed) {
-      this.mainHolder.classList.add("hidemainHolder");
       document.body.addEventListener(
         "mousedown",
         Gesture.IMCActiveEventHandler,
@@ -217,7 +214,6 @@ export class MainAppControlLayer extends Component<
         Gesture.IMCActiveEventHandler,
       );
     } else {
-      this.mainHolder.classList.remove("hidemainHolder");
       document.body.removeEventListener(
         "mousedown",
         Gesture.IMCActiveEventHandler,
@@ -283,7 +279,7 @@ export class MainAppControlLayer extends Component<
       return true;
     }
 
-    // 窗口态变化（开关、视口跨过阈值）：只重算藏聊天区和拦截
+    // 窗口态变化（开关、视口跨过阈值）：只重算拦截
     if (this.state.windowed !== nextState.windowed) {
       this.applyHostCover(nextState.mainAppDisplay, nextState.windowed);
       return true;

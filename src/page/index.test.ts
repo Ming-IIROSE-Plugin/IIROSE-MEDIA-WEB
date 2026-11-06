@@ -158,16 +158,6 @@ describe("主面板单实例", () => {
     expect(legacy.isConnected).toBe(false);
     expect(panels()).toHaveLength(1);
   });
-
-  it("面板开着时被接管，归还宿站聊天区", () => {
-    const holder = document.createElement("div");
-    holder.id = "mainHolder";
-    document.body.append(holder);
-    IMCInit.init(mainContainer());
-    holder.classList.add("hidemainHolder");
-    IMCInit.init(mainContainer());
-    expect(holder.classList.contains("hidemainHolder")).toBe(false);
-  });
 });
 
 describe("收藏随机选择面板接线", () => {

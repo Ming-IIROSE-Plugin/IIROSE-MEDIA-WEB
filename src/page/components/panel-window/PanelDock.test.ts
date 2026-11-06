@@ -150,6 +150,16 @@ describe("停靠件外观与交互", () => {
 });
 
 describe("飞行变量", () => {
+  it("全屏：视口中心到胶囊中心", () => {
+    addInput({ left: 300, top: 800, right: 1400, bottom: 850 });
+    const panel = document.createElement("div");
+    Object.defineProperty(panel, "offsetWidth", { value: 1600 });
+    writeDockFlight(panel, null);
+    // 胶囊标称 87×38：中心 (355.5, 775)，视口中心 (800, 450)
+    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-444.5px");
+    expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("325px");
+  });
+
   it("窗口展开时的中心到胶囊中心", () => {
     addInput({ left: 300, top: 800, right: 1400, bottom: 850 });
     const panel = document.createElement("div");
@@ -308,7 +318,7 @@ describe("样式表", () => {
       css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
     );
     expect(reduced).toMatch(
-      /imw-panel-window\.ShowIIROSE_MEDIA_CONTAINER \{\s*translate: none;\s*scale: none;\s*transition: none/,
+      /\.IIROSE_MEDIA_CONTAINER\.ShowIIROSE_MEDIA_CONTAINER \{\s*translate: none;\s*scale: none;\s*transition: none/,
     );
     expect(reduced).toMatch(/transition: none/);
   });
@@ -331,14 +341,14 @@ describe("样式表", () => {
     expect(css).toMatch(/#imw-panel-dock-root \*::after \{\s*box-sizing/);
   });
 
-  it("打开态的 transform 与 scale / translate 分属两条规则（lightningcss 否则合并）", () => {
+  it("打开停稳没有 transform；收起不用滑动，也不再推走聊天区", () => {
     const openRule = css.match(
-      /\.IIROSE_MEDIA_CONTAINER\.imw-panel-window\.ShowIIROSE_MEDIA_CONTAINER \{[^}]*\}/,
+      /\.IIROSE_MEDIA_CONTAINER\.ShowIIROSE_MEDIA_CONTAINER \{[^}]*\}/,
     )![0];
-    expect(openRule).toContain("transform: none");
-    expect(openRule).not.toMatch(/\b(scale|translate): none/);
-    expect(css).toMatch(
-      /\n\.imw-panel-window\.ShowIIROSE_MEDIA_CONTAINER \{\s*scale: none;\s*translate: none;/,
-    );
+    expect(openRule).toMatch(/translate: none/);
+    expect(openRule).toMatch(/scale: none/);
+    expect(openRule).not.toMatch(/\btransform:/);
+    expect(css).not.toContain("translateX(100%);\n  visibility");
+    expect(css).not.toContain("hidemainHolder");
   });
 });

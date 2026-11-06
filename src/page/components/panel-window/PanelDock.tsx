@@ -1,4 +1,4 @@
-// 窗口模式常驻的胶囊：窗口没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
+// 常驻的胶囊：面板没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
 // 拖到边缘时吸附并收起，悬停展开。
 // 挂在 body 独立根上（宿站主容器会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。
 // 不改宿站输入框 DOM。
@@ -100,10 +100,17 @@ function measureDock(reference: HTMLElement, size: DockSize): DockPoint {
   return dockPosition(anchor, size, viewport, readStoredDock());
 }
 
-/** 写窗口缩向胶囊的位移（CSS 变量，见 `app.css` 的窗口态规则）。`rect` 是窗口展开时的矩形。 */
-export function writeDockFlight(container: HTMLElement, rect: PanelRect): void {
+/**
+ * 写面板缩向胶囊的位移（CSS 变量，见 `app.css`）。`rect` 是窗口展开时的矩形，全屏传 null。
+ * 收起中的容器量不准，所以不读它的矩形。
+ */
+export function writeDockFlight(
+  container: HTMLElement,
+  rect: PanelRect | null,
+): void {
+  const { width, height } = viewportMetrics(container);
   const flight = dockFlight(
-    rect,
+    rect ?? { x: 0, y: 0, width, height },
     measureDock(container, DOCK_NOMINAL_SIZE),
     DOCK_NOMINAL_SIZE,
   );

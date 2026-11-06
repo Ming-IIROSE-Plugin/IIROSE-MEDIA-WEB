@@ -422,7 +422,12 @@
   }
 }
 
-/* --- 3. 插件容器开关状态（JS 用 classList 切换，见 MainAppControlLayer） --- */
+/* --- 3. 插件容器开关状态（JS 用 classList 切换，见 MainAppControlLayer） ---
+   全屏和窗口共用一套开合：收起时缩向胶囊并淡出（--imw-dock-x/y 由 writeDockFlight 写），动画结束才隐藏；
+   打开时从胶囊展开。全屏是原地盖住页面，不滑动，也不把宿站聊天区推走。
+   打开并停稳时 transform / scale / translate 都是 none：这样里面的 fixed 以视口为基准，
+   来源 / 顺序菜单的遮罩才能盖住窗口外（scale 写 1 同样会改变 fixed 的基准）。
+   收起用 visibility 而不是 display:none：viewportMetrics 仍要量缩放比例，也因此要除掉元素自身的 scale。 */
 .IIROSE_MEDIA_CONTAINER {
   position: fixed;
   top: 0;
@@ -430,33 +435,6 @@
   width: 100%;
   height: 100%;
   z-index: 90000;
-  transition:
-    transform 0.25s ease-in-out,
-    visibility 0s linear 0.25s;
-  transform-origin: right;
-  transform: translateX(100%);
-  visibility: hidden;
-}
-
-.IIROSE_MEDIA_CONTAINER.ShowIIROSE_MEDIA_CONTAINER {
-  transform: translateX(0);
-  visibility: visible;
-  transition: transform 0.25s ease-in-out;
-}
-
-/* 窗口态（类由 MainAppControlLayer 在视口放得下时加，几何由 PanelWindowPlacement 写内联样式）。
-   打开并停稳时不带 transform / scale（scale 也要是 none，写 1 同样会改变 fixed 的基准）：
-   这样里面的 fixed 以视口为基准，来源 / 顺序菜单的遮罩才能盖住窗口外。缩放只存在于开合动画期间。
-   收起时缩向胶囊并淡出（--imw-dock-x/y 由 writeDockFlight 写），动画结束才隐藏，并恢复基础规则的 translateX(100%)。
-   收起后也留着这组值，所以 viewportMetrics 量缩放比例时要除掉元素自身的 scale。
-   全屏态关闭后同样是 hidden：关着的面板进出窗口态时全程不可见，视口跨过阈值不会滑过页面，也不会闪一下。
-   关闭用 visibility 而不是 display:none：viewportMetrics 仍要量缩放比例。 */
-.IIROSE_MEDIA_CONTAINER.imw-panel-window {
-  --imw-titlebar: 32px;
-  --imw-grip: 8px;
-  --imw-grip-inset: 4px;
-  padding-top: var(--imw-titlebar);
-  transform-origin: center;
   opacity: 0;
   translate: var(--imw-dock-x, 0) var(--imw-dock-y, 0);
   scale: 0.2;
@@ -466,13 +444,13 @@
     opacity var(--imw-base) var(--imw-ease),
     scale var(--imw-base) var(--imw-ease),
     translate var(--imw-base) var(--imw-ease),
-    transform 0s linear var(--imw-base),
     visibility 0s linear var(--imw-base);
 }
 
-.IIROSE_MEDIA_CONTAINER.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
-  transform: none;
+.IIROSE_MEDIA_CONTAINER.ShowIIROSE_MEDIA_CONTAINER {
   opacity: 1;
+  translate: none;
+  scale: none;
   visibility: visible;
   pointer-events: auto;
   transition:
@@ -481,11 +459,12 @@
     translate var(--imw-base) var(--imw-ease);
 }
 
-/* 不能和上面的 transform: none 写在同一条规则：lightningcss 压缩时会把两者合并成
-   transform: scale(1)，打开后窗口就带上了 transform。 */
-.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
-  scale: none;
-  translate: none;
+/* 窗口态（类由 MainAppControlLayer 在视口放得下时加，几何由 PanelWindowPlacement 写内联样式） */
+.IIROSE_MEDIA_CONTAINER.imw-panel-window {
+  --imw-titlebar: 32px;
+  --imw-grip: 8px;
+  --imw-grip-inset: 4px;
+  padding-top: var(--imw-titlebar);
 }
 
 /* 容器不能裁切（抓取区要伸到窗口外），圆角裁切放在内容根上 */
@@ -568,8 +547,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .IIROSE_MEDIA_CONTAINER.imw-panel-window,
-  .IIROSE_MEDIA_CONTAINER.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
+  .IIROSE_MEDIA_CONTAINER,
+  .IIROSE_MEDIA_CONTAINER.ShowIIROSE_MEDIA_CONTAINER {
     translate: none;
     scale: none;
     transition: none;
@@ -664,15 +643,6 @@
 }
 
 /* --- 4. 宿站页面元素 --- */
-#mainContainer {
-  transition: transform 0.25s;
-}
-
-.fullBoxFixed.hidemainHolder {
-  transform: translateX(-100%);
-  transform-origin: left;
-}
-
 /* 插件注入到宿站 #syncHolder 的取消层（IIROSEUtils.sync 创建） */
 #syncHolder #syncHolderOutside {
   width: 100%;

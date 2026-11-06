@@ -309,18 +309,17 @@ describe("窗口模式", () => {
     vi.unstubAllGlobals();
   });
 
-  it("设置关闭：藏聊天区并拦截页面点击，没有标题栏和内联几何", async () => {
+  it("设置关闭：拦截页面点击，不挪动聊天区，没有标题栏和内联几何", async () => {
     await mount();
     await open();
     expect(isOpen()).toBe(true);
     expect(isWindow()).toBe(false);
-    expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
     expect(hostGetsMouseDown(chat)).toBe(false);
     expect(panel().querySelector("[data-imw-panel-titlebar]")).toBeNull();
     expect(panel().style.left).toBe("");
+    expect(mainHolder.className).toBe("");
 
     await toggle();
-    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
     expect(hostGetsMouseDown(chat)).toBe(true);
   });
 
@@ -329,7 +328,6 @@ describe("窗口模式", () => {
     await mount();
     await open();
     expect(isWindow()).toBe(true);
-    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
     expect(hostGetsMouseDown(chat)).toBe(true);
     expect(hostGetsMouseDown(panel())).toBe(false);
     expect(panel().style.width).toBe("1000px");
@@ -361,7 +359,6 @@ describe("窗口模式", () => {
     expect(isOpen()).toBe(true);
     expect(isWindow()).toBe(true);
     expect(isPanelWindowed()).toBe(true);
-    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
     expect(hostGetsMouseDown(chat)).toBe(true);
 
     await act(async () => {
@@ -370,7 +367,6 @@ describe("窗口模式", () => {
     expect(isOpen()).toBe(true);
     expect(isWindow()).toBe(false);
     expect(panel().style.left).toBe("");
-    expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
     expect(hostGetsMouseDown(chat)).toBe(false);
     expect(mainAppMounts.count).toBe(mounts);
   });
@@ -388,7 +384,6 @@ describe("窗口模式", () => {
       window.dispatchEvent(new Event("resize"));
     });
     expect(isWindow()).toBe(false);
-    expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
     expect(hostGetsMouseDown(chat)).toBe(false);
     expect(
       JSON.parse(localStorage.getItem("imwPluginSetting")!).panelDisplay,
@@ -402,7 +397,6 @@ describe("窗口模式", () => {
       window.dispatchEvent(new Event("resize"));
     });
     expect(isWindow()).toBe(true);
-    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
     expect(panel().style.left).toBe("40px");
   });
 
@@ -475,13 +469,18 @@ describe("窗口模式", () => {
       expect(dock()).toBeNull();
     });
 
-    it("全屏档没有胶囊，也没有最小化钮", async () => {
+    it("原版形态也有胶囊：打开时隐藏，收起回来，没有最小化钮", async () => {
       await mount();
-      expect(dock()).toBeNull();
-      await open();
+      expect(dock()).not.toBeNull();
+      await click("打开点歌台");
       expect(isOpen()).toBe(true);
+      expect(isWindow()).toBe(false);
       expect(dock()).toBeNull();
       expect(button("最小化窗口")).toBeNull();
+      await toggle();
+      expect(isOpen()).toBe(false);
+      expect(dock()).not.toBeNull();
+      expect(panel().style.getPropertyValue("--imw-dock-x")).not.toBe("");
     });
 
     it("窗口上没有 X；最小化收回胶囊，保留挂载和窗口位置、不写盘", async () => {
@@ -555,39 +554,35 @@ describe("窗口模式", () => {
       expect(ref.current!.state.searchKeyword).toBe("晴天");
     });
 
-    it("设置切回全屏：胶囊消失；切到窗口：胶囊出现", async () => {
+    it("切换形态不影响胶囊：开着时都隐藏，收起都回到胶囊", async () => {
       await mount();
       await open();
       expect(dock()).toBeNull();
       await act(async () => {
         PluginSettings.togglePanelDisplay();
       });
+      expect(isWindow()).toBe(true);
       expect(dock()).toBeNull();
       await click("最小化窗口");
       expect(dock()).not.toBeNull();
       await act(async () => {
         PluginSettings.togglePanelDisplay();
       });
-      expect(dock()).toBeNull();
       expect(isWindow()).toBe(false);
+      expect(dock()).not.toBeNull();
     });
 
-    it("视口放不下：胶囊消失，Alt+S 打开全屏；视口恢复胶囊回来", async () => {
+    it("视口放不下窗口：胶囊还在，打开是全屏", async () => {
       await mountWindow();
       setWidth(800);
       await act(async () => {
         window.dispatchEvent(new Event("resize"));
       });
-      expect(dock()).toBeNull();
+      expect(dock()).not.toBeNull();
       await open();
       expect(isWindow()).toBe(false);
-      expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
-      await toggle();
-      setWidth(1400);
-      await act(async () => {
-        window.dispatchEvent(new Event("resize"));
-      });
-      expect(dock()).not.toBeNull();
+      expect(dock()).toBeNull();
+      expect(hostGetsMouseDown(chat)).toBe(false);
     });
 
     it("聊天全归宿站：点击、Esc、返回键都不被拦，胶囊也不被 Esc 收掉", async () => {
@@ -598,7 +593,6 @@ describe("窗口模式", () => {
       await open();
       await click("最小化窗口");
       expect(hostGetsMouseDown(chat)).toBe(true);
-      expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
       // 胶囊自己的按下不漏给宿站的手势识别
       expect(hostGetsMouseDown(dock()!)).toBe(false);
 

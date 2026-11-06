@@ -28,7 +28,7 @@ description: 在真实站点上运行时验证 IIROSE-MEDIA-WEB 插件：构建 
 5. **验证加载**：
    - 控制台出现 `[Ming's IIROSE-MEDIA-WEB] - LOADED`
    - iframe 内存在 `.IIROSE_MEDIA_CONTAINER`，`window.iirosemedia.cors` 已选代理（ipinfo 判 CN/Global）
-   - Alt+S 呼出 UI：在 iframe 内 dispatch `KeyboardEvent('keydown', {key:'s', altKey:true})`；容器是 fixed 定位，**offsetParent 恒为 null**，判断开关看 `getComputedStyle(container).transform` 是否为 `matrix(1,0,0,1,0,0)`（开着）
+   - Alt+S 呼出 UI：在 iframe 内 dispatch `KeyboardEvent('keydown', {key:'s', altKey:true})`；容器是 fixed 定位，**offsetParent 恒为 null**，判断开关看容器有没有 `ShowIIROSE_MEDIA_CONTAINER` 类
 6. **坑：首启双弹窗**——每次注入都可能连弹**两个**站内弹窗：用户协议 → 隐私政策（都在 `#syncAlertHolder`，各一个「确定」），全屏遮罩挡住一切交互，**循环点到没有为止**。
 7. **坑：宿站弹窗残留遮罩**——`IIROSEUtils.sync` 往 `#syncHolder` 加的 `#syncHolderOutside` 关闭后不清理，连同 `#syncHolder`（fullBoxFixed）会**拦截 Playwright 真实点击**（报 "subtree intercepts pointer events"）。点击页内元素前先执行：`document.getElementById('syncHolderOutside')?.remove(); document.getElementById('syncHolder').style.display='none'`（下次要用站内弹窗时去掉 display:none）。
 8. **搜索验证**：
