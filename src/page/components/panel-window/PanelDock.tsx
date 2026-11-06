@@ -1,5 +1,5 @@
 // 常驻的胶囊：面板没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
-// 拖到边缘时吸附并收起，悬停展开；粘在边上像液体，拉到一定距离才断开（几何在 `dockLiquid.ts`）。
+// 拖到边缘时吸附并收起，悬停展开；粘在边上像蜂蜜，拉出一条丝后断开（几何在 `dockLiquid.ts`）。
 // 挂在 body 独立根上（宿站主容器会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。
 // 不改宿站输入框 DOM。
 import { render } from "preact";
@@ -25,9 +25,8 @@ import {
   isStickyEdge,
   nearbyWall,
   neckPath,
-  rubberDistance,
+  pillTailPath,
   stretchScale,
-  stuckPoint,
   stuckPull,
   wallBumpPath,
   wallOf,
@@ -38,6 +37,7 @@ import {
   dockBounds,
   dockFlight,
   dockPosition,
+  DOCK_SNAP_DISTANCE,
   normalizeStoredDock,
   pinToEdge,
   snapDockEdge,
@@ -58,8 +58,6 @@ const DOCK_ANCHOR_ID = "moveinputDisplay";
 const DOCK_FOLLOW_MS = 500;
 /** 胶囊展开时的尺寸：窗口收起时胶囊还没挂载，用它算终点。 */
 const DOCK_NOMINAL_SIZE: DockSize = { width: 87, height: 38 };
-/** 断开后胶囊追上手指的快慢（指数平滑的时间常数）。 */
-const DOCK_FOLLOW_SMOOTHING_MS = 70;
 /** 颈缩回去、胶囊落定的时长；`app.css` 的 `data-imw-dock-settling` 规则与它同长。 */
 const DOCK_SETTLE_MS = 300;
 
@@ -153,10 +151,8 @@ interface DockDrag {
   moved: boolean;
   /** 还粘着的边；断开后为 null。 */
   stuck: StickyEdge | null;
-  /** 当前离粘住那条边的距离（阻尼后）。 */
+  /** 当前离粘住那条边的距离。 */
   stuckDistance: number;
-  /** 手指对应的位置；刚断开时胶囊还在追它。 */
-  target: DockPoint | null;
 }
 
 export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
@@ -166,7 +162,6 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
   const drag = useRef<DockDrag | null>(null);
   const justDragged = useRef(false);
   const neckFrame = useRef(0);
-  const followFrame = useRef(0);
   const settleTimer = useRef(0);
 
   const reference = () => layer.current as HTMLElement;
@@ -227,21 +222,41 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     );
   };
 
-  /** 断开：颈留下的一小团缩回边缘，胶囊的拉伸轻轻弹回去。 */
+  /** 断开：丝从中间断成两个尖头，边缘那头缩回边上，胶囊那头跟着胶囊缩回去。 */
   const detach = (element: HTMLElement, current: DockDrag) => {
     const edge = current.stuck;
     if (!edge) return;
     const { wall, center, thickness } = neckGeometry(element, edge);
-    const length = current.stuckDistance * 0.6 + thickness / 2;
+    const bumpLength = current.stuckDistance * 0.45 + 4;
+    const tailLength = current.stuckDistance * 0.45;
     current.stuck = null;
     writeDockEdge(element, null);
     settle(element);
     element.style.removeProperty("scale");
-    animateNeck((remaining) =>
+    animateNeck((remaining) => {
+      const tail = neckGeometry(element, edge);
+      const left = parseFloat(element.style.left);
+      const top = parseFloat(element.style.top);
+      const cap =
+        edge === "left"
+          ? left - tail.wall
+          : edge === "right"
+            ? tail.wall - left - element.offsetWidth
+            : top - tail.wall;
       writeNeck(
-        wallBumpPath(edge, wall, center, length * remaining, thickness),
-      ),
-    );
+        [
+          wallBumpPath(edge, wall, center, bumpLength * remaining, thickness),
+          pillTailPath(
+            edge,
+            tail.wall,
+            tail.center,
+            cap,
+            tailLength * remaining,
+            thickness,
+          ),
+        ].join(" "),
+      );
+    });
   };
 
   const place = (element: HTMLElement, { x, y }: DockPoint) => {
@@ -257,41 +272,19 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
       point,
       dockBounds(anchor, dockSize(element), viewport),
     );
-    if (near) drawNeck(element, near.edge, near.gap);
-    else writeNeck("");
-  };
-
-  /** 断开后胶囊追上手指：不瞬移，也就不显得粗暴。 */
-  const follow = (element: HTMLElement) => {
-    if (followFrame.current) return;
-    if (prefersReducedMotion()) return;
-    let previous = performance.now();
-    const tick = (now: number) => {
-      const current = drag.current;
-      if (!current?.target) {
-        followFrame.current = 0;
-        return;
-      }
-      const blend = 1 - Math.exp(-(now - previous) / DOCK_FOLLOW_SMOOTHING_MS);
-      previous = now;
-      const x = parseFloat(element.style.left);
-      const y = parseFloat(element.style.top);
-      const next = {
-        x: x + (current.target.x - x) * blend,
-        y: y + (current.target.y - y) * blend,
-      };
-      if (
-        Math.hypot(current.target.x - next.x, current.target.y - next.y) < 0.5
-      ) {
-        place(element, current.target);
-        followFrame.current = 0;
-        return;
-      }
-      place(element, next);
-      drawApproach(element, next);
-      followFrame.current = requestAnimationFrame(tick);
-    };
-    followFrame.current = requestAnimationFrame(tick);
+    if (near) {
+      const { wall, center, thickness } = neckGeometry(element, near.edge);
+      writeNeck(
+        neckPath(
+          near.edge,
+          wall,
+          center,
+          near.gap,
+          thickness,
+          DOCK_SNAP_DISTANCE,
+        ),
+      );
+    } else writeNeck("");
   };
 
   useLayoutEffect(() => {
@@ -320,7 +313,6 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
       window.clearInterval(timer);
       window.clearTimeout(settleTimer.current);
       stopNeckAnimation();
-      window.cancelAnimationFrame?.(followFrame.current);
       window.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("scroll", sync);
@@ -334,16 +326,13 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     if (!element) return;
     element.removeAttribute("data-imw-dock-held");
     if (!finished?.moved) return;
-    window.cancelAnimationFrame?.(followFrame.current);
-    followFrame.current = 0;
     justDragged.current = true;
     const size = dockSize(element);
     const { anchor, viewport } = dockFrame(reference());
-    const current = {
+    const point = {
       x: parseFloat(element.style.left),
       y: parseFloat(element.style.top),
     };
-    const point = finished.target ?? current;
     // 还粘着就松手：弹回那条边
     const edge = snapDockEdge(point, anchor, size, viewport) ?? finished.stuck;
     const final = clampDockPoint(
@@ -357,10 +346,10 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     const gap = !isStickyEdge(edge)
       ? 0
       : edge === "left"
-        ? current.x - bounds.minX
+        ? point.x - bounds.minX
         : edge === "right"
-          ? bounds.maxX - current.x
-          : current.y - bounds.minY;
+          ? bounds.maxX - point.x
+          : point.y - bounds.minY;
     settle(element);
     element.style.removeProperty("scale");
     place(element, final);
@@ -416,7 +405,6 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
             moved: false,
             stuck: isStickyEdge(edge) && !prefersReducedMotion() ? edge : null,
             stuckDistance: 0,
-            target: null,
           };
           // 按住就展开（触屏没有悬停）
           element.setAttribute("data-imw-dock-held", "true");
@@ -442,35 +430,23 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
           const { anchor, viewport } = dockFrame(reference());
           const docked = { x: current.left, y: current.top };
           const raw = { x: current.left + dx, y: current.top + dy };
+          // 胶囊始终 1:1 跟手，粘只表现在形状上
+          const point = clampDockPoint(raw, anchor, size, viewport);
+          place(element, point);
           if (current.stuck) {
-            const pull = stuckPull(current.stuck, docked, raw);
+            const pull = stuckPull(current.stuck, docked, point);
             if (pull < DOCK_DETACH_PULL) {
-              const distance = rubberDistance(pull);
+              const distance = Math.max(pull, 0);
               current.stuckDistance = distance;
-              place(
-                element,
-                clampDockPoint(
-                  stuckPoint(current.stuck, docked, raw, distance),
-                  anchor,
-                  size,
-                  viewport,
-                ),
-              );
               element.style.scale = stretchScale(current.stuck, distance);
               drawNeck(element, current.stuck, distance);
               return;
             }
             detach(element, current);
-            current.target = clampDockPoint(raw, anchor, size, viewport);
-            follow(element);
             return;
           }
           writeDockEdge(element, null);
-          const target = clampDockPoint(raw, anchor, size, viewport);
-          current.target = target;
-          if (followFrame.current) return;
-          place(element, target);
-          drawApproach(element, target);
+          drawApproach(element, point);
         }}
         onPointerUp={(event) => {
           if (drag.current?.pointer === event.pointerId) endDrag();

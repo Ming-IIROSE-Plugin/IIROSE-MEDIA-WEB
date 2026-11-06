@@ -4,9 +4,8 @@ import {
   isStickyEdge,
   nearbyWall,
   neckPath,
-  rubberDistance,
+  pillTailPath,
   stretchScale,
-  stuckPoint,
   stuckPull,
   wallBumpPath,
   wallOf,
@@ -29,29 +28,16 @@ describe("拉动", () => {
     expect(stuckPull("top", docked, raw)).toBe(50);
   });
 
-  it("越拉越费劲：不超过手指，增量递减；往边缘里按不动", () => {
-    expect(rubberDistance(-10)).toBe(0);
-    const near = rubberDistance(20);
-    const far = rubberDistance(40);
-    expect(near).toBeLessThan(20);
-    expect(far - near).toBeLessThan(near);
-    expect(rubberDistance(DOCK_DETACH_PULL)).toBeLessThan(44);
-  });
-
-  it("垂直于边缘走阻尼，沿着边缘跟手", () => {
-    const docked = { x: 100, y: 100 };
-    const raw = { x: 170, y: 160 };
-    expect(stuckPoint("left", docked, raw, 20)).toEqual({ x: 120, y: 160 });
-    expect(stuckPoint("right", docked, raw, 20)).toEqual({ x: 80, y: 160 });
-    expect(stuckPoint("top", docked, raw, 20)).toEqual({ x: 170, y: 120 });
-  });
-
   it("沿拉动方向变长、另一个方向变窄", () => {
     expect(stretchScale("left", 0)).toBe("1.000 1.000");
-    const [alongX, acrossY] = stretchScale("right", 44).split(" ").map(Number);
+    const [alongX, acrossY] = stretchScale("right", DOCK_DETACH_PULL)
+      .split(" ")
+      .map(Number);
     expect(alongX).toBeGreaterThan(1);
     expect(acrossY).toBeLessThan(1);
-    const [acrossX, alongY] = stretchScale("top", 44).split(" ").map(Number);
+    const [acrossX, alongY] = stretchScale("top", DOCK_DETACH_PULL)
+      .split(" ")
+      .map(Number);
     expect(acrossX).toBeLessThan(1);
     expect(alongY).toBeGreaterThan(1);
   });
@@ -84,13 +70,19 @@ describe("颈的形状", () => {
     expect(Math.min(...xs(top))).toBeGreaterThan(300 - 27);
   });
 
-  it("拉得越远，中间越细", () => {
-    // 第二段的终点是颈最细处：取 M 之后第 3 个点的沿边偏移
+  it("丝先粗后急细：前半段还很粗，快断时才变细", () => {
     const waist = (distance: number) =>
       Math.abs(numbers(neckPath("left", 0, 0, distance, 38))[7]);
-    expect(waist(10)).toBeLessThan(waist(0));
-    expect(waist(30)).toBeLessThan(waist(10));
-    expect(waist(44)).toBeGreaterThan(0);
+    expect(waist(28)).toBeGreaterThan(waist(0) * 0.6);
+    expect(waist(50)).toBeLessThan(waist(28) * 0.4);
+    expect(waist(DOCK_DETACH_PULL)).toBeGreaterThan(0);
+  });
+
+  it("靠近边缘用自己的长度算粗细：刚进范围时很细，贴上时最粗", () => {
+    const waist = (distance: number) =>
+      Math.abs(numbers(neckPath("left", 0, 0, distance, 38, 24))[7]);
+    expect(waist(23)).toBeLessThan(5);
+    expect(waist(2)).toBeGreaterThan(15);
   });
 
   it("曲线在边缘处相切：第一个控制点贴着边缘", () => {
@@ -102,6 +94,21 @@ describe("颈的形状", () => {
     const narrow = Math.max(...ys(wallBumpPath("left", 0, 0, 3, 38)));
     expect(narrow).toBeLessThan(wide);
     expect(wallBumpPath("left", 0, 0, 0.2, 38)).toBe("");
+  });
+});
+
+describe("断开后的尖头", () => {
+  const xs = (path: string) =>
+    (path.match(/-?\d+(\.\d+)?/g) ?? [])
+      .map(Number)
+      .filter((_, i) => i % 2 === 0);
+
+  it("胶囊上的尖头朝边缘伸出，太短就不画", () => {
+    // 左边缘，胶囊离边缘 60：尖头伸到 60 - 20
+    const tail = pillTailPath("left", 0, 100, 60, 20, 38);
+    expect(Math.min(...xs(tail))).toBe(40);
+    expect(Math.max(...xs(tail))).toBe(78);
+    expect(pillTailPath("left", 0, 100, 60, 0.2, 38)).toBe("");
   });
 });
 

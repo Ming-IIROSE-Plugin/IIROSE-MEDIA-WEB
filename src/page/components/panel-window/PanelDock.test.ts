@@ -281,7 +281,7 @@ describe("拖动", () => {
       expect(neck().getAttribute("d")).toBe("");
     });
 
-    it("没拉到阈值：胶囊被拖住、拉长，还算贴在这条边上", () => {
+    it("没拉到阈值：胶囊跟手、略微拉长，还算贴在这条边上", () => {
       addInput(input);
       seedEdge("left");
       mount();
@@ -289,9 +289,8 @@ describe("拖动", () => {
       expect(dock().hasAttribute("data-imw-dock-held")).toBe(true);
       pointer("pointermove", restore(), 40, 500);
       expect(edge()).toBe("left");
-      // 手指走了 30，胶囊走得更少
-      expect(position().x).toBeGreaterThan(0);
-      expect(position().x).toBeLessThan(30);
+      // 胶囊 1:1 跟手，粘只表现在形状上
+      expect(position().x).toBe(30);
       expect(dock().style.scale).not.toBe("");
     });
 
@@ -320,6 +319,7 @@ describe("拖动", () => {
       pointer("pointermove", restore(), 100, 500);
       expect(edge()).toBeNull();
       expect(dock().style.scale).toBe("");
+      expect(position().x).toBe(90);
       pointer("pointerup", restore(), 100, 500);
       expect(position()).toEqual({ x: 90, y: 500 });
       expect(stored()).toEqual({ x: 90, y: 500 });

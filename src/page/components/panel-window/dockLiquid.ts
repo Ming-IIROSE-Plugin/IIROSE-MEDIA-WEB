@@ -1,4 +1,5 @@
-// 胶囊粘在边缘的液体效果：只有纯函数。拉胶囊时先被拉长（阻尼位移 + 收细的颈），到阈值才断开。
+// 胶囊粘在边缘的「蜂蜜拉丝」效果：只有纯函数。胶囊始终 1:1 跟手，粘只表现在形状上：
+// 边缘和胶囊之间拉出一条丝，先粗后急细，到阈值断开，两端的尖头各自缩回去。
 // 坐标都是 `viewport.ts` 换算后的 CSS 像素，和胶囊的 left / top 同一口径。
 import {
   DOCK_SNAP_DISTANCE,
@@ -6,11 +7,11 @@ import {
   type DockPoint,
 } from "./dockPlacement";
 
-/** 手指离开贴边位置这么远才断开。 */
-export const DOCK_DETACH_PULL = 72;
-/** 阻尼位移的上限：胶囊被拉住时最多离开边缘这么远。 */
-const DOCK_PULL_MAX = 44;
-const DOCK_PULL_SOFTNESS = 40;
+/** 离开贴边位置这么远就断开：距离短，粘的感觉靠形状。 */
+export const DOCK_DETACH_PULL = 56;
+/** 被拉到最长时，胶囊沿拉动方向变长、另一个方向变窄的比例。 */
+const DOCK_STRETCH_ALONG = 0.07;
+const DOCK_STRETCH_ACROSS = 0.05;
 /** 颈在边缘处比胶囊两侧各多出的宽度（弯月面）。 */
 const NECK_FLARE = 8;
 /** 颈收到最细时的半宽。 */
@@ -34,29 +35,11 @@ export function stuckPull(
   return raw.y - docked.y;
 }
 
-/** 手指拉出的距离换算成胶囊实际离开边缘的距离：越拉越费劲。 */
-export function rubberDistance(pull: number): number {
-  if (pull <= 0) return 0;
-  return DOCK_PULL_MAX * (1 - Math.exp(-pull / DOCK_PULL_SOFTNESS));
-}
-
-/** 被粘住时胶囊的位置：垂直于边缘走阻尼位移，沿着边缘正常跟手。 */
-export function stuckPoint(
-  edge: StickyEdge,
-  docked: DockPoint,
-  raw: DockPoint,
-  distance: number,
-): DockPoint {
-  if (edge === "left") return { x: docked.x + distance, y: raw.y };
-  if (edge === "right") return { x: docked.x - distance, y: raw.y };
-  return { x: raw.x, y: docked.y + distance };
-}
-
 /** 被拉长的胶囊：沿拉动方向变长、另一个方向变窄（CSS `scale` 的值）。 */
 export function stretchScale(edge: StickyEdge, distance: number): string {
-  const amount = Math.min(distance / DOCK_PULL_MAX, 1);
-  const along = (1 + 0.1 * amount).toFixed(3);
-  const across = (1 - 0.06 * amount).toFixed(3);
+  const amount = Math.min(distance / DOCK_DETACH_PULL, 1);
+  const along = (1 + DOCK_STRETCH_ALONG * amount).toFixed(3);
+  const across = (1 - DOCK_STRETCH_ACROSS * amount).toFixed(3);
   return edge === "top" ? `${across} ${along}` : `${along} ${across}`;
 }
 
@@ -72,8 +55,8 @@ function edgeMapper(edge: StickyEdge, wall: number, center: number) {
 }
 
 /**
- * 边缘和胶囊之间的颈：贴在边上时是弯月面，拉开后中间收细。
- * 末端伸进胶囊的圆头，和胶囊同色，所以看起来是一整块。
+ * 边缘和胶囊之间的丝：贴在边上时是弯月面，拉开后先保持粗、快断时才急剧变细，这样才显得粘。
+ * 末端伸进胶囊的圆头，和胶囊同色，所以看起来是一整块。`reach` 是丝细到最细时的长度。
  */
 export function neckPath(
   edge: StickyEdge,
@@ -81,17 +64,20 @@ export function neckPath(
   center: number,
   distance: number,
   thickness: number,
+  reach: number = DOCK_DETACH_PULL,
 ): string {
   const half = thickness / 2;
-  const amount = Math.min(distance / DOCK_PULL_MAX, 1);
-  // 拉长时根部也收窄，否则边缘上会留下两根刺
-  const flare = (half + NECK_FLARE) * (1 - 0.4 * amount);
+  const amount = Math.min(distance / reach, 1);
   // 胶囊被拉长时变窄（`stretchScale`）：末端跟着窄一点，不露出肩膀
-  const endHalf = half * (1 - 0.06 * amount) - 0.5;
+  const endHalf = half * (1 - DOCK_STRETCH_ACROSS * amount) - 0.5;
   const end = distance + half;
   const waistAt = distance / 2 + thickness * 0.2;
-  const taper = Math.max(1 - distance / DOCK_PULL_MAX, 0);
-  const waist = Math.min(Math.max(half * taper ** 1.2, NECK_MIN_HALF), endHalf);
+  const waist = Math.min(
+    Math.max(half * (1 - amount ** 1.6), NECK_MIN_HALF),
+    endHalf,
+  );
+  // 根部随丝收窄，但始终比丝宽：边缘上留着一片铺开的底
+  const flare = waist + (half + NECK_FLARE - waist) * (1 - 0.75 * amount);
   const p = edgeMapper(edge, wall, center);
   // 第一个控制点压在边缘上：曲线与边缘相切，看起来是铺开的液体，不是尖角
   const wallControl = waist + (flare - waist) * 0.35;
@@ -130,6 +116,28 @@ export function wallBumpPath(
     `M ${p(0, -flare)}`,
     `C ${p(0, -flare * 0.45)} ${p(length, -flare * 0.35)} ${p(length, 0)}`,
     `C ${p(length, flare * 0.35)} ${p(0, flare * 0.45)} ${p(0, flare)}`,
+    "Z",
+  ].join(" ");
+}
+
+/** 断开后胶囊上留的尖头：`cap` 是胶囊朝向边缘那一端离边缘的距离。太短就不画。 */
+export function pillTailPath(
+  edge: StickyEdge,
+  wall: number,
+  center: number,
+  cap: number,
+  length: number,
+  thickness: number,
+): string {
+  if (length < 0.5) return "";
+  const half = thickness / 2 - 1;
+  const base = cap + half;
+  const tip = cap - length;
+  const p = edgeMapper(edge, wall, center);
+  return [
+    `M ${p(base, -half)}`,
+    `C ${p(cap, -half * 0.8)} ${p(tip + length * 0.35, -half * 0.12)} ${p(tip, 0)}`,
+    `C ${p(tip + length * 0.35, half * 0.12)} ${p(cap, half * 0.8)} ${p(base, half)}`,
     "Z",
   ].join(" ");
 }
