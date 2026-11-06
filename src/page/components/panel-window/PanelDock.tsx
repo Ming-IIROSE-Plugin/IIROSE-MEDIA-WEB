@@ -1,4 +1,5 @@
-// 窗口模式常驻的胶囊：窗口没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框。
+// 窗口模式常驻的胶囊：窗口没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
+// 拖到左右边缘时吸附并收起，悬停伸出。
 // 挂在 body 独立根上（宿站主容器会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。
 // 不改宿站输入框 DOM。
 import { render } from "preact";
@@ -25,7 +26,10 @@ import {
   dockFlight,
   dockPosition,
   normalizeStoredDock,
+  pinToEdge,
+  snapDockEdge,
   type DockAnchor,
+  type DockEdge,
   type DockPoint,
   type DockSize,
 } from "./dockPlacement";
@@ -69,11 +73,23 @@ function dockFrame(reference: HTMLElement) {
   return { anchor: readAnchor(scale), viewport };
 }
 
+function readStoredDock() {
+  return normalizeStoredDock(readJson(PANEL_DOCK_POSITION_KEY, null));
+}
+
+/** 吸附在边缘的胶囊由 `app.css` 收起，悬停时伸出。 */
+function writeDockEdge(
+  element: HTMLElement,
+  edge: DockEdge | null | undefined,
+) {
+  if (edge) element.setAttribute("data-imw-dock-edge", edge);
+  else element.removeAttribute("data-imw-dock-edge");
+}
+
 /** 胶囊该摆的位置：输入框移动或视口变化只改显示，存档留着等放得下时恢复。 */
 function measureDock(reference: HTMLElement, size: DockSize): DockPoint {
   const { anchor, viewport } = dockFrame(reference);
-  const stored = normalizeStoredDock(readJson(PANEL_DOCK_POSITION_KEY, null));
-  return dockPosition(anchor, size, viewport, stored);
+  return dockPosition(anchor, size, viewport, readStoredDock());
 }
 
 /** 写窗口缩向胶囊的位移（CSS 变量，见 `app.css` 的窗口态规则）。`rect` 是窗口展开时的矩形。 */
@@ -117,6 +133,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
       });
       element.style.left = `${x}px`;
       element.style.top = `${y}px`;
+      writeDockEdge(element, readStoredDock()?.edge);
       // 胶囊常驻：宿站换主题也要跟上
       element.setAttribute("data-imw-theme", themeAttr(hostIsDark()));
       onPlaced();
@@ -143,10 +160,23 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     drag.current = null;
     if (!finished?.moved || !element) return;
     justDragged.current = true;
-    writeJson(PANEL_DOCK_POSITION_KEY, {
+    const size = { width: element.offsetWidth, height: element.offsetHeight };
+    const { anchor, viewport } = dockFrame(reference());
+    const point = {
       x: parseFloat(element.style.left),
       y: parseFloat(element.style.top),
-    });
+    };
+    const edge = snapDockEdge(point, size, viewport);
+    const { x, y } = clampDockPoint(
+      edge ? pinToEdge(point, edge) : point,
+      anchor,
+      size,
+      viewport,
+    );
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+    writeDockEdge(element, edge);
+    writeJson(PANEL_DOCK_POSITION_KEY, edge ? { x, y, edge } : { x, y });
     onPlaced();
   };
   // 粗指针上也要够得着：与其它粗指针目标同为 44px
@@ -192,6 +222,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
         const dy = pointer.y - current.y;
         if (!current.moved && Math.hypot(dx, dy) < DOCK_DRAG_THRESHOLD) return;
         current.moved = true;
+        writeDockEdge(element, null);
         const { anchor, viewport } = dockFrame(reference());
         const { x, y } = clampDockPoint(
           { x: current.left + dx, y: current.top + dy },

@@ -3,6 +3,10 @@ import { PANEL_EDGE, type PanelRect, type PanelViewport } from "./geometry";
 
 /** 胶囊底缘与输入框的间距。 */
 export const DOCK_GAP = 6;
+/** 松手时离视口左右边缘不到这么远，就吸附并收起。 */
+export const DOCK_SNAP_DISTANCE = 24;
+
+export type DockEdge = "left" | "right";
 
 export interface DockSize {
   width: number;
@@ -19,6 +23,11 @@ export interface DockAnchor {
 export interface DockPoint {
   x: number;
   y: number;
+}
+
+/** 存档：吸附在边缘时记 `edge`，视口变宽后仍贴着那条边。 */
+export interface StoredDock extends DockPoint {
+  edge?: DockEdge;
 }
 
 /** 输入框能不能当锚：有尺寸、在视口内，且上方放得下胶囊（放不下就不能压住它）。 */
@@ -38,11 +47,28 @@ function usableAnchor(
 }
 
 /** 存档校验：坏数据按没有存档处理。 */
-export function normalizeStoredDock(raw: unknown): DockPoint | null {
+export function normalizeStoredDock(raw: unknown): StoredDock | null {
   if (!raw || typeof raw !== "object") return null;
-  const { x, y } = raw as Record<string, unknown>;
+  const { x, y, edge } = raw as Record<string, unknown>;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { x, y } as DockPoint;
+  const point = { x, y } as DockPoint;
+  return edge === "left" || edge === "right" ? { ...point, edge } : point;
+}
+
+/** 松手位置靠近哪条左右边缘；都不近时为 null。 */
+export function snapDockEdge(
+  point: DockPoint,
+  size: DockSize,
+  viewport: PanelViewport,
+): DockEdge | null {
+  if (point.x - viewport.offsetX < DOCK_SNAP_DISTANCE) return "left";
+  const right = viewport.offsetX + viewport.width;
+  return right - (point.x + size.width) < DOCK_SNAP_DISTANCE ? "right" : null;
+}
+
+/** 把 x 贴到边缘（`clampDockPoint` 负责落到视口内）。 */
+export function pinToEdge(point: DockPoint, edge: DockEdge): DockPoint {
+  return { x: edge === "left" ? -Infinity : Infinity, y: point.y };
 }
 
 /** 限制在视口内，且底缘不越过输入框顶边（间距 `DOCK_GAP`）；输入框不能当锚时只限制在视口内。 */
@@ -71,9 +97,15 @@ export function dockPosition(
   anchor: DockAnchor | null,
   size: DockSize,
   viewport: PanelViewport,
-  stored: DockPoint | null = null,
+  stored: StoredDock | null = null,
 ): DockPoint {
-  if (stored) return clampDockPoint(stored, anchor, size, viewport);
+  if (stored)
+    return clampDockPoint(
+      stored.edge ? pinToEdge(stored, stored.edge) : stored,
+      anchor,
+      size,
+      viewport,
+    );
   if (!usableAnchor(anchor, size, viewport))
     return {
       x: viewport.offsetX + (viewport.width - size.width) / 2,

@@ -211,6 +211,38 @@ describe("拖动", () => {
     expect(stored()).toBeNull();
   });
 
+  const edge = () => dock().getAttribute("data-imw-dock-edge");
+
+  it("拖到边缘：吸附、收起并连同边一起存档；刷新后还是收起", () => {
+    addInput(input);
+    mount();
+    dragBy(1300, -100);
+    expect(position()).toEqual({ x: 1600, y: 694 });
+    expect(edge()).toBe("right");
+    expect(stored()).toEqual({ x: 1600, y: 694, edge: "right" });
+    releasePanelDock();
+    mount();
+    expect(edge()).toBe("right");
+    expect(position()).toEqual({ x: 1600, y: 694 });
+  });
+
+  it("拖离边缘：拖动中就伸出，松手不再收起", () => {
+    addInput(input);
+    localStorage.setItem(
+      PANEL_DOCK_POSITION_KEY,
+      JSON.stringify({ x: 0, y: 500, edge: "left" }),
+    );
+    mount();
+    expect(edge()).toBe("left");
+    expect(position().x).toBe(0);
+    pointer("pointerdown", restore(), 10, 500);
+    pointer("pointermove", restore(), 400, 500);
+    expect(edge()).toBeNull();
+    pointer("pointerup", restore(), 400, 500);
+    expect(edge()).toBeNull();
+    expect(stored()).toEqual({ x: 390, y: 500 });
+  });
+
   it("重新挂载（含刷新后）回到存档位置；存档也是窗口的缩放终点", () => {
     addInput(input);
     localStorage.setItem(
@@ -257,6 +289,17 @@ describe("样式表", () => {
       /imw-panel-window\.ShowIIROSE_MEDIA_CONTAINER \{\s*translate: none;\s*scale: none;\s*transition: none/,
     );
     expect(reduced).toMatch(/transition: none/);
+  });
+
+  it("收起只在有悬停的设备上，悬停和键盘聚焦都伸出", () => {
+    const block = css.slice(
+      css.indexOf("@media (hover: hover) {\n  [data-imw-panel-dock]"),
+    );
+    expect(block).toContain('[data-imw-dock-edge="right"]');
+    expect(block).toContain('[data-imw-dock-edge="left"]');
+    expect(block).toMatch(
+      /\[data-imw-dock-edge\]:hover,\s*\[data-imw-panel-dock\]\[data-imw-dock-edge\]:has\(:focus-visible\) \{\s*translate: none/,
+    );
   });
 
   it("独立根进了边框基线和盒模型两条选择器", () => {

@@ -576,6 +576,39 @@
   }
 }
 
+/* 胶囊吸附在左右边缘时收起，只露出图标，悬停或键盘聚焦时伸出（data-imw-dock-edge 由 PanelDock 写）。
+   触屏没有悬停，收起后难点，保持完整显示。聚焦判断用 :focus-visible：鼠标拖动留下的焦点不能让它一直伸着。 */
+@media (hover: hover) {
+  [data-imw-panel-dock] {
+    --imw-dock-peek: 34px;
+    transition: translate 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  [data-imw-panel-dock][data-imw-dock-edge="right"] {
+    translate: calc(100% - var(--imw-dock-peek)) 0;
+  }
+
+  [data-imw-panel-dock][data-imw-dock-edge="left"] {
+    translate: calc(var(--imw-dock-peek) - 100%) 0;
+  }
+
+  /* 左边缘露出的是胶囊右端：图标换到右边 */
+  [data-imw-panel-dock][data-imw-dock-edge="left"] button {
+    flex-direction: row-reverse;
+  }
+
+  [data-imw-panel-dock][data-imw-dock-edge]:hover,
+  [data-imw-panel-dock][data-imw-dock-edge]:has(:focus-visible) {
+    translate: none;
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: reduce) {
+  [data-imw-panel-dock] {
+    transition: none;
+  }
+}
+
 /* --- 4. 宿站页面元素 --- */
 #mainContainer {
   transition: transform 0.25s;
