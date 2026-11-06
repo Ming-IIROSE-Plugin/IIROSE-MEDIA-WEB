@@ -3,6 +3,7 @@
 // 手势结束才写盘；视口变化只改显示，存档留着等视口恢复。
 import {
   currentViewportPosition,
+  viewportMetrics,
   pointerPosition,
 } from "../../../media-progress/viewport";
 import { readJson, writeJson } from "../../../storage/localStore";
@@ -96,8 +97,16 @@ export class PanelWindowPlacement {
   /** 按当前视口重算显示；视口变化时不写盘，也不打断手势。 */
   private sync = (): void => {
     const viewport = this.viewport();
+    // 放不放得下看布局视口：键盘和捏合只缩小可视视口，不该把窗口变成全屏、藏起聊天区。
+    const { scale } = viewportMetrics(this.element);
     const windowed =
-      this.enabled && !isPhoneLayout() && viewportFitsWindow(viewport);
+      this.enabled &&
+      !isPhoneLayout() &&
+      viewportFitsWindow({
+        ...viewport,
+        width: window.innerWidth / scale,
+        height: window.innerHeight / scale,
+      });
     if (windowed) {
       this.show(
         fitRect(

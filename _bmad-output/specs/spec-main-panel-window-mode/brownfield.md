@@ -10,9 +10,10 @@
 | `src/page/MainAppControlLayer.tsx:242` | Esc 不看焦点位置就关闭面板 | 在聊天框按 Esc 会关窗口 |
 | `src/page/components/desk/overlayLayers.ts:69` | Esc 在捕获阶段按层关闭，不看焦点位置 | 同上 |
 | `src/app.css:421-436` | 容器 `fixed` 全屏，`translateX(100%)` 收起 | 窗口要有自己的几何尺寸，收起时不得挡住页面 |
-| `src/page/components/media-card-container/OrderMenu.tsx:95-101` | 按 `window.innerWidth` 和锚点算 `fixed` 的 `top` / `right` | 容器带 `transform` 时 `fixed` 以容器为基准，全屏时两者重合，窗口化后菜单错位 |
-| `src/page/components/desk/SourceMenu.tsx:95`、`OrderMenu.tsx:129` | `fixed inset-0` 遮罩负责点外部关闭 | 遮罩只盖窗口，点聊天区不会收起菜单 |
 | `src/page/components/room-deck/RoomDeckDesktop.tsx:51,85` | 视口 ≤900px 时左右栏收窄 | 按视口判断，窄窗口在大屏上不收窄，中栏进度轨被挤没 |
+| `src/input-behavior-module/InputPlatformAnalysis.ts:28` | `@` 搜索调用开关切换 | 窗口开着时在聊天框 `@` 会关窗口 |
+
+窗口打开时 `transform: none`，`fixed` 以视口为基准，所以 `OrderMenu`、`SourceMenu` 的定位和遮罩都不用改；菜单开着时点窗口外，这一下只收起菜单。
 
 ## 可复用
 

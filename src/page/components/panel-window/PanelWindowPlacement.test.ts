@@ -161,6 +161,32 @@ describe("视口变化只改显示", () => {
     expect(element.style.left).toBe("");
   });
 
+  it("可视视口缩到阈值以下（键盘、捏合）：仍是窗口，显示收回可视视口，存档不变", () => {
+    seed(saved);
+    const listeners = new Set<() => void>();
+    const visual = {
+      width: 1600,
+      height: 900,
+      offsetLeft: 0,
+      offsetTop: 0,
+      addEventListener: (_type: string, listener: () => void) =>
+        listeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) =>
+        listeners.delete(listener),
+    };
+    vi.stubGlobal("visualViewport", visual);
+    begin();
+    onChange.mockClear();
+
+    visual.width = 700;
+    visual.height = 400;
+    listeners.forEach((listener) => listener());
+
+    expect(onChange).not.toHaveBeenCalled();
+    expect(shown()).toEqual({ x: 12, y: 12, width: 800, height: 520 });
+    expect(stored()).toEqual(saved);
+  });
+
   it("窗口态不变时不重复回调", () => {
     begin();
     onChange.mockClear();
