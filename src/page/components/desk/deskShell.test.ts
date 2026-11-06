@@ -144,6 +144,10 @@ describe("页头", () => {
     expect(close.getAttribute("class")).toContain("w-10");
     // 手机上关闭钮要够 44px（真站 390 宽下原为 40×40）
     expect(close.getAttribute("class")).toContain("max-[768px]:h-11");
+    // 窗口态只留标题栏的关闭钮
+    expect(close.getAttribute("class")).toContain(
+      "[.imw-panel-window_&]:hidden",
+    );
     (close as HTMLButtonElement).click();
     expect(onClose).toHaveBeenCalledOnce();
   });

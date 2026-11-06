@@ -425,35 +425,57 @@
   width: 100%;
   height: 100%;
   z-index: 90000;
-  transition: transform 0.25s ease-in-out;
+  transition:
+    transform 0.25s ease-in-out,
+    visibility 0s linear 0.25s;
   transform-origin: right;
   transform: translateX(100%);
+  visibility: hidden;
 }
 
 .IIROSE_MEDIA_CONTAINER.ShowIIROSE_MEDIA_CONTAINER {
   transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.25s ease-in-out;
 }
 
 /* 窗口态（类由 MainAppControlLayer 在视口放得下时加，几何由 PanelWindowPlacement 写内联样式）。
-   打开时不用 transform：这样里面的 fixed 以视口为基准，来源 / 顺序菜单的遮罩才能盖住窗口外。
-   关闭时保留基础规则的 translateX(100%)：离开窗口态时 transform 没有变化，全屏面板不会滑过页面。
-   只在打开时淡入（关闭立即隐藏）：视口跨过阈值时，关着的面板不会闪一下。
+   打开并停稳时不带 transform / scale（scale 也要是 none，写 1 同样会改变 fixed 的基准）：
+   这样里面的 fixed 以视口为基准，来源 / 顺序菜单的遮罩才能盖住窗口外。缩放只存在于开合动画期间。
+   关闭时淡出并缩小，动画结束才隐藏，并恢复基础规则的 translateX(100%)。
+   全屏态关闭后同样是 hidden：关着的面板进出窗口态时全程不可见，视口跨过阈值不会滑过页面，也不会闪一下。
    关闭用 visibility 而不是 display:none：viewportMetrics 仍要量缩放比例。 */
 .IIROSE_MEDIA_CONTAINER.imw-panel-window {
   --imw-titlebar: 32px;
   --imw-grip: 8px;
   --imw-grip-inset: 4px;
   padding-top: var(--imw-titlebar);
+  transform-origin: center;
   opacity: 0;
+  scale: 0.96;
   visibility: hidden;
-  transition: none;
+  pointer-events: none;
+  transition:
+    opacity var(--imw-base) var(--imw-ease),
+    scale var(--imw-base) var(--imw-ease),
+    transform 0s linear var(--imw-base),
+    visibility 0s linear var(--imw-base);
 }
 
 .IIROSE_MEDIA_CONTAINER.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
   transform: none;
   opacity: 1;
   visibility: visible;
-  transition: opacity var(--imw-fast) var(--imw-ease);
+  pointer-events: auto;
+  transition:
+    opacity var(--imw-base) var(--imw-ease),
+    scale var(--imw-base) var(--imw-ease);
+}
+
+/* 不能和上面的 transform: none 写在同一条规则：lightningcss 压缩时会把两者合并成
+   transform: scale(1)，打开后窗口就带上了 transform。 */
+.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
+  scale: none;
 }
 
 /* 容器不能裁切（抓取区要伸到窗口外），圆角裁切放在内容根上 */
@@ -536,7 +558,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .IIROSE_MEDIA_CONTAINER.imw-panel-window,
   .IIROSE_MEDIA_CONTAINER.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
+    scale: none;
     transition: none;
   }
 }
