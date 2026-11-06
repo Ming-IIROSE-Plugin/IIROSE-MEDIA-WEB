@@ -167,7 +167,7 @@ headless: false
 
 **这段时间进入面板外壳的新东西（不属本 epic，但共用同一批文件）**
 
-窗口模式、常驻胶囊、吸附与蜂蜜拉丝（`0498428..7ff089d`，11-06）。它们改了 `MainAppControlLayer.tsx`、`app.css`，新增 `panel-window/`。这批工作**没有对应的 epic 或票**，只有 `plan-main-panel-window-mode.md` 和 `plan-panel-window-minimize.md` 两份树外 plan，也没有做过独立的 bmad 代码审查。属于流程缺口，建议另立 epic 后再单独回顾。
+窗口模式、常驻胶囊、吸附与蜂蜜拉丝（`0498428..7ff089d`，11-06）。它们改了 `MainAppControlLayer.tsx`、`app.css`，新增 `panel-window/`。这批工作当时没有对应的 epic（只有两份树外 plan，后来在 v7 迁移中丢失，也没做过独立审查）；2026-11-06 已登记为 `epic-panel-dock`（`82b7956`），审查与复盘见 `../epic-panel-dock/epic-panel-dock-retrospective.md`。
 
 **验证**：`npm test` 91 个文件 / 1518 个用例通过（HEAD `d41652b`）。本次**没有**跑真站，也没有复验上文列出的三个「仍未实测」项。
 

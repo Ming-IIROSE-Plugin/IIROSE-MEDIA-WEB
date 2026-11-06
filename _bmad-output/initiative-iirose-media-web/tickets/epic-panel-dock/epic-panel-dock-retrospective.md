@@ -31,9 +31,9 @@ headless: false
 
 ### 聚合视图
 
-- **A1 体量增长**：`git_evidence.py` 按变更量排前几位的是 `PanelDock.tsx`(+790/−263)、`PanelDock.test.ts`(+594)、`MainAppControlLayer.test.ts`(+520)、`app.css`(+411/−150)。读 HEAD 实际行数：`PanelDock.tsx` 527、`PanelDock.test.ts` 501、`MainAppControlLayer.tsx` 365、`PanelWindowPlacement.ts` 225、`dockLiquid.ts` 176、`geometry.ts` 171、`dockPlacement.ts` 160；`app.css` 778。**`PanelDock.tsx` 是最大的单文件**，同时装着拖动手势、颈的几何绘制、落定动画、轮询跟随、挂载 / 卸载。`epic-large-file-decomposition` 的 ≤400 行目标只是那个 epic 的范围，不是全仓规则，所以这不算违规，但它是下一个会长成神类的候选。→ 处置：**defer**（见行动项 2）。
+- **A1 体量增长**：`git_evidence.py` 按变更量排前几位的是 `PanelDock.tsx`(+790/−263)、`PanelDock.test.ts`(+594)、`MainAppControlLayer.test.ts`(+520)、`app.css`(+411/−150)。读 HEAD 实际行数：`PanelDock.tsx` 527、`PanelDock.test.ts` 501、`MainAppControlLayer.tsx` 365、`PanelWindowPlacement.ts` 225、`dockLiquid.ts` 176、`geometry.ts` 171、`dockPlacement.ts` 160；`app.css` 778。**`PanelDock.tsx` 是最大的单文件**，同时装着拖动手势、颈的几何绘制、落定动画、轮询跟随、挂载 / 卸载。`epic-large-file-decomposition` 的 ≤400 行目标只是那个 epic 的范围，不是全仓规则，所以这不算违规，但它是下一个会长成神类的候选。→ 处置：**已处理**（行动项 2：拆成 `dockMeasure.ts` 与 `dockNeck.ts`，`PanelDock.tsx` 527 → 约 330 行）。
 - **A2 架构增量**：`madge --circular` 在 `MainAppControlLayer.tsx` 与 `panel-window/` 上筛出的循环里，没有一条经过这两处（`grep -ci` 命中 0）；`panel-window/` 只向外依赖 `storage/localStore`、`iirose_func/HostTheme`、`floating-panel`、`media-progress`，被 `MainAppControlLayer`、`index.tsx` 用（`PageHeader.tsx` 只写了一个类名字符串，不是导入）。方向单一。仓库里其它地方 madge 报的循环（如 `PluginSettings ↔ Input-Behavior-Module`）不属本 epic，未处理。
-- **A3 重复 / 双源**：胶囊的尺寸有两个来源——TS 里的 `DOCK_NOMINAL_SIZE`(87×38) / `DOCK_NOMINAL_SIZE_LARGE`(110×54)（`PanelDock.tsx:61-62`）与按钮上的 Tailwind 类 `h-9 max-[768px]:h-13`（`:391`）。代码注释写了「尺寸同 `DOCK_NOMINAL_SIZE_LARGE`」，但没有任何东西强制两边一致；改一边，边界与飞行终点就悄悄错位。`dock.mjs` 只断言手机高度 ≥ 52px，覆盖不到桌面尺寸。→ 处置：**defer**（行动项 3）。
+- **A3 重复 / 双源**：胶囊的尺寸有两个来源——TS 里的 `DOCK_NOMINAL_SIZE`(87×38) / `DOCK_NOMINAL_SIZE_LARGE`(110×54)（`PanelDock.tsx:61-62`）与按钮上的 Tailwind 类 `h-9 max-[768px]:h-13`（`:391`）。代码注释写了「尺寸同 `DOCK_NOMINAL_SIZE_LARGE`」，但没有任何东西强制两边一致；改一边，边界与飞行终点就悄悄错位。`dock.mjs` 只断言手机高度 ≥ 52px，覆盖不到桌面尺寸。→ 处置：**已处理**（行动项 3：`PanelDock.test.ts` 核对「按钮高度类 + 2px 边框 = 标称尺寸」，`dock.mjs` 实测桌面 38px / 展开 87px / 手机 54px）。
 - **A4 规格对账**（对照 epic 的 Done when）：
   1. 三形态开合都从胶囊出发回到胶囊、面板上没有 X —— 成立：`PageHeader.tsx:39` 的关闭钮在窗口态被 `[.imw-panel-window_&]:hidden` 藏起，全屏页头是最小化，标题栏只有最小化（`PanelWindowChrome.tsx`）。
   2. 胶囊可拖动、记住位置、不能进输入框、吸附 / 收起 / 展开 / 粘连在真站实测通过 —— 成立：本次重跑 `dock.mjs` 6 项全 PASS（贴右边露出 34px、悬停 87px、跟手最大偏差 0.00px、侧栏打开层左缘 275px 且仍只露 34px、手机高度 54px）。
@@ -59,7 +59,7 @@ headless: false
 
 ### 验证缺口
 
-- **V1（仍开着）**：真机触屏没验证——手机行为只跑过 CDP 模拟触摸；手机端宿站侧栏的开合没有单独测；深色宿站主题下胶囊的配色没验证。
+- **V1（部分已补）**：手机端宿站侧栏（模拟 390 宽视口）与深色主题已由 `dock.mjs` 在真站覆盖；**真机触屏仍没验证**，手机行为只跑过 CDP 模拟触摸，也没在真实手机上开合过宿站侧栏。
 - **V2（仍开着）**：批量进度卡（`#imw-batch-progress-root`，右下角，z 90008）与胶囊（z 90009）可能重叠。胶囊在上层，所以只会盖住卡片一角，没有验证，也没有测试。
 - **V3（已补）**：`dock.mjs` 的「1:1 跟手」检查没做过反向验证。**本次已做**：在注入后加一条 `[data-imw-panel-dock]{transition:left .3s,top .3s}`，该项报 **FAIL，最大偏差 150.55px**；去掉后恢复 PASS。这证明它对「过渡造成的滞后」敏感。
 - **V4（接受）**：`dock.mjs` 不在 `npm test` / CI 里，需要真站和已登录的 profile，只能手动跑；AGENTS.md 已写明改胶囊或其 CSS 后要跑。
@@ -76,17 +76,19 @@ headless: false
 
 ## Action items
 
-1. **补一句 `epic-media-desk-redesign` 复盘增补里的过时说法**（owner：维护者 / 文档，提议、未应用）：该文件 `## Post-epic 核对` 一节写着胶囊工作「没有对应的 epic 或票，只有两份树外 plan」，现在已登记为 `epic-panel-dock`、两份 plan 也已丢失。建议改成指向本 epic。
-2. **评估拆分 `PanelDock.tsx`**（owner：开发，defer）：527 行，拖动手势、颈的几何、落定动画、轮询跟随混在一起。不急，等下一次要改它时顺手拆（候选：拖动手势一个 hook，颈与落定动画一个模块）。
-3. **胶囊尺寸收成一个来源**（owner：开发，defer）：让 TS 常量和 Tailwind 高度类共用一份，或在测试 / `dock.mjs` 里断言两边相等（桌面 38px，手机 54px）。
-4. **补三个未验证环境**（owner：维护者）：真机触屏、手机端宿站侧栏开合、深色宿站主题下的胶囊；以及批量进度卡与胶囊重叠的观感（V1、V2）。`dock.mjs` 可以先扩一项深色主题。
-5. **流程：功能改动先过 `bmad-build` 再登记**（owner：流程）：这一天的十几个提交是对话里直接做的，没有 plan、没有票、没有独立审查，事后才补树，导致原 plan 丢失后的范围只能推定。以后动 `panel-window/` 一类的新特性，先建票再做，plan 的 `baseline_revision` 才有意义。来源：Epic summary「缺失」。
+以下五条在复盘当日（2026-11-06）由维护者要求执行，状态如下：
+
+1. **（已做）** `epic-media-desk-redesign` 复盘增补里那句过时的话，改成指向本 epic。
+2. **（已做）** `PanelDock.tsx` 拆成三份：量取与存档 `dockMeasure.ts`、颈的绘制与落定动画 `dockNeck.ts`、组件本体（527 → 约 330 行）；对外导出不变，全量测试 91 个文件 / 1521 个用例通过。
+3. **（已做）** 胶囊尺寸两处写法的一致性由两道检查守着：`PanelDock.test.ts` 核对「按钮高度类 + 2px 边框 = 标称尺寸」（把标称高度改成 40 后该用例失败，已验证），`dock.mjs` 真站实测桌面 38px、展开 87px、手机 54px。
+4. **（部分做）** 验证缺口：`dock.mjs` 新增深色主题（墨色 `rgb(28, 26, 24)`）与手机尺寸下宿站侧栏打开（层左缘 275px、只露 54px）两项，真站通过。**没做**：真机触屏（无设备）；批量进度卡与胶囊重叠没有用真实卡片验证，见 V2。
+5. **（已做）** AGENTS.md「BMAD 流程约定」补一条：新特性先建票再做。
 
 ## Decision records
 
-按「难以回退、脱离上下文令人意外、是真实权衡的结果、仓库里尚无 `adr-*.md` 记录」的标准，提议两条（维护者 2026-11-06 确认，两条都已写入）：
+按「难以回退、脱离上下文令人意外、是真实权衡的结果、仓库里尚无 `adr-*.md` 记录」的标准，提议两条（维护者 2026-11-06 确认：第 1 条不写，第 2 条写入）：
 
-1. **胶囊位置 1:1 跟手，粘连只表现在形状上（不做阻尼 / 追赶 / 橡皮筋）**。来源：`71e9d04`、`376d714`（12.5），维护者两次明确否决橡皮筋与「慢一步」的手感；现已写进 AGENTS.md。属真实权衡（粘连感 vs 跟手），脱离上下文会被后人当成「缺个缓动」。已写入 `src/page/components/panel-window/adr-pill-tracks-pointer-one-to-one.md`。
+1. **胶囊位置 1:1 跟手，粘连只表现在形状上（不做阻尼 / 追赶 / 橡皮筋）**。来源：`71e9d04`、`376d714`（12.5），维护者两次明确否决橡皮筋与「慢一步」的手感；现已写进 AGENTS.md。属真实权衡（粘连感 vs 跟手），脱离上下文会被后人当成「缺个缓动」。**维护者决定不写**（已在 AGENTS.md 里记着，不另立 ADR）。
 2. **面板停稳时 `transform` / `scale` / `translate` 都是 `none`，缩放只存在于开合动画期间**。来源：`app.css` 的容器规则与 12.2 的实现；原因是 `OrderMenu` 的坐标和 `fixed inset-0` 遮罩依赖「`fixed` 以视口为基准」，且 lightningcss 会把同规则里的 `transform:none` 与 `scale:none` 合并成 `transform:scale(1)`。AGENTS.md 的 Known pitfalls 已记，但没有 ADR。已写入同目录 `adr-panel-rests-without-transform.md`。
 
 ## Acceptance verdict
@@ -100,6 +102,5 @@ headless: false
 
 ## Open questions
 
-1. （已结）两条 ADR 已写入。
-2. 行动项 1：是否把 `epic-media-desk-redesign` 复盘增补里那句过时说法改掉。
-3. 真机触屏与深色主题的验证，由谁、什么时候做（V1）。
+1. （已结）第 2 条 ADR 已写入，第 1 条不写。
+2. 真机触屏的验证，由谁、什么时候做（V1）；批量进度卡与胶囊的重叠是否需要处理（V2）。

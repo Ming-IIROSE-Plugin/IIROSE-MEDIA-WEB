@@ -9,7 +9,9 @@
 //   1. 跟手：贴边的胶囊被拉出时，每一步中心都在指针下（误差 ≤ 2px）
 //   2. 贴边收起：靠右时只露出一小截；悬停后展开
 //   3. 宿站侧栏：body 平移 275px 时，贴左的胶囊被层的左缘裁住，不压到侧栏上
-//   4. 手机尺寸：胶囊高度 ≥ 52px
+//   4. 尺寸：桌面 38px 高、展开 87px 宽；手机 54px 高（和代码里的标称尺寸是同一份数）
+//   5. 宿站主题：浅色 / 深色下胶囊底色分别是纸色 / 墨色
+//   6. 手机尺寸下宿站侧栏打开：贴左的胶囊仍被层的左缘裁住
 //
 // 前置：测试账号已在持久化 profile 里登录并能进房（凭据在 .secrets/，不进脚本）。
 
@@ -123,9 +125,33 @@ try {
   const visibleHovered = hovered.viewport - hovered.left;
   check(
     "悬停后展开",
-    visibleHovered >= 80,
-    `露出 ${visibleHovered.toFixed(1)}px`,
+    Math.abs(visibleHovered - 87) <= 1,
+    `露出 ${visibleHovered.toFixed(1)}px（标称宽 87）`,
   );
+  check(
+    "桌面尺寸：胶囊高度 38px",
+    Math.abs(hovered.height - 38) <= 0.5,
+    `${hovered.height}px`,
+  );
+
+  // ── 5. 宿站主题 ────────────────────────────────────────────
+  const pillBackground = () =>
+    frame.evaluate(
+      (sel) => getComputedStyle(document.querySelector(sel)).backgroundColor,
+      PILL,
+    );
+  const light = await pillBackground();
+  check("浅色主题：胶囊是纸色", light === "rgb(251, 250, 247)", light);
+  await frame.evaluate(() => {
+    window.theme = "";
+  });
+  await page.waitForTimeout(900);
+  const dark = await pillBackground();
+  check("深色主题：胶囊是墨色", dark === "rgb(28, 26, 24)", dark);
+  await frame.evaluate(() => {
+    window.theme = "theme/";
+  });
+  await page.waitForTimeout(900);
 
   // ── 1. 跟手 ────────────────────────────────────────────────
   const start = await pillRect();
@@ -192,7 +218,37 @@ try {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.waitForTimeout(1500);
   const phone = await pillRect();
-  check("手机尺寸：胶囊高度 ≥ 52px", phone.height >= 52, `${phone.height}px`);
+  check(
+    "手机尺寸：胶囊高度 54px",
+    Math.abs(phone.height - 54) <= 0.5,
+    `${phone.height}px`,
+  );
+
+  // ── 6. 手机尺寸下宿站侧栏 ──────────────────────────────────
+  await store({ x: 0, y: 400, edge: "left" });
+  await page.waitForTimeout(900);
+  await frame.evaluate(() => {
+    document.body.style.transform = "translateX(275px)";
+  });
+  await page.waitForTimeout(900);
+  const phoneSide = await frame.evaluate((sel) => {
+    const layer = document
+      .querySelector("[data-imw-dock-layer]")
+      .getBoundingClientRect();
+    const pill = document.querySelector(sel).getBoundingClientRect();
+    return { layerLeft: layer.left, pillRight: pill.right };
+  }, PILL);
+  const phoneVisible = phoneSide.pillRight - phoneSide.layerLeft;
+  check(
+    "手机侧栏打开：贴左的胶囊仍只露一小截",
+    Math.abs(phoneSide.layerLeft - 275) <= 1 &&
+      phoneVisible > 0 &&
+      phoneVisible < 80,
+    `层左缘 ${phoneSide.layerLeft.toFixed(1)}px，露出 ${phoneVisible.toFixed(1)}px`,
+  );
+  await frame.evaluate(() => {
+    document.body.style.transform = "";
+  });
 } catch (error) {
   check("脚本运行", false, String(error).slice(0, 300));
 } finally {

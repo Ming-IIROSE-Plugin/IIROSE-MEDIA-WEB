@@ -5,11 +5,7 @@
 import { render } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";
 import { hostIsDark } from "../../../iirose_func/HostTheme";
-import {
-  pointerPosition,
-  viewportMetrics,
-} from "../../../media-progress/viewport";
-import { readJson, writeJson } from "../../../storage/localStore";
+import { pointerPosition } from "../../../media-progress/viewport";
 import { stopHostGestures, themeAttr } from "../floating-panel/floatingPanel";
 import {
   DeskIcon,
@@ -23,133 +19,46 @@ import {
 import {
   DOCK_DETACH_PULL,
   isStickyEdge,
-  nearbyWall,
-  neckPath,
-  pillTailPath,
   stretchScale,
   stuckPull,
-  wallBumpPath,
-  wallOf,
   type StickyEdge,
 } from "./dockLiquid";
 import {
+  dockFrame,
+  dockSize,
+  forgetUnsavedDock,
+  measureDock,
+  PANEL_DOCK_POSITION_KEY,
+  readStoredDock,
+  saveStoredDock,
+  writeDockEdge,
+  writeDockFlight,
+} from "./dockMeasure";
+import { createNeckController, prefersReducedMotion } from "./dockNeck";
+import {
   clampDockPoint,
   dockBounds,
-  dockFlight,
-  dockPosition,
-  DOCK_SNAP_DISTANCE,
-  normalizeStoredDock,
   pinToEdge,
   snapDockEdge,
-  type DockAnchor,
   type DockEdge,
   type DockPoint,
-  type DockSize,
   type StoredDock,
 } from "./dockPlacement";
-import type { PanelRect, PanelViewport } from "./geometry";
 
 export const PANEL_DOCK_ROOT_ID = "imw-panel-dock-root";
-export const PANEL_DOCK_POSITION_KEY = "imwPanelDockPosition";
+// 量取与存档在 `dockMeasure.ts`；这里转出去，调用方和测试仍从 `PanelDock` 取
+export { PANEL_DOCK_POSITION_KEY, writeDockFlight };
 /** 按下后移动超过它才算拖动，否则是点击还原。 */
 const DOCK_DRAG_THRESHOLD = 4;
-/** 真站 `#moveinput` 的外层；`#mainHolder` 隐藏时尺寸为 0，按缺失处理。 */
-const DOCK_ANCHOR_ID = "moveinputDisplay";
+/**
+ * 按钮高度类。手机和粗指针上要好点：52px 高，比其它目标的 44px 更大。
+ * 与 `dockMeasure.ts` 的 `DOCK_NOMINAL_SIZE(_LARGE)` 是同一件事的两处写法（高度 + 上下 2px 边框），
+ * 测试会核对两边，改一处另一处不跟就会失败。
+ */
+export const DOCK_HEIGHT_CLASS =
+  "h-9 max-[768px]:h-13 [@media(pointer:coarse)]:h-13";
 /** 聊天区尺寸变化没有事件可听（输入框上方的内容也会把它顶走），低频轮询兜底。 */
 const DOCK_FOLLOW_MS = 500;
-/** 胶囊展开时的尺寸：窗口收起时胶囊还没挂载，用它算终点。手机和粗指针上更大，见 `app.css`。 */
-const DOCK_NOMINAL_SIZE: DockSize = { width: 87, height: 38 };
-const DOCK_NOMINAL_SIZE_LARGE: DockSize = { width: 110, height: 54 };
-
-const dockNominalSize = () =>
-  window.matchMedia?.("(max-width: 768px), (pointer: coarse)")?.matches
-    ? DOCK_NOMINAL_SIZE_LARGE
-    : DOCK_NOMINAL_SIZE;
-/** 颈缩回去、胶囊落定的时长；`app.css` 的 `data-imw-dock-settling` 规则与它同长。 */
-const DOCK_SETTLE_MS = 300;
-
-const prefersReducedMotion = () =>
-  !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-
-function readAnchor(scale: number): DockAnchor | null {
-  const anchor = document.getElementById(DOCK_ANCHOR_ID);
-  if (!anchor || getComputedStyle(anchor).visibility === "hidden") return null;
-  const { left, top, right, bottom } = anchor.getBoundingClientRect();
-  // 宿站侧栏打开时平移整个 body，胶囊也在 body 里：要换算成相对 body 的坐标，不然平移会算两次
-  const body = document.body.getBoundingClientRect();
-  return {
-    left: (left - body.left) / scale,
-    top: (top - body.top) / scale,
-    right: (right - body.left) / scale,
-    bottom: (bottom - body.top) / scale,
-  };
-}
-
-/**
- * 胶囊摆放要参考的输入框和视口（`fixed` 只看可视视口的平移，不加页面滚动）。`reference` 用来量
- * 宿站缩放，要够宽：`offsetWidth` 是取整的，拿胶囊自己量（约 113px）在 1.15 倍下会差出 4px。
- */
-function dockFrame(reference: HTMLElement) {
-  const { scale, width, height } = viewportMetrics(reference);
-  const viewport: PanelViewport = {
-    width,
-    height,
-    offsetX: (window.visualViewport?.offsetLeft || 0) / scale,
-    offsetY: (window.visualViewport?.offsetTop || 0) / scale,
-  };
-  return { anchor: readAnchor(scale), viewport };
-}
-
-/** 贴上下边时胶囊缩成图标，范围要按展开后算，否则靠右时悬停会伸出视口。 */
-function dockSize(element: HTMLElement): DockSize {
-  return {
-    width: Math.max(element.offsetWidth, dockNominalSize().width),
-    height: element.offsetHeight,
-  };
-}
-
-/** 存储写不进去（隐私模式、被禁用）时的内存兜底：否则拖完的位置会在下一次轮询被默认位置覆盖。 */
-let unsavedDock: StoredDock | null = null;
-
-function readStoredDock() {
-  return (
-    normalizeStoredDock(readJson(PANEL_DOCK_POSITION_KEY, null)) ?? unsavedDock
-  );
-}
-
-/** 吸附在边缘的胶囊由 `app.css` 收起，悬停时伸出。 */
-function writeDockEdge(
-  element: HTMLElement,
-  edge: DockEdge | null | undefined,
-) {
-  if (edge) element.setAttribute("data-imw-dock-edge", edge);
-  else element.removeAttribute("data-imw-dock-edge");
-}
-
-/** 胶囊该摆的位置：输入框移动或视口变化只改显示，存档留着等放得下时恢复。 */
-function measureDock(reference: HTMLElement, size: DockSize): DockPoint {
-  const { anchor, viewport } = dockFrame(reference);
-  return dockPosition(anchor, size, viewport, readStoredDock());
-}
-
-/**
- * 写面板缩向胶囊的位移（CSS 变量，见 `app.css`）。`rect` 是窗口展开时的矩形，全屏传 null。
- * 收起中的容器量不准，所以不读它的矩形。
- */
-export function writeDockFlight(
-  container: HTMLElement,
-  rect: PanelRect | null,
-): void {
-  const { width, height } = viewportMetrics(container);
-  const size = dockNominalSize();
-  const flight = dockFlight(
-    rect ?? { x: 0, y: 0, width, height },
-    measureDock(container, size),
-    size,
-  );
-  container.style.setProperty("--imw-dock-x", `${flight.x}px`);
-  container.style.setProperty("--imw-dock-y", `${flight.y}px`);
-}
 
 export interface PanelDockProps {
   onOpen: () => void;
@@ -176,133 +85,28 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
   const neck = useRef<SVGPathElement>(null);
   const drag = useRef<DockDrag | null>(null);
   const justDragged = useRef(false);
-  const neckFrame = useRef(0);
-  const settleTimer = useRef(0);
 
   const reference = () => layer.current as HTMLElement;
 
-  const writeNeck = (path: string) => neck.current?.setAttribute("d", path);
-
-  /** 这条边的颈所需的几何；胶囊的位置取当前 left / top。 */
-  const neckGeometry = (element: HTMLElement, edge: StickyEdge) => {
-    const size = dockSize(element);
-    const { anchor, viewport } = dockFrame(reference());
-    return {
-      wall: wallOf(edge, dockBounds(anchor, size, viewport), size.width),
-      center:
-        edge === "top"
-          ? parseFloat(element.style.left) + element.offsetWidth / 2
-          : parseFloat(element.style.top) + element.offsetHeight / 2,
-      thickness: element.offsetHeight,
-    };
-  };
-
-  const drawNeck = (
-    element: HTMLElement,
-    edge: StickyEdge,
-    distance: number,
-  ) => {
-    const { wall, center, thickness } = neckGeometry(element, edge);
-    writeNeck(neckPath(edge, wall, center, distance, thickness));
-  };
-
-  const stopNeckAnimation = () => {
-    window.cancelAnimationFrame?.(neckFrame.current);
-    neckFrame.current = 0;
-  };
-
-  /** 逐帧画一段 ease-out 的收缩；减少动态效果时直接到终点。 */
-  const animateNeck = (draw: (remaining: number) => void) => {
-    stopNeckAnimation();
-    if (prefersReducedMotion()) {
-      draw(0);
-      return;
-    }
-    const start = performance.now();
-    const tick = (now: number) => {
-      const progress = Math.min((now - start) / DOCK_SETTLE_MS, 1);
-      draw((1 - progress) ** 3);
-      neckFrame.current = progress < 1 ? requestAnimationFrame(tick) : 0;
-    };
-    neckFrame.current = requestAnimationFrame(tick);
-  };
-
-  /**
-   * 落定用的过渡，只在这一小段时间打开。断开时手指还在拖，只能弹 `scale`（`"scale"`）：
-   * 带上 left / top 胶囊就会缓动着追手指；松手后才用 `"place"`。
-   */
-  const settle = (element: HTMLElement, kind: "scale" | "place") => {
-    window.clearTimeout(settleTimer.current);
-    element.setAttribute("data-imw-dock-settling", kind);
-    settleTimer.current = window.setTimeout(
-      () => element.removeAttribute("data-imw-dock-settling"),
-      DOCK_SETTLE_MS + 40,
-    );
-  };
-
-  /** 断开：丝从中间断成两个尖头，边缘那头缩回边上，胶囊那头跟着胶囊缩回去。 */
-  const detach = (element: HTMLElement, current: DockDrag) => {
-    const edge = current.stuck;
-    if (!edge) return;
-    const { wall, center, thickness } = neckGeometry(element, edge);
-    const bumpLength = current.stuckDistance * 0.45 + 4;
-    const tailLength = current.stuckDistance * 0.45;
-    current.stuck = null;
-    writeDockEdge(element, null);
-    settle(element, "scale");
-    element.style.removeProperty("scale");
-    animateNeck((remaining) => {
-      const tail = neckGeometry(element, edge);
-      const left = parseFloat(element.style.left);
-      const top = parseFloat(element.style.top);
-      const cap =
-        edge === "left"
-          ? left - tail.wall
-          : edge === "right"
-            ? tail.wall - left - element.offsetWidth
-            : top - tail.wall;
-      writeNeck(
-        [
-          wallBumpPath(edge, wall, center, bumpLength * remaining, thickness),
-          pillTailPath(
-            edge,
-            tail.wall,
-            tail.center,
-            cap,
-            tailLength * remaining,
-            thickness,
-          ),
-        ].join(" "),
-      );
-    });
-  };
+  // 颈的绘制与落定动画在 `dockNeck.ts`；组件只拿它的方法
+  const neckRef = useRef<ReturnType<typeof createNeckController>>();
+  if (!neckRef.current)
+    neckRef.current = createNeckController(reference, () => neck.current);
+  const {
+    writeNeck,
+    drawNeck,
+    animating,
+    stop: stopNeckAnimation,
+    animate: animateNeck,
+    settle,
+    cancelSettle,
+    detach,
+    drawApproach,
+  } = neckRef.current;
 
   const place = (element: HTMLElement, { x, y }: DockPoint) => {
     element.style.left = `${x}px`;
     element.style.top = `${y}px`;
-  };
-
-  /** 自由拖动靠近边缘时，边缘提前伸出来接它。 */
-  const drawApproach = (element: HTMLElement, point: DockPoint) => {
-    if (neckFrame.current) return;
-    const { anchor, viewport } = dockFrame(reference());
-    const near = nearbyWall(
-      point,
-      dockBounds(anchor, dockSize(element), viewport),
-    );
-    if (near) {
-      const { wall, center, thickness } = neckGeometry(element, near.edge);
-      writeNeck(
-        neckPath(
-          near.edge,
-          wall,
-          center,
-          near.gap,
-          thickness,
-          DOCK_SNAP_DISTANCE,
-        ),
-      );
-    } else writeNeck("");
   };
 
   useLayoutEffect(() => {
@@ -314,7 +118,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
       place(element, { x, y });
       const edge = readStoredDock()?.edge;
       writeDockEdge(element, edge);
-      if (!neckFrame.current) {
+      if (!animating()) {
         if (isStickyEdge(edge)) drawNeck(element, edge, 0);
         else writeNeck("");
       }
@@ -329,7 +133,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     window.visualViewport?.addEventListener("scroll", sync);
     return () => {
       window.clearInterval(timer);
-      window.clearTimeout(settleTimer.current);
+      cancelSettle();
       stopNeckAnimation();
       window.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("resize", sync);
@@ -379,16 +183,15 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     writeDockEdge(element, edge);
     if (isStickyEdge(edge)) {
       animateNeck((remaining) => drawNeck(element, edge, gap * remaining));
-    } else if (!neckFrame.current) {
+    } else if (!animating()) {
       writeNeck("");
     }
     const saved: StoredDock = edge ? { ...final, edge } : final;
-    unsavedDock = writeJson(PANEL_DOCK_POSITION_KEY, saved) ? null : saved;
+    saveStoredDock(saved);
     onPlaced();
   };
 
-  // 手机和粗指针上要好点：52px 高，比其它目标的 44px 更大（尺寸同 `DOCK_NOMINAL_SIZE_LARGE`）
-  const controlHeight = "h-9 max-[768px]:h-13 [@media(pointer:coarse)]:h-13";
+  const controlHeight = DOCK_HEIGHT_CLASS;
   return (
     <div
       ref={layer}
@@ -415,7 +218,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
           if (!element || !event.isPrimary || event.button !== 0) return;
           justDragged.current = false;
           // 上一次松手的落定还没结束就又按下：不能带着过渡拖
-          window.clearTimeout(settleTimer.current);
+          cancelSettle();
           element.removeAttribute("data-imw-dock-settling");
           const pointer = pointerPosition(
             reference(),
@@ -518,7 +321,7 @@ export function mountPanelDock(props: PanelDockProps): () => void {
 }
 
 export function releasePanelDock(): void {
-  unsavedDock = null;
+  forgetUnsavedDock();
   for (const node of document.querySelectorAll(`#${PANEL_DOCK_ROOT_ID}`)) {
     // 先卸载：停掉跟随用的定时器和视口监听
     render(null, node);

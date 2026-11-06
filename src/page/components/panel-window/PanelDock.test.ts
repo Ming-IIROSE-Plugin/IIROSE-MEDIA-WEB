@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
+import { DOCK_NOMINAL_SIZE, DOCK_NOMINAL_SIZE_LARGE } from "./dockMeasure";
 import {
+  DOCK_HEIGHT_CLASS,
   mountPanelDock,
   PANEL_DOCK_POSITION_KEY,
   PANEL_DOCK_ROOT_ID,
@@ -52,6 +54,16 @@ afterEach(() => {
   document.getElementById("moveinputDisplay")?.remove();
   delete (window as Window & { theme?: unknown }).theme;
   vi.useRealTimers();
+});
+
+describe("胶囊尺寸的两处写法", () => {
+  const px = (utility: string) => Number(utility.match(/h-(\d+)/)?.[1]) * 4;
+  it("按钮高度类 + 2px 边框 = 标称尺寸，桌面与手机各一份", () => {
+    const [desktop, phone, coarse] = DOCK_HEIGHT_CLASS.split(" ");
+    expect(px(desktop) + 2).toBe(DOCK_NOMINAL_SIZE.height);
+    expect(px(phone) + 2).toBe(DOCK_NOMINAL_SIZE_LARGE.height);
+    expect(px(coarse)).toBe(px(phone));
+  });
 });
 
 describe("停靠件定位", () => {
