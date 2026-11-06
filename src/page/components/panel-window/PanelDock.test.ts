@@ -63,18 +63,18 @@ describe("停靠件定位", () => {
 
   it("没有输入框 / 尺寸为 0：底部居中留 12px", () => {
     mount();
-    expect(position()).toEqual({ x: 800, y: 888 });
+    expect(position()).toEqual({ x: 756.5, y: 888 });
     releasePanelDock();
     addInput({ left: 0, top: 0, right: 0, bottom: 0 });
     mount();
-    expect(position()).toEqual({ x: 800, y: 888 });
+    expect(position()).toEqual({ x: 756.5, y: 888 });
   });
 
   it("`visibility: hidden` 的输入框算缺失", () => {
     const input = addInput({ left: 300, top: 800, right: 1400, bottom: 850 });
     input.style.visibility = "hidden";
     mount();
-    expect(position()).toEqual({ x: 800, y: 888 });
+    expect(position()).toEqual({ x: 756.5, y: 888 });
   });
 
   it("视口变化时跟随输入框", () => {
@@ -89,7 +89,7 @@ describe("停靠件定位", () => {
   it("聊天区顶动输入框没有事件：低频轮询跟上，输入框后出现也跟上；卸载后停", () => {
     vi.useFakeTimers();
     const unmount = mount();
-    expect(position()).toEqual({ x: 800, y: 888 });
+    expect(position()).toEqual({ x: 756.5, y: 888 });
     addInput({ left: 300, top: 800, right: 1400, bottom: 850 });
     vi.advanceTimersByTime(600);
     expect(position()).toEqual({ x: 312, y: 794 });
@@ -155,8 +155,8 @@ describe("飞行变量", () => {
     const panel = document.createElement("div");
     Object.defineProperty(panel, "offsetWidth", { value: 1000 });
     writeDockFlight(panel, WINDOW_RECT);
-    // 胶囊标称 82×38：x 312..394、y 756..794
-    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-247px");
+    // 胶囊标称 87×38：x 312..399、y 756..794
+    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-244.5px");
     expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("375px");
   });
 });
@@ -217,13 +217,35 @@ describe("拖动", () => {
     addInput(input);
     mount();
     dragBy(1300, -100);
-    expect(position()).toEqual({ x: 1600, y: 694 });
+    expect(position()).toEqual({ x: 1513, y: 694 });
     expect(edge()).toBe("right");
-    expect(stored()).toEqual({ x: 1600, y: 694, edge: "right" });
+    expect(stored()).toEqual({ x: 1513, y: 694, edge: "right" });
     releasePanelDock();
     mount();
     expect(edge()).toBe("right");
-    expect(position()).toEqual({ x: 1600, y: 694 });
+    expect(position()).toEqual({ x: 1513, y: 694 });
+  });
+
+  it("拖到上边和输入框上方：吸附、存档；靠右时也给展开留足宽度", () => {
+    addInput(input);
+    mount();
+    dragBy(800, -780);
+    expect(edge()).toBe("top");
+    expect(position()).toEqual({ x: 1112, y: 0 });
+    expect(stored()).toEqual({ x: 1112, y: 0, edge: "top" });
+    dragBy(1000, 0);
+    expect(edge()).toBe("right");
+    localStorage.setItem(
+      PANEL_DOCK_POSITION_KEY,
+      JSON.stringify({ x: 1590, y: 0, edge: "top" }),
+    );
+    releasePanelDock();
+    mount();
+    // 展开宽 87：不能贴到 1600 上
+    expect(position().x).toBe(1513);
+    dragBy(-800, 790);
+    expect(edge()).toBe("bottom");
+    expect(position().y).toBe(794);
   });
 
   it("拖离边缘：拖动中就伸出，松手不再收起", () => {
@@ -254,8 +276,8 @@ describe("拖动", () => {
     const panel = document.createElement("div");
     Object.defineProperty(panel, "offsetWidth", { value: 1000 });
     writeDockFlight(panel, WINDOW_RECT);
-    // 胶囊标称 82×38：中心 (541, 319)，窗口中心 (600, 400)
-    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-59px");
+    // 胶囊标称 87×38：中心 (543.5, 319)，窗口中心 (600, 400)
+    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-56.5px");
     expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("-81px");
   });
 
@@ -297,6 +319,8 @@ describe("样式表", () => {
     );
     expect(block).toContain('[data-imw-dock-edge="right"]');
     expect(block).toContain('[data-imw-dock-edge="left"]');
+    expect(block).toContain('[data-imw-dock-edge="top"]');
+    expect(block).toContain('[data-imw-dock-edge="bottom"]');
     expect(block).toMatch(
       /\[data-imw-dock-edge\]:hover,\s*\[data-imw-panel-dock\]\[data-imw-dock-edge\]:has\(:focus-visible\) \{\s*translate: none/,
     );

@@ -1,5 +1,5 @@
 // 窗口模式常驻的胶囊：窗口没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
-// 拖到左右边缘时吸附并收起，悬停伸出。
+// 拖到边缘时吸附并收起，悬停展开。
 // 挂在 body 独立根上（宿站主容器会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。
 // 不改宿站输入框 DOM。
 import { render } from "preact";
@@ -43,8 +43,8 @@ const DOCK_DRAG_THRESHOLD = 4;
 const DOCK_ANCHOR_ID = "moveinputDisplay";
 /** 聊天区尺寸变化没有事件可听（输入框上方的内容也会把它顶走），低频轮询兜底。 */
 const DOCK_FOLLOW_MS = 500;
-/** 窗口收起时胶囊还没挂载，用标称尺寸算终点。 */
-const DOCK_NOMINAL_SIZE: DockSize = { width: 82, height: 38 };
+/** 胶囊展开时的尺寸：窗口收起时胶囊还没挂载，用它算终点。 */
+const DOCK_NOMINAL_SIZE: DockSize = { width: 87, height: 38 };
 
 function readAnchor(scale: number): DockAnchor | null {
   const anchor = document.getElementById(DOCK_ANCHOR_ID);
@@ -71,6 +71,14 @@ function dockFrame(reference: HTMLElement) {
     offsetY: (window.visualViewport?.offsetTop || 0) / scale,
   };
   return { anchor: readAnchor(scale), viewport };
+}
+
+/** 贴上下边时胶囊缩成图标，范围要按展开后算，否则靠右时悬停会伸出视口。 */
+function dockSize(element: HTMLElement): DockSize {
+  return {
+    width: Math.max(element.offsetWidth, DOCK_NOMINAL_SIZE.width),
+    height: element.offsetHeight,
+  };
 }
 
 function readStoredDock() {
@@ -127,10 +135,10 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     if (!element) return;
     const sync = () => {
       if (drag.current) return;
-      const { x, y } = measureDock(element.parentElement ?? element, {
-        width: element.offsetWidth,
-        height: element.offsetHeight,
-      });
+      const { x, y } = measureDock(
+        element.parentElement ?? element,
+        dockSize(element),
+      );
       element.style.left = `${x}px`;
       element.style.top = `${y}px`;
       writeDockEdge(element, readStoredDock()?.edge);
@@ -160,13 +168,13 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     drag.current = null;
     if (!finished?.moved || !element) return;
     justDragged.current = true;
-    const size = { width: element.offsetWidth, height: element.offsetHeight };
+    const size = dockSize(element);
     const { anchor, viewport } = dockFrame(reference());
     const point = {
       x: parseFloat(element.style.left),
       y: parseFloat(element.style.top),
     };
-    const edge = snapDockEdge(point, size, viewport);
+    const edge = snapDockEdge(point, anchor, size, viewport);
     const { x, y } = clampDockPoint(
       edge ? pinToEdge(point, edge) : point,
       anchor,
@@ -227,7 +235,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
         const { x, y } = clampDockPoint(
           { x: current.left + dx, y: current.top + dy },
           anchor,
-          { width: element.offsetWidth, height: element.offsetHeight },
+          dockSize(element),
           viewport,
         );
         element.style.left = `${x}px`;
@@ -252,7 +260,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
         className={`m-0 flex cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-inherit ${controlHeight} ${typeButtonSm} ${deskPressTone} ${deskFocusRing}`}
       >
         <DeskIcon name="mark" size={16} />
-        点歌台
+        <span data-imw-dock-label="true">点歌台</span>
       </button>
     </div>
   );

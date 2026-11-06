@@ -92,10 +92,38 @@ describe("拖动范围与存档", () => {
 
 describe("边缘吸附", () => {
   it("离左右边缘不到 24px 才吸附", () => {
-    expect(snapDockEdge({ x: 23, y: 0 }, size, viewport)).toBe("left");
-    expect(snapDockEdge({ x: 24, y: 0 }, size, viewport)).toBeNull();
-    expect(snapDockEdge({ x: 1457, y: 0 }, size, viewport)).toBe("right");
-    expect(snapDockEdge({ x: 1456, y: 0 }, size, viewport)).toBeNull();
+    const at = (x: number) =>
+      snapDockEdge({ x, y: 400 }, anchor, size, viewport);
+    expect(at(23)).toBe("left");
+    expect(at(24)).toBeNull();
+    expect(at(1457)).toBe("right");
+    expect(at(1456)).toBeNull();
+  });
+
+  it("上边按视口算，下边按输入框上方那条线算；角落按左右算", () => {
+    const at = (x: number, y: number) =>
+      snapDockEdge({ x, y }, anchor, size, viewport);
+    expect(at(500, 23)).toBe("top");
+    expect(at(500, 24)).toBeNull();
+    expect(at(500, 735)).toBe("bottom");
+    expect(at(500, 734)).toBeNull();
+    expect(at(10, 10)).toBe("left");
+    expect(snapDockEdge({ x: 500, y: 850 }, null, size, viewport)).toBe(
+      "bottom",
+    );
+  });
+
+  it("贴上下边：x 不变，y 贴边；贴下边跟着输入框走", () => {
+    const top = { x: 500, y: 300, edge: "top" as const };
+    expect(dockPosition(anchor, size, viewport, top)).toEqual({ x: 500, y: 0 });
+    const bottom = { x: 500, y: 300, edge: "bottom" as const };
+    expect(dockPosition(anchor, size, viewport, bottom)).toEqual({
+      x: 500,
+      y: 758,
+    });
+    const raised = { ...anchor, top: 600, bottom: 650 };
+    expect(dockPosition(raised, size, viewport, bottom).y).toBe(558);
+    expect(dockPosition(null, size, viewport, bottom).y).toBe(864);
   });
 
   it("吸附的存档贴着边，视口变化也不离开；纵向限制仍生效", () => {
@@ -110,7 +138,7 @@ describe("边缘吸附", () => {
   });
 
   it("存档的 edge 非法就忽略", () => {
-    expect(normalizeStoredDock({ x: 1, y: 2, edge: "top" })).toEqual({
+    expect(normalizeStoredDock({ x: 1, y: 2, edge: "middle" })).toEqual({
       x: 1,
       y: 2,
     });

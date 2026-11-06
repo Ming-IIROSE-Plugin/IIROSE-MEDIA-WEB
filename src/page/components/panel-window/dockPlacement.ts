@@ -3,10 +3,10 @@ import { PANEL_EDGE, type PanelRect, type PanelViewport } from "./geometry";
 
 /** 胶囊底缘与输入框的间距。 */
 export const DOCK_GAP = 6;
-/** 松手时离视口左右边缘不到这么远，就吸附并收起。 */
+/** 松手时离可停靠范围的边缘不到这么远，就吸附并收起。 */
 export const DOCK_SNAP_DISTANCE = 24;
 
-export type DockEdge = "left" | "right";
+export type DockEdge = "left" | "right" | "top" | "bottom";
 
 export interface DockSize {
   width: number;
@@ -46,46 +46,69 @@ function usableAnchor(
   return inView && anchor.top - DOCK_GAP - size.height >= viewport.offsetY;
 }
 
+const DOCK_EDGES: readonly unknown[] = ["left", "right", "top", "bottom"];
+
 /** 存档校验：坏数据按没有存档处理。 */
 export function normalizeStoredDock(raw: unknown): StoredDock | null {
   if (!raw || typeof raw !== "object") return null;
   const { x, y, edge } = raw as Record<string, unknown>;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   const point = { x, y } as DockPoint;
-  return edge === "left" || edge === "right" ? { ...point, edge } : point;
+  return DOCK_EDGES.includes(edge)
+    ? { ...point, edge: edge as DockEdge }
+    : point;
 }
 
-/** 松手位置靠近哪条左右边缘；都不近时为 null。 */
+/** 胶囊左上角能到的范围：视口内，且底缘不越过输入框顶边（间距 `DOCK_GAP`）；输入框不能当锚时只看视口。 */
+function dockBounds(
+  anchor: DockAnchor | null,
+  size: DockSize,
+  viewport: PanelViewport,
+) {
+  const viewportMaxY = viewport.offsetY + viewport.height - size.height;
+  return {
+    minX: viewport.offsetX,
+    minY: viewport.offsetY,
+    maxX: viewport.offsetX + viewport.width - size.width,
+    maxY: usableAnchor(anchor, size, viewport)
+      ? Math.min(viewportMaxY, anchor.top - DOCK_GAP - size.height)
+      : viewportMaxY,
+  };
+}
+
+/** 松手位置靠近哪条边（左右优先，角落按左右算）；都不近时为 null。下边指输入框上方那条线。 */
 export function snapDockEdge(
   point: DockPoint,
+  anchor: DockAnchor | null,
   size: DockSize,
   viewport: PanelViewport,
 ): DockEdge | null {
-  if (point.x - viewport.offsetX < DOCK_SNAP_DISTANCE) return "left";
-  const right = viewport.offsetX + viewport.width;
-  return right - (point.x + size.width) < DOCK_SNAP_DISTANCE ? "right" : null;
+  const { minX, minY, maxX, maxY } = dockBounds(anchor, size, viewport);
+  if (point.x - minX < DOCK_SNAP_DISTANCE) return "left";
+  if (maxX - point.x < DOCK_SNAP_DISTANCE) return "right";
+  if (point.y - minY < DOCK_SNAP_DISTANCE) return "top";
+  if (maxY - point.y < DOCK_SNAP_DISTANCE) return "bottom";
+  return null;
 }
 
-/** 把 x 贴到边缘（`clampDockPoint` 负责落到视口内）。 */
+/** 把点贴到边缘（`clampDockPoint` 负责落到范围内）。 */
 export function pinToEdge(point: DockPoint, edge: DockEdge): DockPoint {
-  return { x: edge === "left" ? -Infinity : Infinity, y: point.y };
+  if (edge === "left") return { x: -Infinity, y: point.y };
+  if (edge === "right") return { x: Infinity, y: point.y };
+  return { x: point.x, y: edge === "top" ? -Infinity : Infinity };
 }
 
-/** 限制在视口内，且底缘不越过输入框顶边（间距 `DOCK_GAP`）；输入框不能当锚时只限制在视口内。 */
+/** 限制在可停靠范围内。 */
 export function clampDockPoint(
   point: DockPoint,
   anchor: DockAnchor | null,
   size: DockSize,
   viewport: PanelViewport,
 ): DockPoint {
-  const maxX = viewport.offsetX + viewport.width - size.width;
-  const viewportMaxY = viewport.offsetY + viewport.height - size.height;
-  const maxY = usableAnchor(anchor, size, viewport)
-    ? Math.min(viewportMaxY, anchor.top - DOCK_GAP - size.height)
-    : viewportMaxY;
+  const { minX, minY, maxX, maxY } = dockBounds(anchor, size, viewport);
   return {
-    x: Math.max(viewport.offsetX, Math.min(point.x, maxX)),
-    y: Math.max(viewport.offsetY, Math.min(point.y, maxY)),
+    x: Math.max(minX, Math.min(point.x, maxX)),
+    y: Math.max(minY, Math.min(point.y, maxY)),
   };
 }
 
