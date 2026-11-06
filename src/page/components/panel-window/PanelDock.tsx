@@ -1,5 +1,5 @@
 // 常驻的胶囊：面板没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
-// 拖到边缘时吸附并收起，悬停展开。
+// 拖到边缘时吸附并收起，悬停展开；粘在边上像液体，拉到一定距离才断开（几何在 `dockLiquid.ts`）。
 // 挂在 body 独立根上（宿站主容器会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。
 // 不改宿站输入框 DOM。
 import { render } from "preact";
@@ -14,15 +14,28 @@ import { stopHostGestures, themeAttr } from "../floating-panel/floatingPanel";
 import {
   DeskIcon,
   deskFocusRing,
+  deskDockShadow,
   deskInk,
-  deskMenuShadow,
-  deskPressTone,
-  deskRule,
   deskSheet,
+  deskSheetFill,
   typeButtonSm,
 } from "../floating-panel/tokens";
 import {
+  DOCK_DETACH_PULL,
+  isStickyEdge,
+  nearbyWall,
+  neckPath,
+  rubberDistance,
+  stretchScale,
+  stuckPoint,
+  stuckPull,
+  wallBumpPath,
+  wallOf,
+  type StickyEdge,
+} from "./dockLiquid";
+import {
   clampDockPoint,
+  dockBounds,
   dockFlight,
   dockPosition,
   normalizeStoredDock,
@@ -45,6 +58,13 @@ const DOCK_ANCHOR_ID = "moveinputDisplay";
 const DOCK_FOLLOW_MS = 500;
 /** 胶囊展开时的尺寸：窗口收起时胶囊还没挂载，用它算终点。 */
 const DOCK_NOMINAL_SIZE: DockSize = { width: 87, height: 38 };
+/** 断开后胶囊追上手指的快慢（指数平滑的时间常数）。 */
+const DOCK_FOLLOW_SMOOTHING_MS = 70;
+/** 颈缩回去、胶囊落定的时长；`app.css` 的 `data-imw-dock-settling` 规则与它同长。 */
+const DOCK_SETTLE_MS = 300;
+
+const prefersReducedMotion = () =>
+  !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
 
 function readAnchor(scale: number): DockAnchor | null {
   const anchor = document.getElementById(DOCK_ANCHOR_ID);
@@ -131,26 +151,164 @@ interface DockDrag {
   left: number;
   top: number;
   moved: boolean;
+  /** 还粘着的边；断开后为 null。 */
+  stuck: StickyEdge | null;
+  /** 当前离粘住那条边的距离（阻尼后）。 */
+  stuckDistance: number;
+  /** 手指对应的位置；刚断开时胶囊还在追它。 */
+  target: DockPoint | null;
 }
 
 export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
+  const layer = useRef<HTMLDivElement>(null);
   const pill = useRef<HTMLDivElement>(null);
+  const neck = useRef<SVGPathElement>(null);
   const drag = useRef<DockDrag | null>(null);
   const justDragged = useRef(false);
+  const neckFrame = useRef(0);
+  const followFrame = useRef(0);
+  const settleTimer = useRef(0);
+
+  const reference = () => layer.current as HTMLElement;
+
+  const writeNeck = (path: string) => neck.current?.setAttribute("d", path);
+
+  /** 这条边的颈所需的几何；胶囊的位置取当前 left / top。 */
+  const neckGeometry = (element: HTMLElement, edge: StickyEdge) => {
+    const size = dockSize(element);
+    const { anchor, viewport } = dockFrame(reference());
+    return {
+      wall: wallOf(edge, dockBounds(anchor, size, viewport), size.width),
+      center:
+        edge === "top"
+          ? parseFloat(element.style.left) + element.offsetWidth / 2
+          : parseFloat(element.style.top) + element.offsetHeight / 2,
+      thickness: element.offsetHeight,
+    };
+  };
+
+  const drawNeck = (
+    element: HTMLElement,
+    edge: StickyEdge,
+    distance: number,
+  ) => {
+    const { wall, center, thickness } = neckGeometry(element, edge);
+    writeNeck(neckPath(edge, wall, center, distance, thickness));
+  };
+
+  const stopNeckAnimation = () => {
+    window.cancelAnimationFrame?.(neckFrame.current);
+    neckFrame.current = 0;
+  };
+
+  /** 逐帧画一段 ease-out 的收缩；减少动态效果时直接到终点。 */
+  const animateNeck = (draw: (remaining: number) => void) => {
+    stopNeckAnimation();
+    if (prefersReducedMotion()) {
+      draw(0);
+      return;
+    }
+    const start = performance.now();
+    const tick = (now: number) => {
+      const progress = Math.min((now - start) / DOCK_SETTLE_MS, 1);
+      draw((1 - progress) ** 3);
+      neckFrame.current = progress < 1 ? requestAnimationFrame(tick) : 0;
+    };
+    neckFrame.current = requestAnimationFrame(tick);
+  };
+
+  /** 落定用的过渡（left / top / scale），只在这一小段时间打开，拖动时不能有。 */
+  const settle = (element: HTMLElement) => {
+    window.clearTimeout(settleTimer.current);
+    element.setAttribute("data-imw-dock-settling", "true");
+    settleTimer.current = window.setTimeout(
+      () => element.removeAttribute("data-imw-dock-settling"),
+      DOCK_SETTLE_MS + 40,
+    );
+  };
+
+  /** 断开：颈留下的一小团缩回边缘，胶囊的拉伸轻轻弹回去。 */
+  const detach = (element: HTMLElement, current: DockDrag) => {
+    const edge = current.stuck;
+    if (!edge) return;
+    const { wall, center, thickness } = neckGeometry(element, edge);
+    const length = current.stuckDistance * 0.6 + thickness / 2;
+    current.stuck = null;
+    writeDockEdge(element, null);
+    settle(element);
+    element.style.removeProperty("scale");
+    animateNeck((remaining) =>
+      writeNeck(
+        wallBumpPath(edge, wall, center, length * remaining, thickness),
+      ),
+    );
+  };
+
+  const place = (element: HTMLElement, { x, y }: DockPoint) => {
+    element.style.left = `${x}px`;
+    element.style.top = `${y}px`;
+  };
+
+  /** 自由拖动靠近边缘时，边缘提前伸出来接它。 */
+  const drawApproach = (element: HTMLElement, point: DockPoint) => {
+    if (neckFrame.current) return;
+    const { anchor, viewport } = dockFrame(reference());
+    const near = nearbyWall(
+      point,
+      dockBounds(anchor, dockSize(element), viewport),
+    );
+    if (near) drawNeck(element, near.edge, near.gap);
+    else writeNeck("");
+  };
+
+  /** 断开后胶囊追上手指：不瞬移，也就不显得粗暴。 */
+  const follow = (element: HTMLElement) => {
+    if (followFrame.current) return;
+    if (prefersReducedMotion()) return;
+    let previous = performance.now();
+    const tick = (now: number) => {
+      const current = drag.current;
+      if (!current?.target) {
+        followFrame.current = 0;
+        return;
+      }
+      const blend = 1 - Math.exp(-(now - previous) / DOCK_FOLLOW_SMOOTHING_MS);
+      previous = now;
+      const x = parseFloat(element.style.left);
+      const y = parseFloat(element.style.top);
+      const next = {
+        x: x + (current.target.x - x) * blend,
+        y: y + (current.target.y - y) * blend,
+      };
+      if (
+        Math.hypot(current.target.x - next.x, current.target.y - next.y) < 0.5
+      ) {
+        place(element, current.target);
+        followFrame.current = 0;
+        return;
+      }
+      place(element, next);
+      drawApproach(element, next);
+      followFrame.current = requestAnimationFrame(tick);
+    };
+    followFrame.current = requestAnimationFrame(tick);
+  };
+
   useLayoutEffect(() => {
     const element = pill.current;
     if (!element) return;
     const sync = () => {
       if (drag.current) return;
-      const { x, y } = measureDock(
-        element.parentElement ?? element,
-        dockSize(element),
-      );
-      element.style.left = `${x}px`;
-      element.style.top = `${y}px`;
-      writeDockEdge(element, readStoredDock()?.edge);
+      const { x, y } = measureDock(reference(), dockSize(element));
+      place(element, { x, y });
+      const edge = readStoredDock()?.edge;
+      writeDockEdge(element, edge);
+      if (!neckFrame.current) {
+        if (isStickyEdge(edge)) drawNeck(element, edge, 0);
+        else writeNeck("");
+      }
       // 胶囊常驻：宿站换主题也要跟上
-      element.setAttribute("data-imw-theme", themeAttr(hostIsDark()));
+      layer.current?.setAttribute("data-imw-theme", themeAttr(hostIsDark()));
       onPlaced();
     };
     sync();
@@ -160,115 +318,182 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     window.visualViewport?.addEventListener("scroll", sync);
     return () => {
       window.clearInterval(timer);
+      window.clearTimeout(settleTimer.current);
+      stopNeckAnimation();
+      window.cancelAnimationFrame?.(followFrame.current);
       window.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("scroll", sync);
     };
   }, [onPlaced]);
-  const reference = () => {
-    const element = pill.current as HTMLElement;
-    return element.parentElement ?? element;
-  };
+
   const endDrag = () => {
     const finished = drag.current;
     const element = pill.current;
     drag.current = null;
-    if (!finished?.moved || !element) return;
+    if (!element) return;
+    element.removeAttribute("data-imw-dock-held");
+    if (!finished?.moved) return;
+    window.cancelAnimationFrame?.(followFrame.current);
+    followFrame.current = 0;
     justDragged.current = true;
     const size = dockSize(element);
     const { anchor, viewport } = dockFrame(reference());
-    const point = {
+    const current = {
       x: parseFloat(element.style.left),
       y: parseFloat(element.style.top),
     };
-    const edge = snapDockEdge(point, anchor, size, viewport);
-    const { x, y } = clampDockPoint(
+    const point = finished.target ?? current;
+    // 还粘着就松手：弹回那条边
+    const edge = snapDockEdge(point, anchor, size, viewport) ?? finished.stuck;
+    const final = clampDockPoint(
       edge ? pinToEdge(point, edge) : point,
       anchor,
       size,
       viewport,
     );
-    element.style.left = `${x}px`;
-    element.style.top = `${y}px`;
+    // 落定前离边缘多远：颈从这里收回弯月面
+    const bounds = dockBounds(anchor, size, viewport);
+    const gap = !isStickyEdge(edge)
+      ? 0
+      : edge === "left"
+        ? current.x - bounds.minX
+        : edge === "right"
+          ? bounds.maxX - current.x
+          : current.y - bounds.minY;
+    settle(element);
+    element.style.removeProperty("scale");
+    place(element, final);
     writeDockEdge(element, edge);
-    writeJson(PANEL_DOCK_POSITION_KEY, edge ? { x, y, edge } : { x, y });
+    if (isStickyEdge(edge)) {
+      animateNeck((remaining) => drawNeck(element, edge, gap * remaining));
+    } else if (!neckFrame.current) {
+      writeNeck("");
+    }
+    writeJson(PANEL_DOCK_POSITION_KEY, edge ? { ...final, edge } : final);
     onPlaced();
   };
+
   // 粗指针上也要够得着：与其它粗指针目标同为 44px
   const controlHeight = "h-9 max-[768px]:h-11 [@media(pointer:coarse)]:h-11";
   return (
     <div
-      ref={pill}
-      role="group"
-      aria-label="点歌台"
-      data-imw-panel-dock="true"
-      className={`fixed z-[90009] flex touch-none select-none rounded-full border border-solid whitespace-nowrap animate-[imwRiseIn_200ms_ease-out] motion-reduce:animate-none ${deskRule} ${deskSheet} ${deskInk} ${deskMenuShadow}`}
-      {...stopHostGestures}
-      onPointerDown={(event) => {
-        const element = pill.current;
-        if (!element || !event.isPrimary || event.button !== 0) return;
-        justDragged.current = false;
-        const pointer = pointerPosition(
-          reference(),
-          event.clientX,
-          event.clientY,
-        );
-        drag.current = {
-          pointer: event.pointerId,
-          x: pointer.x,
-          y: pointer.y,
-          left: parseFloat(element.style.left),
-          top: parseFloat(element.style.top),
-          moved: false,
-        };
-        // 一按下就捕获：快速拖出胶囊也不丢。捕获后点击可能落在胶囊上，所以打开写在外层的 onClick
-        element.setPointerCapture?.(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        const current = drag.current;
-        const element = pill.current;
-        if (!current || !element || current.pointer !== event.pointerId) return;
-        const pointer = pointerPosition(
-          reference(),
-          event.clientX,
-          event.clientY,
-        );
-        const dx = pointer.x - current.x;
-        const dy = pointer.y - current.y;
-        if (!current.moved && Math.hypot(dx, dy) < DOCK_DRAG_THRESHOLD) return;
-        current.moved = true;
-        writeDockEdge(element, null);
-        const { anchor, viewport } = dockFrame(reference());
-        const { x, y } = clampDockPoint(
-          { x: current.left + dx, y: current.top + dy },
-          anchor,
-          dockSize(element),
-          viewport,
-        );
-        element.style.left = `${x}px`;
-        element.style.top = `${y}px`;
-      }}
-      onPointerUp={(event) => {
-        if (drag.current?.pointer === event.pointerId) endDrag();
-      }}
-      onPointerCancel={endDrag}
-      onLostPointerCapture={endDrag}
-      onClick={() => {
-        if (justDragged.current) {
-          justDragged.current = false;
-          return;
-        }
-        onOpen();
-      }}
+      ref={layer}
+      data-imw-dock-layer="true"
+      className={`pointer-events-none fixed inset-0 z-[90009] ${deskDockShadow}`}
     >
-      <button
-        type="button"
-        aria-label="打开点歌台"
-        className={`m-0 flex cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-inherit ${controlHeight} ${typeButtonSm} ${deskPressTone} ${deskFocusRing}`}
+      <svg
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full overflow-visible"
       >
-        <DeskIcon name="mark" size={16} />
-        <span data-imw-dock-label="true">点歌台</span>
-      </button>
+        <path ref={neck} d="" className={deskSheetFill} />
+      </svg>
+      <div
+        ref={pill}
+        role="group"
+        aria-label="点歌台"
+        data-imw-panel-dock="true"
+        className={`pointer-events-auto fixed flex touch-none select-none rounded-full border border-solid border-transparent whitespace-nowrap animate-[imwRiseIn_200ms_ease-out] motion-reduce:animate-none ${deskSheet} ${deskInk}`}
+        {...stopHostGestures}
+        onPointerDown={(event) => {
+          const element = pill.current;
+          if (!element || !event.isPrimary || event.button !== 0) return;
+          justDragged.current = false;
+          const pointer = pointerPosition(
+            reference(),
+            event.clientX,
+            event.clientY,
+          );
+          const edge = element.getAttribute(
+            "data-imw-dock-edge",
+          ) as DockEdge | null;
+          drag.current = {
+            pointer: event.pointerId,
+            x: pointer.x,
+            y: pointer.y,
+            left: parseFloat(element.style.left),
+            top: parseFloat(element.style.top),
+            moved: false,
+            stuck: isStickyEdge(edge) && !prefersReducedMotion() ? edge : null,
+            stuckDistance: 0,
+            target: null,
+          };
+          // 按住就展开（触屏没有悬停）
+          element.setAttribute("data-imw-dock-held", "true");
+          // 一按下就捕获：快速拖出胶囊也不丢。捕获后点击可能落在胶囊上，所以打开写在外层的 onClick
+          element.setPointerCapture?.(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const current = drag.current;
+          const element = pill.current;
+          if (!current || !element || current.pointer !== event.pointerId)
+            return;
+          const pointer = pointerPosition(
+            reference(),
+            event.clientX,
+            event.clientY,
+          );
+          const dx = pointer.x - current.x;
+          const dy = pointer.y - current.y;
+          if (!current.moved && Math.hypot(dx, dy) < DOCK_DRAG_THRESHOLD)
+            return;
+          current.moved = true;
+          const size = dockSize(element);
+          const { anchor, viewport } = dockFrame(reference());
+          const docked = { x: current.left, y: current.top };
+          const raw = { x: current.left + dx, y: current.top + dy };
+          if (current.stuck) {
+            const pull = stuckPull(current.stuck, docked, raw);
+            if (pull < DOCK_DETACH_PULL) {
+              const distance = rubberDistance(pull);
+              current.stuckDistance = distance;
+              place(
+                element,
+                clampDockPoint(
+                  stuckPoint(current.stuck, docked, raw, distance),
+                  anchor,
+                  size,
+                  viewport,
+                ),
+              );
+              element.style.scale = stretchScale(current.stuck, distance);
+              drawNeck(element, current.stuck, distance);
+              return;
+            }
+            detach(element, current);
+            current.target = clampDockPoint(raw, anchor, size, viewport);
+            follow(element);
+            return;
+          }
+          writeDockEdge(element, null);
+          const target = clampDockPoint(raw, anchor, size, viewport);
+          current.target = target;
+          if (followFrame.current) return;
+          place(element, target);
+          drawApproach(element, target);
+        }}
+        onPointerUp={(event) => {
+          if (drag.current?.pointer === event.pointerId) endDrag();
+        }}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
+        onClick={() => {
+          if (justDragged.current) {
+            justDragged.current = false;
+            return;
+          }
+          onOpen();
+        }}
+      >
+        <button
+          type="button"
+          aria-label="打开点歌台"
+          className={`m-0 flex cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-inherit ${controlHeight} ${typeButtonSm} ${deskFocusRing}`}
+        >
+          <DeskIcon name="mark" size={16} />
+          <span data-imw-dock-label="true">点歌台</span>
+        </button>
+      </div>
     </div>
   );
 }

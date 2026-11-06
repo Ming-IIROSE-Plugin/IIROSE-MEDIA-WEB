@@ -23,6 +23,8 @@ export const deskPaper = "bg-[#F5F2EC] imw-dark:bg-[#141312]";
 export const deskRail = "bg-[#EDE8DF] imw-dark:bg-[#0F0E0D]";
 /** 抬起的面：搜索栏、选中的竖栏项、视图分段选中格（sheet）。 */
 export const deskSheet = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]";
+/** sheet 的 SVG 填充（胶囊粘在边缘的颈，要和胶囊同色）。 */
+export const deskSheetFill = "fill-[#FBFAF7] imw-dark:fill-[#1C1A18]";
 /** 行悬停底、来源切换器常态底（hover）。 */
 export const deskHover = "bg-[#EFEBE3] imw-dark:bg-[#201E1C]";
 /** 封面 / 缩略图占位底（thumb）。 */
@@ -161,6 +163,9 @@ export const deskKeyBorder = "border-[#D3CBBE] imw-dark:border-[#45403A]";
 /** 下拉菜单浮层投影（来源菜单）：浅色柔和，深色加深一档才看得出层次。 */
 export const deskMenuShadow =
   "shadow-[0_10px_30px_#1C19161F] imw-dark:shadow-[0_10px_30px_#00000080]";
+/** 胶囊和粘在边缘的颈共用一层投影：分开投会在接缝处压出一道弧。 */
+export const deskDockShadow =
+  "[filter:drop-shadow(0_6px_14px_#1C191633)] imw-dark:[filter:drop-shadow(0_6px_14px_#00000080)]";
 /** 面板提示条：浮在结果区上方的柔和投影。 */
 export const deskToastShadow = "shadow-[0_6px_20px_#0000002E]";
 

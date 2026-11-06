@@ -1,5 +1,5 @@
-// 页头（DESIGN.md `page-header`）：等宽眉题 + 宋体模式名 + 右侧描边关闭钮。
-// 窗口态只留标题栏的关闭钮：MainApp 不随窗口态重渲染，所以用容器上的状态类隐藏。
+// 页头（DESIGN.md `page-header`）：等宽眉题 + 宋体模式名 + 右侧描边最小化钮（收回胶囊）。
+// 窗口态只留标题栏的最小化钮：MainApp 不随窗口态重渲染，所以用容器上的状态类隐藏。
 import {
   DeskIcon,
   deskFocusRing,
@@ -35,11 +35,11 @@ export function PageHeader({ title, onClose }: PageHeaderProps) {
       </div>
       <button
         type="button"
-        aria-label="关闭点歌台"
+        aria-label="最小化点歌台"
         className={`ml-auto grid h-10 [.imw-panel-window_&]:hidden w-10 shrink-0 cursor-pointer place-items-center border border-solid bg-transparent p-0 max-[768px]:h-11 max-[768px]:w-11 ${roundedLg} ${deskRule} ${deskInk2} ${deskPressTone} ${deskPress} ${deskFocusRing}`}
         onClick={onClose}
       >
-        <DeskIcon name="close" size={20} />
+        <DeskIcon name="minimize" size={20} />
       </button>
     </header>
   );

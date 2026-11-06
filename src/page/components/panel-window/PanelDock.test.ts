@@ -105,10 +105,11 @@ describe("停靠件外观与交互", () => {
     const page = window as Window & { theme?: unknown };
     page.theme = 1;
     mount();
-    expect(dock().getAttribute("data-imw-theme")).toBe("light");
+    const layer = () => dock().closest("[data-imw-theme]");
+    expect(layer()?.getAttribute("data-imw-theme")).toBe("light");
     page.theme = 0;
     vi.advanceTimersByTime(600);
-    expect(dock().getAttribute("data-imw-theme")).toBe("dark");
+    expect(layer()?.getAttribute("data-imw-theme")).toBe("dark");
   });
 
   it("点胶囊打开；只有一个按钮，没有关闭钮和歌名", async () => {
@@ -125,13 +126,15 @@ describe("停靠件外观与交互", () => {
     expect(onPlaced).toHaveBeenCalled();
   });
 
-  it("独立根只有胶囊一个孩子，没有铺满的遮罩", () => {
+  it("只有胶囊接收点击：外层铺满但不拦指针", () => {
     mount();
     const root = document.getElementById(PANEL_DOCK_ROOT_ID)!;
     expect(root.parentElement).toBe(document.body);
-    expect(root.children).toHaveLength(1);
-    expect(root.firstElementChild).toBe(dock());
-    expect(dock().className).not.toMatch(/inset-/);
+    const layer = root.firstElementChild!;
+    expect(layer.className).toContain("pointer-events-none");
+    expect(dock().className).toContain("pointer-events-auto");
+    expect(layer.querySelector("svg")!.parentElement).toBe(layer);
+    expect(dock().parentElement).toBe(layer);
   });
 
   it("重复挂载只留一个，被替换的停靠件停掉定时器", () => {
@@ -145,7 +148,7 @@ describe("停靠件外观与交互", () => {
 
   it("压在批量进度（90008）之上、选集面板（90010）之下", () => {
     mount();
-    expect(dock().classList.contains("z-[90009]")).toBe(true);
+    expect(dock().parentElement!.classList.contains("z-[90009]")).toBe(true);
   });
 });
 
@@ -258,6 +261,87 @@ describe("拖动", () => {
     expect(position().y).toBe(794);
   });
 
+  const neck = () => document.querySelector(`#${PANEL_DOCK_ROOT_ID} path`)!;
+
+  describe("液体粘连", () => {
+    const seedEdge = (edge: string, x = 0, y = 500) =>
+      localStorage.setItem(
+        PANEL_DOCK_POSITION_KEY,
+        JSON.stringify({ x, y, edge }),
+      );
+
+    it("贴边静止就有弯月面；离开边缘和贴下边都没有", () => {
+      addInput(input);
+      seedEdge("left");
+      mount();
+      expect(neck().getAttribute("d")).not.toBe("");
+      releasePanelDock();
+      seedEdge("bottom", 500, 300);
+      mount();
+      expect(neck().getAttribute("d")).toBe("");
+    });
+
+    it("没拉到阈值：胶囊被拖住、拉长，还算贴在这条边上", () => {
+      addInput(input);
+      seedEdge("left");
+      mount();
+      pointer("pointerdown", restore(), 10, 500);
+      expect(dock().hasAttribute("data-imw-dock-held")).toBe(true);
+      pointer("pointermove", restore(), 40, 500);
+      expect(edge()).toBe("left");
+      // 手指走了 30，胶囊走得更少
+      expect(position().x).toBeGreaterThan(0);
+      expect(position().x).toBeLessThan(30);
+      expect(dock().style.scale).not.toBe("");
+    });
+
+    it("没拉到阈值就松手：弹回边缘，存档的边不变，也不算点击", () => {
+      addInput(input);
+      seedEdge("left");
+      mount();
+      pointer("pointerdown", restore(), 10, 500);
+      pointer("pointermove", restore(), 40, 460);
+      pointer("pointerup", restore(), 40, 460);
+      restore().click();
+      expect(position()).toEqual({ x: 0, y: 460 });
+      expect(edge()).toBe("left");
+      expect(stored()).toEqual({ x: 0, y: 460, edge: "left" });
+      expect(dock().hasAttribute("data-imw-dock-held")).toBe(false);
+      expect(dock().style.scale).toBe("");
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it("拉过阈值：断开，不再贴边，拉伸撤掉", () => {
+      addInput(input);
+      seedEdge("left");
+      mount();
+      pointer("pointerdown", restore(), 10, 500);
+      pointer("pointermove", restore(), 40, 500);
+      pointer("pointermove", restore(), 100, 500);
+      expect(edge()).toBeNull();
+      expect(dock().style.scale).toBe("");
+      pointer("pointerup", restore(), 100, 500);
+      expect(position()).toEqual({ x: 90, y: 500 });
+      expect(stored()).toEqual({ x: 90, y: 500 });
+    });
+
+    it("自由拖近边缘：边缘提前伸出来；拖远又收回去", () => {
+      addInput(input);
+      localStorage.setItem(
+        PANEL_DOCK_POSITION_KEY,
+        JSON.stringify({ x: 400, y: 400 }),
+      );
+      mount();
+      expect(neck().getAttribute("d")).toBe("");
+      pointer("pointerdown", restore(), 400, 400);
+      pointer("pointermove", restore(), 10, 400);
+      expect(neck().getAttribute("d")).not.toBe("");
+      pointer("pointermove", restore(), 300, 400);
+      expect(neck().getAttribute("d")).toBe("");
+      pointer("pointerup", restore(), 300, 400);
+    });
+  });
+
   it("拖离边缘：拖动中就伸出，松手不再收起", () => {
     addInput(input);
     localStorage.setItem(
@@ -315,7 +399,10 @@ describe("样式表", () => {
 
   it("减少动态效果时开合没有位移和缩放，也没有过渡", () => {
     const reduced = css.slice(
-      css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
+      css.lastIndexOf(
+        "@media (prefers-reduced-motion: reduce)",
+        css.indexOf("胶囊吸附在边缘时收起"),
+      ),
     );
     expect(reduced).toMatch(
       /\.IIROSE_MEDIA_CONTAINER\.ShowIIROSE_MEDIA_CONTAINER \{\s*translate: none;\s*scale: none;\s*transition: none/,
@@ -323,17 +410,15 @@ describe("样式表", () => {
     expect(reduced).toMatch(/transition: none/);
   });
 
-  it("收起只在有悬停的设备上，悬停和键盘聚焦都伸出", () => {
-    const block = css.slice(
-      css.indexOf("@media (hover: hover) {\n  [data-imw-panel-dock]"),
+  it("收起不分设备；悬停只在有悬停的设备上展开，按住和键盘聚焦都展开", () => {
+    const block = css.slice(css.indexOf("胶囊吸附在边缘时收起"));
+    expect(block.indexOf('[data-imw-dock-edge="right"]')).toBeLessThan(
+      block.indexOf("@media (hover: hover)"),
     );
-    expect(block).toContain('[data-imw-dock-edge="right"]');
-    expect(block).toContain('[data-imw-dock-edge="left"]');
-    expect(block).toContain('[data-imw-dock-edge="top"]');
-    expect(block).toContain('[data-imw-dock-edge="bottom"]');
     expect(block).toMatch(
-      /\[data-imw-dock-edge\]:hover,\s*\[data-imw-panel-dock\]\[data-imw-dock-edge\]:has\(:focus-visible\) \{\s*translate: none/,
+      /@media \(hover: hover\) \{\s*\[data-imw-panel-dock\]\[data-imw-dock-edge\]:hover/,
     );
+    expect(block).toMatch(/\[data-imw-dock-held\],\s*:has\(:focus-visible\)/);
   });
 
   it("独立根进了边框基线和盒模型两条选择器", () => {

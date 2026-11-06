@@ -132,7 +132,7 @@ describe("竖栏 / 底部标签栏", () => {
 });
 
 describe("页头", () => {
-  it("眉题 + 宋体模式名 + 描边关闭钮", () => {
+  it("眉题 + 宋体模式名 + 描边最小化钮", () => {
     const onClose = vi.fn();
     render(h(PageHeader, { title: "点歌台", onClose }), host);
     expect(host.querySelector("h1")!.textContent).toBe("点歌台");
@@ -140,11 +140,11 @@ describe("页头", () => {
     expect(host.textContent).toContain("Media Desk");
     const title = host.querySelector("h1")!.getAttribute("class")!;
     expect(title).toContain("Songti_SC");
-    const close = host.querySelector('[aria-label="关闭点歌台"]')!;
+    const close = host.querySelector('[aria-label="最小化点歌台"]')!;
     expect(close.getAttribute("class")).toContain("w-10");
-    // 手机上关闭钮要够 44px（真站 390 宽下原为 40×40）
+    // 手机上最小化钮要够 44px（真站 390 宽下原为 40×40）
     expect(close.getAttribute("class")).toContain("max-[768px]:h-11");
-    // 窗口态只留标题栏的关闭钮
+    // 窗口态只留标题栏的最小化钮
     expect(close.getAttribute("class")).toContain(
       "[.imw-panel-window_&]:hidden",
     );

@@ -60,7 +60,7 @@ export function normalizeStoredDock(raw: unknown): StoredDock | null {
 }
 
 /** 胶囊左上角能到的范围：视口内，且底缘不越过输入框顶边（间距 `DOCK_GAP`）；输入框不能当锚时只看视口。 */
-function dockBounds(
+export function dockBounds(
   anchor: DockAnchor | null,
   size: DockSize,
   viewport: PanelViewport,

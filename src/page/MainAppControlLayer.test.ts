@@ -503,7 +503,7 @@ describe("窗口模式", () => {
       expect(isOpen()).toBe(false);
       expect(isPanelOpen()).toBe(false);
       expect(dock()).not.toBeNull();
-      expect(dock()!.querySelector('[aria-label="关闭点歌台"]')).toBeNull();
+      expect(dock()!.querySelectorAll("button")).toHaveLength(1);
       expect(setPanelOpen).toHaveBeenLastCalledWith(false);
       expect(mainAppMounts.count).toBe(mounts);
       expect({ ...localStorage }).toEqual(before);
