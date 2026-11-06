@@ -447,7 +447,8 @@
 /* 窗口态（类由 MainAppControlLayer 在视口放得下时加，几何由 PanelWindowPlacement 写内联样式）。
    打开并停稳时不带 transform / scale（scale 也要是 none，写 1 同样会改变 fixed 的基准）：
    这样里面的 fixed 以视口为基准，来源 / 顺序菜单的遮罩才能盖住窗口外。缩放只存在于开合动画期间。
-   关闭时淡出并缩小，动画结束才隐藏，并恢复基础规则的 translateX(100%)。
+   收起时缩向胶囊并淡出（--imw-dock-x/y 由 writeDockFlight 写），动画结束才隐藏，并恢复基础规则的 translateX(100%)。
+   收起后也留着这组值，所以 viewportMetrics 量缩放比例时要除掉元素自身的 scale。
    全屏态关闭后同样是 hidden：关着的面板进出窗口态时全程不可见，视口跨过阈值不会滑过页面，也不会闪一下。
    关闭用 visibility 而不是 display:none：viewportMetrics 仍要量缩放比例。 */
 .IIROSE_MEDIA_CONTAINER.imw-panel-window {
@@ -457,7 +458,8 @@
   padding-top: var(--imw-titlebar);
   transform-origin: center;
   opacity: 0;
-  scale: 0.96;
+  translate: var(--imw-dock-x, 0) var(--imw-dock-y, 0);
+  scale: 0.2;
   visibility: hidden;
   pointer-events: none;
   transition:
@@ -484,13 +486,6 @@
 .imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
   scale: none;
   translate: none;
-}
-
-/* 最小化：缩向停靠件（--imw-dock-x/y 由 writeDockFlight 在窗口收起前写好）。隐藏后也留着这组值，
-   所以 viewportMetrics 量缩放比例时要除掉元素自身的 scale。 */
-.IIROSE_MEDIA_CONTAINER.imw-panel-window.imw-panel-minimized {
-  translate: var(--imw-dock-x, 0) var(--imw-dock-y, 0);
-  scale: 0.2;
 }
 
 /* 容器不能裁切（抓取区要伸到窗口外），圆角裁切放在内容根上 */
@@ -575,13 +570,9 @@
 @media (prefers-reduced-motion: reduce) {
   .IIROSE_MEDIA_CONTAINER.imw-panel-window,
   .IIROSE_MEDIA_CONTAINER.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
-    scale: none;
-    transition: none;
-  }
-
-  .IIROSE_MEDIA_CONTAINER.imw-panel-window.imw-panel-minimized {
     translate: none;
     scale: none;
+    transition: none;
   }
 }
 

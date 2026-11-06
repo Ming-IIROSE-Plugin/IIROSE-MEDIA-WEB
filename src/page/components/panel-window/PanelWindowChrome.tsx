@@ -16,13 +16,11 @@ import type { PanelWindowPlacement } from "./PanelWindowPlacement";
 export interface PanelWindowChromeProps {
   placement: PanelWindowPlacement;
   onMinimize: () => void;
-  onClose: () => void;
 }
 
 export function PanelWindowChrome({
   placement,
   onMinimize,
-  onClose,
 }: PanelWindowChromeProps) {
   return (
     <>
@@ -38,18 +36,10 @@ export function PanelWindowChrome({
         <button
           type="button"
           aria-label="最小化窗口"
-          className={`relative z-[21] flex h-full w-11 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-inherit ${deskPressTone} ${deskFocusRing}`}
+          className={`relative z-[21] flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-tr-[11px] border-0 bg-transparent p-0 text-inherit ${deskPressTone} ${deskFocusRing}`}
           onClick={onMinimize}
         >
           <DeskIcon name="minimize" size={18} />
-        </button>
-        <button
-          type="button"
-          aria-label="关闭窗口"
-          className={`relative z-[21] flex h-full w-11 shrink-0 cursor-pointer items-center justify-center rounded-tr-[11px] border-0 bg-transparent p-0 text-inherit ${deskPressTone} ${deskFocusRing}`}
-          onClick={onClose}
-        >
-          <DeskIcon name="close" size={18} />
         </button>
       </div>
       {RESIZE_EDGES.map((edge) => (

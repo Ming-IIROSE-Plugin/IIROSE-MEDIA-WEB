@@ -3,7 +3,6 @@ import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
 import {
-  clearDockFlight,
   mountPanelDock,
   PANEL_DOCK_POSITION_KEY,
   PANEL_DOCK_ROOT_ID,
@@ -30,9 +29,10 @@ const addInput = (rect: {
   document.body.append(input);
   return input;
 };
-const onRestore = vi.fn();
-const onClose = vi.fn();
-const mount = () => mountPanelDock({ onRestore, onClose });
+const onOpen = vi.fn();
+const onPlaced = vi.fn();
+const mount = () => mountPanelDock({ onOpen, onPlaced });
+const WINDOW_RECT = { x: 100, y: 100, width: 1000, height: 600 };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -111,15 +111,18 @@ describe("停靠件外观与交互", () => {
     expect(dock().getAttribute("data-imw-theme")).toBe("dark");
   });
 
-  it("点胶囊还原，旁边的钮关闭；不显示歌名", async () => {
+  it("点胶囊打开；只有一个按钮，没有关闭钮和歌名", async () => {
     mount();
     expect(dock().textContent).toBe("点歌台");
-    const [restore, close] = dock().querySelectorAll("button");
-    await act(async () => restore.click());
-    expect(onRestore).toHaveBeenCalledOnce();
-    expect(onClose).not.toHaveBeenCalled();
-    await act(async () => close.click());
-    expect(onClose).toHaveBeenCalledOnce();
+    const buttons = dock().querySelectorAll("button");
+    expect(buttons).toHaveLength(1);
+    await act(async () => buttons[0].click());
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it("摆好和拖完都通知窗口更新缩放终点", () => {
+    mount();
+    expect(onPlaced).toHaveBeenCalled();
   });
 
   it("独立根只有胶囊一个孩子，没有铺满的遮罩", () => {
@@ -147,18 +150,14 @@ describe("停靠件外观与交互", () => {
 });
 
 describe("飞行变量", () => {
-  it("窗口中心到胶囊中心，收起前写好、撤掉后不留", () => {
+  it("窗口展开时的中心到胶囊中心", () => {
     addInput({ left: 300, top: 800, right: 1400, bottom: 850 });
     const panel = document.createElement("div");
-    panel.getBoundingClientRect = () =>
-      ({ left: 100, top: 100, width: 1000, height: 600 }) as DOMRect;
     Object.defineProperty(panel, "offsetWidth", { value: 1000 });
-    writeDockFlight(panel);
-    // 胶囊标称 114×38：x 312..426、y 756..794
-    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-231px");
+    writeDockFlight(panel, WINDOW_RECT);
+    // 胶囊标称 82×38：x 312..394、y 756..794
+    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-247px");
     expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("375px");
-    clearDockFlight(panel);
-    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("");
   });
 });
 
@@ -175,9 +174,7 @@ describe("拖动", () => {
     target.dispatchEvent(event);
   };
   const restore = () =>
-    dock().querySelector('[aria-label="还原点歌台"]') as HTMLElement;
-  const closeButton = () =>
-    dock().querySelector('[aria-label="关闭点歌台"]') as HTMLElement;
+    dock().querySelector('[aria-label="打开点歌台"]') as HTMLElement;
   const stored = () =>
     JSON.parse(localStorage.getItem(PANEL_DOCK_POSITION_KEY) ?? "null");
   /** 从胶囊上按下、移动、松手，再触发浏览器随后的点击。 */
@@ -188,13 +185,14 @@ describe("拖动", () => {
     restore().click();
   };
 
-  it("拖动跟手、松手写盘，随后的点击不还原", () => {
+  it("拖动跟手、松手写盘，随后的点击不打开", () => {
     addInput(input);
     mount();
     dragBy(100, -200);
     expect(position()).toEqual({ x: 412, y: 594 });
     expect(stored()).toEqual({ x: 412, y: 594 });
-    expect(onRestore).not.toHaveBeenCalled();
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onPlaced).toHaveBeenCalledTimes(2);
   });
 
   it("往下拖进不了输入框", () => {
@@ -205,15 +203,15 @@ describe("拖动", () => {
     expect(stored().y).toBe(794);
   });
 
-  it("移动不到 4px 算点击：还原，不写盘", () => {
+  it("移动不到 4px 算点击：打开，不写盘", () => {
     addInput(input);
     mount();
     dragBy(2, 1);
-    expect(onRestore).toHaveBeenCalledTimes(1);
+    expect(onOpen).toHaveBeenCalledTimes(1);
     expect(stored()).toBeNull();
   });
 
-  it("重新挂载（含刷新后）回到存档位置；存档用于窗口的缩向终点", () => {
+  it("重新挂载（含刷新后）回到存档位置；存档也是窗口的缩放终点", () => {
     addInput(input);
     localStorage.setItem(
       PANEL_DOCK_POSITION_KEY,
@@ -222,12 +220,10 @@ describe("拖动", () => {
     mount();
     expect(position()).toEqual({ x: 500, y: 300 });
     const panel = document.createElement("div");
-    panel.getBoundingClientRect = () =>
-      ({ left: 100, top: 100, width: 1000, height: 600 }) as DOMRect;
     Object.defineProperty(panel, "offsetWidth", { value: 1000 });
-    writeDockFlight(panel);
-    // 胶囊标称 114×38：中心 (557, 319)，窗口中心 (600, 400)
-    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-43px");
+    writeDockFlight(panel, WINDOW_RECT);
+    // 胶囊标称 82×38：中心 (541, 319)，窗口中心 (600, 400)
+    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-59px");
     expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("-81px");
   });
 
@@ -248,30 +244,17 @@ describe("拖动", () => {
     vi.advanceTimersByTime(600);
     expect(position().y).toBe(700);
   });
-
-  it("从关闭钮按下不拖动，点击只关闭", () => {
-    addInput(input);
-    mount();
-    pointer("pointerdown", closeButton(), 400, 700);
-    pointer("pointermove", closeButton(), 500, 500);
-    pointer("pointerup", closeButton(), 500, 500);
-    closeButton().click();
-    expect(position()).toEqual({ x: 312, y: 794 });
-    expect(stored()).toBeNull();
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(onRestore).not.toHaveBeenCalled();
-  });
 });
 
 describe("样式表", () => {
   const css = readFileSync(resolve(process.cwd(), "src/app.css"), "utf8");
 
-  it("减少动态效果时最小化没有位移和缩放，也没有过渡", () => {
+  it("减少动态效果时开合没有位移和缩放，也没有过渡", () => {
     const reduced = css.slice(
       css.lastIndexOf("@media (prefers-reduced-motion: reduce)"),
     );
     expect(reduced).toMatch(
-      /\.imw-panel-minimized \{\s*translate: none;\s*scale: none;/,
+      /imw-panel-window\.ShowIIROSE_MEDIA_CONTAINER \{\s*translate: none;\s*scale: none;\s*transition: none/,
     );
     expect(reduced).toMatch(/transition: none/);
   });

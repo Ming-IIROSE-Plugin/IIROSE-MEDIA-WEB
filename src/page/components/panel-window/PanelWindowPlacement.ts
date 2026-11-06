@@ -89,6 +89,11 @@ export class PanelWindowPlacement {
     this.clearStyle();
   }
 
+  /** 当前显示的矩形；全屏时为 null。收起的窗口量不准，缩向胶囊的终点要用它算。 */
+  get rect(): PanelRect | null {
+    return this.shown;
+  }
+
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     this.sync();
