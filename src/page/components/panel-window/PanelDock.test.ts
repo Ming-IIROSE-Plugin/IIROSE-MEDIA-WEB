@@ -53,10 +53,10 @@ afterEach(() => {
 });
 
 describe("停靠件定位", () => {
-  it("贴在输入框右上方", () => {
+  it("贴在输入框左上方", () => {
     addInput({ left: 300, top: 800, right: 1400, bottom: 850 });
     mount();
-    expect(position()).toEqual({ x: 1400, y: 794 });
+    expect(position()).toEqual({ x: 312, y: 794 });
   });
 
   it("没有输入框 / 尺寸为 0：底部居中留 12px", () => {
@@ -81,7 +81,7 @@ describe("停靠件定位", () => {
     input.getBoundingClientRect = () =>
       ({ left: 100, top: 500, right: 900, bottom: 550 }) as DOMRect;
     window.dispatchEvent(new Event("resize"));
-    expect(position()).toEqual({ x: 900, y: 494 });
+    expect(position()).toEqual({ x: 112, y: 494 });
   });
 
   it("聊天区顶动输入框没有事件：低频轮询跟上，输入框后出现也跟上；卸载后停", () => {
@@ -90,7 +90,7 @@ describe("停靠件定位", () => {
     expect(position()).toEqual({ x: 800, y: 888 });
     addInput({ left: 300, top: 800, right: 1400, bottom: 850 });
     vi.advanceTimersByTime(600);
-    expect(position()).toEqual({ x: 1400, y: 794 });
+    expect(position()).toEqual({ x: 312, y: 794 });
     unmount();
     expect(vi.getTimerCount()).toBe(0);
     expect(document.getElementById(PANEL_DOCK_ROOT_ID)).toBeNull();
@@ -152,8 +152,8 @@ describe("飞行变量", () => {
       ({ left: 100, top: 100, width: 1000, height: 600 }) as DOMRect;
     Object.defineProperty(panel, "offsetWidth", { value: 1000 });
     writeDockFlight(panel);
-    // 胶囊标称 114×38：x 1286..1400、y 756..794
-    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("743px");
+    // 胶囊标称 114×38：x 312..426、y 756..794
+    expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("-231px");
     expect(panel.style.getPropertyValue("--imw-dock-y")).toBe("375px");
     clearDockFlight(panel);
     expect(panel.style.getPropertyValue("--imw-dock-x")).toBe("");

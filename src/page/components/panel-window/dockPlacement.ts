@@ -21,9 +21,6 @@ export interface DockPoint {
   y: number;
 }
 
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
-
 /** 输入框能不能当锚：有尺寸、在视口内，且上方放得下胶囊（放不下就不能压住它）。 */
 function usableAnchor(
   anchor: DockAnchor | null,
@@ -40,7 +37,7 @@ function usableAnchor(
   return inView && anchor.top - DOCK_GAP - size.height >= viewport.offsetY;
 }
 
-/** 胶囊左上角：右缘对齐输入框右缘、底缘在它上方；没有输入框时视口底部居中，留 12px。 */
+/** 胶囊左上角：在输入框左上方，左边留 12px、底缘在它上方；没有输入框时视口底部居中，留 12px。 */
 export function dockPosition(
   anchor: DockAnchor | null,
   size: DockSize,
@@ -52,9 +49,9 @@ export function dockPosition(
       y: viewport.offsetY + viewport.height - size.height - PANEL_EDGE,
     };
   return {
-    x: clamp(
-      anchor.right - size.width,
-      viewport.offsetX,
+    // 输入框可能伸到视口外（宿站侧栏把聊天区推走时）：从看得见的左缘量起
+    x: Math.min(
+      Math.max(anchor.left, viewport.offsetX) + PANEL_EDGE,
       Math.max(
         viewport.offsetX,
         viewport.offsetX + viewport.width - size.width,

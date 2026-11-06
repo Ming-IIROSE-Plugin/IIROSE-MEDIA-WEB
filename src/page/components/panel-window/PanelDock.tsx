@@ -1,4 +1,4 @@
-// 最小化停靠件：窗口让开聊天时贴在输入框右上方的胶囊。挂在 body 独立根上（宿站主容器
+// 最小化停靠件：窗口让开聊天时贴在输入框左上方的胶囊。挂在 body 独立根上（宿站主容器
 // 会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。不改宿站输入框 DOM。
 import { render } from "preact";
 import { useLayoutEffect, useRef } from "preact/hooks";

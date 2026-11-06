@@ -6,9 +6,9 @@ const viewport = { width: 1600, height: 900, offsetX: 0, offsetY: 0 };
 const anchor = { left: 300, top: 800, right: 1400, bottom: 850 };
 
 describe("dockPosition", () => {
-  it("右缘对齐输入框右缘，底缘在输入框上方、不压住它", () => {
+  it("在输入框左上方，左边留 12px，底缘在输入框上方、不压住它", () => {
     const { x, y } = dockPosition(anchor, size, viewport);
-    expect(x + size.width).toBe(anchor.right);
+    expect(x).toBe(anchor.left + 12);
     expect(y + size.height).toBeLessThan(anchor.top);
   });
 
@@ -31,9 +31,14 @@ describe("dockPosition", () => {
     expect(dockPosition(top, size, viewport)).toEqual({ x: 740, y: 852 });
   });
 
-  it("输入框比胶囊窄、贴在左边：不超出视口", () => {
-    const narrow = { left: 0, top: 800, right: 50, bottom: 850 };
-    expect(dockPosition(narrow, size, viewport).x).toBe(0);
+  it("输入框左缘伸到视口外：从视口左缘量起", () => {
+    const pushed = { left: -140, top: 800, right: 1260, bottom: 850 };
+    expect(dockPosition(pushed, size, viewport).x).toBe(12);
+  });
+
+  it("输入框贴着视口右边：胶囊不超出视口", () => {
+    const narrow = { left: 1590, top: 800, right: 1600, bottom: 850 };
+    expect(dockPosition(narrow, size, viewport).x).toBe(1480);
   });
 
   it("可视视口平移（键盘、捏合）：跟着偏移", () => {
