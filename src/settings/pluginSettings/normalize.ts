@@ -9,6 +9,9 @@ export type SearchViewMode = "card" | "list";
  */
 export type AnnounceMode = "card" | "silent" | "summary";
 
+/** 主面板显示方式：full 全屏（原版）/ window 窗口。 */
+export type PanelDisplay = "full" | "window";
+
 /** 云同步设置；口令**绝不**入此结构（只存内存，刷新即失锁） */
 export interface PluginSyncSettings {
   enabled: boolean;
@@ -36,6 +39,8 @@ export interface PluginSettingsInterface {
   announceMode: AnnounceMode;
   /** 收藏每页显示条数（1–500，默认 10） */
   favoritesPageSize: number;
+  /** 主面板显示方式（默认全屏；旧存档没有这一项） */
+  panelDisplay: PanelDisplay;
   sync: PluginSyncSettings;
 }
 
@@ -64,6 +69,11 @@ export function normalizeFavoritesPageSize(raw: unknown): number {
 /** 归一化：手改 localStorage 产生的非法值一律回退 "card"（单点归一化，同 searchViewMode） */
 export function normalizeAnnounceMode(raw: unknown): AnnounceMode {
   return raw === "silent" || raw === "summary" ? raw : "card";
+}
+
+/** 归一化：缺失或非法值一律回退全屏。 */
+export function normalizePanelDisplay(raw: unknown): PanelDisplay {
+  return raw === "window" ? "window" : "full";
 }
 
 /**

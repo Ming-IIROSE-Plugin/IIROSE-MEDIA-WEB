@@ -76,14 +76,16 @@ export function SettingsRow({
     />
   );
   const label = (
-    <span className={`min-w-0 flex-1 truncate ${typeLabel} ${deskInk}`}>
+    <span
+      className={`min-w-0 flex-1 truncate ${typeLabel} ${item.muted ? deskInk3 : deskInk}`}
+    >
       {item.title}
     </span>
   );
   const valueText = (
     <span
       className={`max-w-[52%] shrink-0 truncate ${typeLabel} ${
-        item.external ? deskRose : deskInk2
+        item.external ? deskRose : item.muted ? deskInk3 : deskInk2
       }`}
     >
       {value}

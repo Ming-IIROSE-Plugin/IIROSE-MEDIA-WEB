@@ -11,7 +11,10 @@
 import { SyncManager } from "../../sync/SyncManager";
 import { buildBilibiliGroups } from "./settingsBilibiliSection";
 import { buildNetEaseGroups } from "./settingsNeteaseSection";
-import { buildPluginGroups } from "./settingsPluginSection";
+import {
+  buildPluginGroups,
+  panelDisplayRowForm,
+} from "./settingsPluginSection";
 import { buildRadioGroups } from "./settingsRadioSection";
 
 export class SettingsService {
@@ -65,8 +68,24 @@ export class SettingsService {
 
     // 先渲染，再（重）订阅：反过来会先被 `ctx.setState` 前的清理摘掉
     ctx.setState({ settingsData: groups });
-    this.syncStatusUnsub?.();
+    this.releaseSubscriptions();
     this.syncStatusUnsub = SyncManager.onStateChange(refresh);
+    // 视口跨过阈值时「窗口模式」行要变（灰显 / 暂用全屏）；只在形态真的变了才重建
+    const form = panelDisplayRowForm();
+    const onResize = () => {
+      if (panelDisplayRowForm() !== form) refresh();
+    };
+    window.addEventListener("resize", onResize);
+    this.viewportUnsub = () => window.removeEventListener("resize", onResize);
+  }
+
+  private static viewportUnsub: (() => void) | null = null;
+
+  private static releaseSubscriptions() {
+    this.syncStatusUnsub?.();
+    this.syncStatusUnsub = null;
+    this.viewportUnsub?.();
+    this.viewportUnsub = null;
   }
 
   /** 同步状态订阅：离开设置模式时必须释放，避免别处导航后仍被状态变化重绘 */
@@ -78,8 +97,7 @@ export class SettingsService {
    */
   static release() {
     this.revision += 1;
-    this.syncStatusUnsub?.();
-    this.syncStatusUnsub = null;
+    this.releaseSubscriptions();
   }
 
   static setState = (
@@ -88,8 +106,7 @@ export class SettingsService {
   ) => {
     // 换了范围 = 之前还在构建的设置数据作废（迟到的 setState 不得覆盖当前范围）
     this.revision += 1;
-    this.syncStatusUnsub?.();
-    this.syncStatusUnsub = null;
+    this.releaseSubscriptions();
     ctx.setState({ settingsData });
   };
 

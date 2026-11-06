@@ -1,9 +1,46 @@
 import { ShowMessage } from "../../iirose_func/ShowMessage";
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
-import { PluginSettings } from "../../settings/pluginSettings/PluginSettings";
+import {
+  PluginSettings,
+  type PanelDisplay,
+} from "../../settings/pluginSettings/PluginSettings";
 import { SyncManager } from "../../sync/SyncManager";
 import { chooseEnableStep, formatMergeStats } from "../../sync/SyncGate";
 import type { MergeStats } from "../../sync/SyncMerge";
+import { isPanelWindowed } from "../../listener/panelPresence";
+import { isPhoneLayout } from "../components/media-card-container/mediaFormat";
+
+/** 开关左侧的状态文字：开了但视口放不下窗口时说明原因。 */
+const panelDisplayStatus = (display: PanelDisplay) =>
+  display === "window" && !isPanelWindowed() ? "页面太小，暂用全屏" : "";
+
+/** 「窗口模式」行的形态取决于视口：变了要重建设置数据（见 `SettingsService`）。 */
+export const panelDisplayRowForm = () =>
+  isPhoneLayout() ? "phone" : isPanelWindowed() ? "window" : "full";
+
+/** 「窗口模式」行：手机上始终全屏，是灰显的只读行。 */
+const buildPanelDisplayRow = (display: PanelDisplay): SettingData =>
+  isPhoneLayout()
+    ? {
+        key: "panelDisplay",
+        title: "窗口模式",
+        kind: "readonly",
+        actionTitle: "手机上始终全屏",
+        icon: "layout",
+        muted: true,
+      }
+    : {
+        key: "panelDisplay",
+        title: "窗口模式",
+        kind: "switch",
+        checked: display === "window",
+        actionTitle: panelDisplayStatus(display),
+        icon: "layout",
+        action: (report) => {
+          const next = PluginSettings.togglePanelDisplay();
+          report?.(panelDisplayStatus(next), next === "window");
+        },
+      };
 
 /**
  * 插件全局设置：聊天框 + 云端同步两张组卡的数据（渲染层只做展示）。
@@ -83,6 +120,7 @@ export const buildPluginGroups = async (
             );
           },
         },
+        buildPanelDisplayRow(ps.panelDisplay),
       ],
     },
     await buildSyncGroup(refresh),

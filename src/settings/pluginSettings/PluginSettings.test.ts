@@ -9,6 +9,7 @@ import {
   DESK_MODE_LIST,
   type DeskModeDescriptor,
 } from "../deskModeCatalog";
+import { LocalStorageUtils } from "../localStorageUtils/LocalStorageUtils";
 
 describe("normalizeSyncSettings", () => {
   const empty = PluginSettings.normalizeSyncSettings(null);
@@ -454,5 +455,51 @@ describe("收藏每页显示", () => {
     expect(alerts).toEqual(["请输入 1 到 500 之间的整数"]);
     expect(saved()).toBeUndefined();
     expect(report).not.toHaveBeenCalled();
+  });
+});
+
+describe("主面板显示方式", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("没有存档、旧存档、非法值都归一化为全屏", () => {
+    expect(PluginSettings.getPluginSetting().panelDisplay).toBe("full");
+    localStorage.setItem("imwPluginSetting", JSON.stringify({}));
+    expect(PluginSettings.getPluginSetting().panelDisplay).toBe("full");
+    localStorage.setItem(
+      "imwPluginSetting",
+      JSON.stringify({ panelDisplay: "floating" }),
+    );
+    expect(PluginSettings.getPluginSetting().panelDisplay).toBe("full");
+  });
+
+  it("选择跨刷新保留（读盘后仍是窗口）", () => {
+    expect(PluginSettings.togglePanelDisplay()).toBe("window");
+    expect(PluginSettings.getPluginSetting().panelDisplay).toBe("window");
+  });
+
+  it("启动合并默认值：旧存档补上全屏，已选的窗口不被覆盖", () => {
+    localStorage.setItem(
+      "imwPluginSetting",
+      JSON.stringify({ defaultPage: 0 }),
+    );
+    LocalStorageUtils.Init();
+    expect(
+      JSON.parse(localStorage.getItem("imwPluginSetting")!).panelDisplay,
+    ).toBe("full");
+
+    PluginSettings.togglePanelDisplay();
+    LocalStorageUtils.Init();
+    expect(
+      JSON.parse(localStorage.getItem("imwPluginSetting")!).panelDisplay,
+    ).toBe("window");
+  });
+
+  it("退订后不再收到通知", () => {
+    const listener = vi.fn();
+    const off = PluginSettings.onPanelDisplayChange(listener);
+    PluginSettings.togglePanelDisplay();
+    off();
+    PluginSettings.togglePanelDisplay();
+    expect(listener).toHaveBeenCalledOnce();
   });
 });

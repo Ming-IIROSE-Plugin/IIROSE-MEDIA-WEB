@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SettingsService } from "./SettingsService";
 import { AboutService } from "./AboutService";
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
+import { setPanelPresence } from "../../listener/panelPresence";
+import { PluginSettings } from "../../settings/pluginSettings/PluginSettings";
+import { ShowMessage } from "../../iirose_func/ShowMessage";
 
 // 设置数据契约（story 7）：范围 → 组卡 → 行三级结构、行语义（kind）、
 // 云同步开关的 checked 只来自 SyncManager.getState().enabled、关于卡外链无 emoji。
@@ -99,6 +102,7 @@ describe("设置范围的分组标题", () => {
       "favoritesPageSize",
       "announceMode",
       "proxyAtInput",
+      "panelDisplay",
     ]);
     const syncKeys = groups[1].items.map((item) => item.key);
     expect(syncKeys).toEqual([
@@ -157,6 +161,139 @@ describe("代理蔷薇@输入开关", () => {
     expect(report).toHaveBeenCalledWith(undefined, false);
     const stored = JSON.parse(localStorage.getItem("imwPluginSetting")!);
     expect(stored.chatBox.isProxyAtInput).toBe(false);
+  });
+});
+
+describe("窗口模式行", () => {
+  const seed = (panelDisplay?: string) =>
+    localStorage.setItem(
+      "imwPluginSetting",
+      JSON.stringify({
+        chatBox: { isProxyAtInput: true },
+        defaultPage: 0,
+        searchViewMode: "card",
+        announceMode: "card",
+        ...(panelDisplay ? { panelDisplay } : {}),
+      }),
+    );
+  const stored = () =>
+    JSON.parse(localStorage.getItem("imwPluginSetting")!).panelDisplay;
+
+  afterEach(() => {
+    setPanelPresence({ windowed: false });
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("旧存档和非法值都是关，行语义是开关", async () => {
+    for (const raw of [undefined, "floating"]) {
+      seed(raw);
+      const { groups } = await showPlugin();
+      const row = rowOf(groups, "panelDisplay");
+      expect(row).toMatchObject({
+        title: "窗口模式",
+        kind: "switch",
+        checked: false,
+        icon: "layout",
+        actionTitle: "",
+      });
+    }
+  });
+
+  it("点整行：落盘、通知订阅方、回报新值", async () => {
+    seed();
+    const { groups } = await showPlugin();
+    const listener = vi.fn((display: string) =>
+      setPanelPresence({ windowed: display === "window" }),
+    );
+    const off = PluginSettings.onPanelDisplayChange(listener);
+    const report = vi.fn();
+
+    rowOf(groups, "panelDisplay").action?.(report);
+    expect(stored()).toBe("window");
+    expect(listener).toHaveBeenCalledWith("window");
+    expect(report).toHaveBeenLastCalledWith("", true);
+
+    rowOf(groups, "panelDisplay").action?.(report);
+    expect(stored()).toBe("full");
+    expect(report).toHaveBeenLastCalledWith("", false);
+    off();
+  });
+
+  it("开启但视口放不下：值位说明暂用全屏，存档仍是窗口", async () => {
+    seed("window");
+    setPanelPresence({ windowed: false });
+    const { groups } = await showPlugin();
+    const row = rowOf(groups, "panelDisplay");
+    expect(row.checked).toBe(true);
+    expect(row.actionTitle).toBe("页面太小，暂用全屏");
+    expect(stored()).toBe("window");
+
+    setPanelPresence({ windowed: true });
+    const { groups: fits } = await showPlugin();
+    expect(rowOf(fits, "panelDisplay").actionTitle).toBe("");
+  });
+
+  it("写盘失败：提示重试，模式不变，不通知", async () => {
+    seed();
+    const { groups } = await showPlugin();
+    const listener = vi.fn();
+    const off = PluginSettings.onPanelDisplayChange(listener);
+    const show = vi.spyOn(ShowMessage, "show").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("quota");
+    });
+    const report = vi.fn();
+
+    rowOf(groups, "panelDisplay").action?.(report);
+    expect(show).toHaveBeenCalledWith("设置保存失败，请重试");
+    expect(listener).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledWith("", false);
+    expect(stored() ?? "full").toBe("full");
+    off();
+  });
+
+  it("视口跨过阈值时重建这一行；离开设置后不再重建", async () => {
+    seed("window");
+    setPanelPresence({ windowed: true });
+    const { setState } = await showPlugin();
+    expect(rowOf(groupsOf(setState), "panelDisplay").actionTitle).toBe("");
+    const resized = async () => {
+      window.dispatchEvent(new Event("resize"));
+      await new Promise((resolve) => setTimeout(resolve));
+    };
+
+    setState.mockClear();
+    await resized();
+    expect(setState).not.toHaveBeenCalled();
+
+    setPanelPresence({ windowed: false });
+    await resized();
+    expect(rowOf(groupsOf(setState), "panelDisplay").actionTitle).toBe(
+      "页面太小，暂用全屏",
+    );
+
+    SettingsService.release();
+    setState.mockClear();
+    setPanelPresence({ windowed: true });
+    await resized();
+    expect(setState).not.toHaveBeenCalled();
+  });
+
+  it("手机：灰显的只读行，说明始终全屏，不动选择", async () => {
+    seed("window");
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(max-width: 768px)",
+    }));
+    const { groups } = await showPlugin();
+    const row = rowOf(groups, "panelDisplay");
+    expect(row).toMatchObject({
+      kind: "readonly",
+      muted: true,
+      actionTitle: "手机上始终全屏",
+    });
+    expect(row.action).toBeUndefined();
+    expect(stored()).toBe("window");
   });
 });
 

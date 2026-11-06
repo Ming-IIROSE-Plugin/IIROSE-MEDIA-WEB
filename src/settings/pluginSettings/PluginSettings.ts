@@ -18,6 +18,7 @@ import {
   normalizeFavoritesPageSize,
   normalizeSyncSettings,
   type AnnounceMode,
+  type PanelDisplay,
   type PluginSettingsInterface,
   type PluginSyncSettings,
   type SearchViewMode,
@@ -31,6 +32,7 @@ export {
 } from "./normalize";
 export type {
   AnnounceMode,
+  PanelDisplay,
   PluginSettingsInterface,
   PluginSyncSettings,
   SearchViewMode,
@@ -285,6 +287,37 @@ export class PluginSettings {
   /** 归一化：手改 localStorage 产生的非法值一律回退 "card"（单点归一化，同 searchViewMode） */
   public static normalizeAnnounceMode(raw: unknown): AnnounceMode {
     return normalizeAnnounceMode(raw);
+  }
+
+  private static panelDisplayListeners = new Set<
+    (display: PanelDisplay) => void
+  >();
+
+  /**
+   * 切换主面板的全屏 / 窗口：写盘成功才生效并通知订阅方（面板立即切换）；
+   * 写盘失败时提示并保持原模式，否则刷新后设置会悄悄退回去。返回切换后实际的模式。
+   */
+  public static togglePanelDisplay(): PanelDisplay {
+    const ps = PluginSettings.getPluginSetting();
+    const previous = ps.panelDisplay;
+    ps.panelDisplay = previous === "window" ? "full" : "window";
+    if (!writeJson(PLUGIN_SETTINGS_KEY, ps)) {
+      ShowMessage.show("设置保存失败，请重试");
+      return previous;
+    }
+    for (const listener of PluginSettings.panelDisplayListeners)
+      listener(ps.panelDisplay);
+    return ps.panelDisplay;
+  }
+
+  /** 订阅全屏 / 窗口的切换，返回退订函数。 */
+  public static onPanelDisplayChange(
+    listener: (display: PanelDisplay) => void,
+  ): () => void {
+    PluginSettings.panelDisplayListeners.add(listener);
+    return () => {
+      PluginSettings.panelDisplayListeners.delete(listener);
+    };
   }
 
   public static getPluginSetting(): PluginSettingsInterface {

@@ -3,7 +3,20 @@ import { createRef, h, render, type ComponentType } from "preact";
 import { act } from "preact/test-utils";
 
 // 只验证主题属性写入：主面板内容与宿站联动模块替换为空壳。
-vi.mock("./MainApp", () => ({ MainApp: () => null }));
+const mainAppMounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock("./MainApp", async () => {
+  const { Component } = await import("preact");
+  return {
+    MainApp: class extends Component {
+      componentDidMount() {
+        mainAppMounts.count += 1;
+      }
+      render() {
+        return null;
+      }
+    },
+  };
+});
 vi.mock("../input-behavior-module/Input-Behavior-Module", () => ({
   Input_Behavior_Module: { init: () => {} },
 }));
@@ -21,6 +34,9 @@ import {
   pushOverlayLayer,
   setPanelBackHandler,
 } from "./components/desk/overlayLayers";
+import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
+import { isPanelOpen, isPanelWindowed } from "../listener/panelPresence";
+import { PANEL_WINDOW_RECT_KEY } from "./components/panel-window/PanelWindowPlacement";
 
 // 构造函数签名写的是 props: undefined，这里只按无 props 组件挂载。
 const Layer = MainAppControlLayer as unknown as ComponentType<object>;
@@ -212,5 +228,210 @@ describe("Esc 与宿站返回键", () => {
       callBack();
     });
     expect(hostBackward).toHaveBeenCalledOnce();
+  });
+});
+
+describe("窗口模式", () => {
+  let mainHolder: HTMLDivElement;
+  let chat: HTMLTextAreaElement;
+  const bodyMouseDown = vi.fn();
+
+  const seedDisplay = (panelDisplay: string) =>
+    localStorage.setItem(
+      "imwPluginSetting",
+      JSON.stringify({ panelDisplay, chatBox: { isProxyAtInput: true } }),
+    );
+  const setWidth = (width: number) =>
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: width,
+    });
+  const mount = async () => {
+    await act(async () => {
+      render(h(Layer, {}), host);
+    });
+  };
+  const isOpen = () => panel().classList.contains("ShowIIROSE_MEDIA_CONTAINER");
+  const isWindow = () => panel().classList.contains("imw-panel-window");
+  const hostGetsMouseDown = (target: Element) => {
+    bodyMouseDown.mockClear();
+    target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    return bodyMouseDown.mock.calls.length > 0;
+  };
+  // 第一次打开（与初始化合批）不走显示副作用：开 → 关 → 开之后才是稳定态
+  const open = async () => {
+    await toggle();
+    await toggle();
+    await toggle();
+  };
+  const pressEscape = async (target: Element) => {
+    await act(async () => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    setWidth(1600);
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 900,
+    });
+    mainHolder = document.createElement("div");
+    mainHolder.id = "mainHolder";
+    chat = document.createElement("textarea");
+    mainHolder.append(chat);
+    document.body.append(mainHolder);
+    // 宿站的监听挂在 document 上：body 的拦截是用 stopImmediatePropagation 不让它收到
+    document.addEventListener("mousedown", bodyMouseDown);
+  });
+
+  afterEach(() => {
+    document.removeEventListener("mousedown", bodyMouseDown);
+    mainHolder.remove();
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("设置关闭：藏聊天区并拦截页面点击，没有标题栏和内联几何", async () => {
+    await mount();
+    await open();
+    expect(isOpen()).toBe(true);
+    expect(isWindow()).toBe(false);
+    expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
+    expect(hostGetsMouseDown(chat)).toBe(false);
+    expect(panel().querySelector("[data-imw-panel-titlebar]")).toBeNull();
+    expect(panel().style.left).toBe("");
+
+    await toggle();
+    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
+    expect(hostGetsMouseDown(chat)).toBe(true);
+  });
+
+  it("窗口态：聊天区露出，窗口外宿站收得到点击，窗口内收不到", async () => {
+    seedDisplay("window");
+    await mount();
+    await open();
+    expect(isWindow()).toBe(true);
+    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
+    expect(hostGetsMouseDown(chat)).toBe(true);
+    expect(hostGetsMouseDown(panel())).toBe(false);
+    expect(panel().style.width).toBe("1000px");
+  });
+
+  it("窗口只有八个抓取区和一个标题栏，关闭钮关窗口但保留挂载", async () => {
+    seedDisplay("window");
+    await mount();
+    await open();
+    expect(panel().querySelectorAll("[data-imw-grip]")).toHaveLength(8);
+    const mounts = mainAppMounts.count;
+    const close = panel().querySelector(
+      '[data-imw-panel-titlebar] button[aria-label="关闭窗口"]',
+    ) as HTMLButtonElement;
+    await act(async () => close.click());
+    expect(isOpen()).toBe(false);
+    expect(isPanelOpen()).toBe(false);
+    expect(mainAppMounts.count).toBe(mounts);
+  });
+
+  it("设置开关立即切换，且 MainApp 不重挂载", async () => {
+    await mount();
+    await open();
+    const mounts = mainAppMounts.count;
+
+    await act(async () => {
+      PluginSettings.togglePanelDisplay();
+    });
+    expect(isOpen()).toBe(true);
+    expect(isWindow()).toBe(true);
+    expect(isPanelWindowed()).toBe(true);
+    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
+    expect(hostGetsMouseDown(chat)).toBe(true);
+
+    await act(async () => {
+      PluginSettings.togglePanelDisplay();
+    });
+    expect(isOpen()).toBe(true);
+    expect(isWindow()).toBe(false);
+    expect(panel().style.left).toBe("");
+    expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
+    expect(hostGetsMouseDown(chat)).toBe(false);
+    expect(mainAppMounts.count).toBe(mounts);
+  });
+
+  it("视口放不下：自动全屏并藏聊天区，选择和存档不变；恢复后回窗口", async () => {
+    const saved = { x: 40, y: 50, width: 900, height: 600 };
+    localStorage.setItem(PANEL_WINDOW_RECT_KEY, JSON.stringify(saved));
+    seedDisplay("window");
+    await mount();
+    await open();
+    expect(panel().style.left).toBe("40px");
+
+    setWidth(800);
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(isWindow()).toBe(false);
+    expect(mainHolder.classList.contains("hidemainHolder")).toBe(true);
+    expect(hostGetsMouseDown(chat)).toBe(false);
+    expect(
+      JSON.parse(localStorage.getItem("imwPluginSetting")!).panelDisplay,
+    ).toBe("window");
+    expect(JSON.parse(localStorage.getItem(PANEL_WINDOW_RECT_KEY)!)).toEqual(
+      saved,
+    );
+
+    setWidth(1600);
+    await act(async () => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    expect(isWindow()).toBe(true);
+    expect(mainHolder.classList.contains("hidemainHolder")).toBe(false);
+    expect(panel().style.left).toBe("40px");
+  });
+
+  it("焦点在聊天框按 Esc：面板和内层都不响应，也不拦下事件", async () => {
+    seedDisplay("window");
+    await mount();
+    await open();
+
+    const dismiss = vi.fn();
+    const release = pushOverlayLayer("inner", dismiss);
+    await pressEscape(chat);
+    expect(dismiss).not.toHaveBeenCalled();
+    expect(isOpen()).toBe(true);
+    release();
+
+    await pressEscape(chat);
+    expect(isOpen()).toBe(true);
+
+    // 焦点不在宿站输入框：照常先关层、再关窗口
+    const release2 = pushOverlayLayer("inner", dismiss);
+    await pressEscape(document.body);
+    expect(dismiss).toHaveBeenCalledOnce();
+    expect(isOpen()).toBe(true);
+    release2();
+    await pressEscape(document.body);
+    expect(isOpen()).toBe(false);
+  });
+
+  it("全屏时 Esc 不看焦点位置（与原版一致）", async () => {
+    await mount();
+    await open();
+    await pressEscape(chat);
+    expect(isOpen()).toBe(false);
+  });
+
+  it("卸载时撤掉内联几何和 presence", async () => {
+    seedDisplay("window");
+    await mount();
+    await open();
+    const container = panel();
+    render(null, host);
+    expect(container.style.left).toBe("");
+    expect(isPanelOpen()).toBe(false);
+    expect(isPanelWindowed()).toBe(false);
   });
 });

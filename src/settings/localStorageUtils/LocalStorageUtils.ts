@@ -155,6 +155,7 @@ export class LocalStorageUtils {
       searchViewMode: "card", // 搜索结果视图：card 卡片网格 / list 列表
       announceMode: "card", // 点播播报模式：card 发卡片 / silent 静默 / summary 批量总结（与 PluginSettings.getPluginSetting 两处一致）
       favoritesPageSize: 10, // 收藏每页显示条数（与 PluginSettings.getPluginSetting 两处一致）
+      panelDisplay: "full", // 主面板显示方式：full 全屏 / window 窗口（与 loadPluginSetting 两处一致）
       // 云同步默认值（与 PluginSettings.getPluginSetting 保持两处一致）
       sync: PluginSettings.defaultSyncSettings(),
     };

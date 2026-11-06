@@ -39,8 +39,9 @@ export function RoomDeckDesktop({
   return (
     <div
       id="imw-desk-room-deck"
-      className={`relative shrink-0 max-[768px]:hidden ${hidden ? "hidden" : ""}`}
+      className={`@container relative shrink-0 max-[768px]:hidden ${hidden ? "hidden" : ""}`}
     >
+      {/* 左右栏按底部条自身宽度收窄（816 = 全屏时的 900 减竖栏 84）：窗口变窄时给进度轨留宽度 */}
       <div
         data-imw-deck="room"
         role="group"
@@ -48,7 +49,7 @@ export function RoomDeckDesktop({
         className={`flex h-[60px] items-center gap-6 px-[36px] ${deskDeckSurface} ${deskDeckText} ${deskDeckRing}`}
         {...stopHostGestures}
       >
-        <div className="flex w-[280px] min-w-0 shrink-0 items-center gap-3 max-[900px]:w-[190px]">
+        <div className="flex w-[280px] min-w-0 shrink-0 items-center gap-3 @max-[816px]:w-[190px]">
           <Cover
             src={cover}
             icon="note"
@@ -82,7 +83,7 @@ export function RoomDeckDesktop({
           )}
         </div>
 
-        <div className="flex w-[260px] shrink-0 items-center justify-end gap-2 max-[900px]:w-[210px]">
+        <div className="flex w-[260px] shrink-0 items-center justify-end gap-2 @max-[816px]:w-[210px]">
           <DeckToggles
             playback={playback}
             compact={false}

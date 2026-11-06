@@ -2,10 +2,14 @@
 // 都只问「最上层是谁」，每按一次只关一层。取代旧的 DOM 探针（`[data-imw-order-menu]`）
 // 与各浮层自管的 `Esc` 监听。
 //
+// 窗口模式下焦点在宿站输入框时 `Esc` 归宿站（`isHostTextTarget`）。
+//
 // 关闭顺序：收藏随机面板（独立根、自管 `Esc` 的单槽位，`dispatchBack` 先让位给它）
 // > 选集面板（独立根 `z-[90010]`，但登记 `episode` 层，不进 `PANEL_TIER`）
 // > 展开的底部条 / 顺序菜单 / 来源菜单（主面板内最上层，互斥）
 // > 专辑·歌单内页 > 主面板。
+
+import { isHostTextTarget } from "../../../listener/panelPresence";
 
 export type OverlayLayerKind =
   | "deck"
@@ -54,6 +58,7 @@ function handleEscape(event: KeyboardEvent): void {
   if (event.defaultPrevented) return;
   if (!layers.length) return;
   if (isForeignEvent(event.target)) return;
+  if (isHostTextTarget(event.target)) return;
   event.preventDefault();
   event.stopPropagation();
   // 按住不放产生的重复事件照样吞掉，但不再往下走：一次按键只关一层。

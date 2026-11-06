@@ -201,6 +201,26 @@ describe("动作行与只读行", () => {
     expect(action).not.toHaveBeenCalled();
   });
 
+  it("灰显行：标签和值都退到三级文字色，普通只读行不受影响", async () => {
+    const item = (muted: boolean): SettingData => ({
+      key: "panelDisplay",
+      title: "窗口模式",
+      kind: "readonly",
+      actionTitle: "手机上始终全屏",
+      icon: "layout",
+      muted,
+    });
+    await draw(h(SettingsGroup, { group: group([item(true)]) }));
+    const spans = () => row("readonly").querySelectorAll("span");
+    expect(spans()[0].className).toContain(tokens.deskInk3);
+    expect(spans()[1].className).toContain(tokens.deskInk3);
+    expect(row("readonly").textContent).toContain("手机上始终全屏");
+
+    await draw(h(SettingsGroup, { group: group([item(false)]) }));
+    expect(spans()[0].className).toContain(tokens.deskInk);
+    expect(spans()[0].className).not.toContain(tokens.deskInk3);
+  });
+
   it("只读行的值变化读得出来：整行 aria-live=polite（同步中… → 正常）", async () => {
     const readonlyItem = (actionTitle: string): SettingData =>
       item({

@@ -5,6 +5,7 @@ import { ShowMessage } from "../iirose_func/ShowMessage";
 import { Announce } from "../iirose_func/Socket/Announce";
 import { Media } from "../iirose_func/Socket/Media";
 import { Socket } from "../iirose_func/Socket";
+import { isPanelOpen } from "../listener/panelPresence";
 
 export class InputPlatformAnalysis {
   /**
@@ -25,7 +26,8 @@ export class InputPlatformAnalysis {
       if (!extracted) {
         const keyword = e.slice(1).trim();
         if (keyword) {
-          if (ShowOrHideIMC) {
+          // 窗口开着时聊天框也能发 `@`：切换函数会把它关掉，只搜索不切换
+          if (ShowOrHideIMC && !isPanelOpen()) {
             await ShowOrHideIMC();
           }
           if (changeSearchKeyword) {

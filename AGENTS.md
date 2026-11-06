@@ -34,13 +34,14 @@
 - **内页头通用于三类内页**：专辑 / 歌单（`innerCollection`，带曲目数与「全部播放」）与多 P / 多集（只有 `innerPageSource`，只有返回 + 名称 + 分页，`CollectionHeader` 的 `onPlayAll` 不传）。手机没有键盘，返回钮是多 P 内页唯一的出口；`‹ 返回` / `Esc` / 宿站返回键都走 `switchToOutFromMultiPage`。
 - **点播历史**：`src/history/RequestHistory.ts`（`imwRequestHistory`，按房间记录、节流写盘、默认页只迁移一次）；音乐模式未搜索的首屏列「最近点播」（`RecentService`）。
 - **收藏模式的过滤面**：来源 3 档（全部 / 网易云 / B 站）× 范围 4 档（全部 / 单曲 / 歌单与专辑 / 视频，`FavoriteRange`，歌单与专辑合并查两类记录）；输入即过滤走 `filterLive`（不发网络请求，内页开着时先回外层）。`FavoritesService.restored` 缓存记录到 `PlatformData` 的还原结果（键 `账号|主键@更新时间`，超 500 条清空），过滤只读本地、不重复探测分 P。
+- **主面板窗口模式**（`panelDisplay: "full" | "window"`，默认全屏）：`src/page/components/panel-window/`（`geometry` 纯函数、`PanelWindowPlacement` 管存档 `imwPanelWindowRect` / 视口监听 / 手势并命令式写容器 `style`、`PanelWindowChrome` 标题栏与八个抓取区）；开合与窗口态在 `src/listener/panelPresence.ts`（输入模块和层级栈共用，含 `isHostTextTarget`）。实际是否按窗口显示 = 设置开启 且 视口 >768px 且放得下「800×520 + 两侧 12px」，否则自动全屏，选择和存档都不改。手势结束才写盘，视口变化只改显示；拖动不重渲染 `MainApp`。藏聊天区和 body 拦截只在全屏态（`applyHostCover`），窗口态由容器上的 `IMCActiveEventHandler` 隔离。
 - **面板内浮层层级单点调度**：`src/page/components/desk/overlayLayers.ts` 登记层（`deck` / `order` / `source` 互斥，`inner` 下一档，`episode` 独立根），`Esc` 与宿站 `Utils.backward` 只问「最上层是谁」，每按一次只关一层；焦点规则走 `desk/focusTrap.ts`。**新增面板内浮层必须登记一层**，不要再用 DOM 探针或自管 `document` 捕获监听。
 - **网易云歌单/专辑内页分段加载**：`src/platforms/CollectionSegments.ts` 按 `trackIds` 每 100 首一段取详情，翻到已加载的最后一页即预取下一段、并发去重、失败段单独重试、离开内页即 abort；加载器存进模式快照并配每模式 ticket（迟到结果作废）。内页的 `allMediaData` 切片现在只剩 B 站多 P。
 - **内页多选**：选中按绝对位置记，跨页、跨模式保留；离开内页 / 新搜索 / 换来源 / 换范围时清空，点播只在真正 `"sent"` 后才清。`playSelection` → `guardedRequest(..., ':selected')` → `NetEasePlatform.playSongIds`（与选集面板共用）；`SelectionBar` 原位替换 `RoomDeck`，不新增浮层层级。
 - **点播反馈统一走 `src/playback/RequestGuard.ts` 的 `guardedRequest`**：所有手动点播入口（行、卡、收藏、电台、整张播放选定顺序后）都包它——同一条目进行中再点无效，按钮「点播中」转圈到第一条 `&1` 点播报文发出（`Socket.observe` 里的 `noteMediaSent`）即恢复，**没有冷却、没有「已点播」态**；平台函数要把发送过程的 Promise 返回出来（返回 `void` 的入口按「弹菜单 / 选集」放行，不显示点播中）。成功确认是面板内 `DeskToast`，失败仍走宿站 `ShowMessage`。新增点播入口记得接守卫，别直接调平台函数。
 - **批量点播进度**：整张正序/乱序与选集多选用 `src/playback/BatchProgress.ts` 的 `startBatch` 拿句柄，`finalODSONG(ids, batch)` 逐首 `step()`、每首发送前查 `batch.cancelled`；句柄带 `signal`，`stopBatch` 永久 abort（卡片收起后仍有效）。`neteaseRequest` 第 5 参 `signal`：外部中止静默返回 null，不切节点、不提示。`sendSongs` 每 100 首取一段详情边取边发，逐段 / 逐首查停止；段失败即停并校正总数；返回实际发出数，summary 档已发总结且实际数 < N 时 `runBatchAnnounce` 补发一条校正（「已取消，未提交曲目」/「已停止，实际提交 X / N 项」）。浮窗 `BatchProgressStack` 挂 body 独立根 `#imw-batch-progress-root`（z 90008），关面板仍在。
 - **没有手机操作条**（已取消）：手机曲目行直接放 40px 收藏星 + 40px 点播钮，网格卡首点显示「点播」胶囊再点点播；面板内浮层层级只有 展开的底部条 / 顺序菜单 / 来源菜单（互斥）> 内页 > 主面板，见 `overlayLayers.ts`。
-- **底部条**：`src/page/components/room-deck/`（`RoomDeck` 桌面三栏 / 手机迷你条 / 展开层、`DeckProgress`、`ModeToggle`、`useDeck`），DOM 钩子 `data-imw-deck="room|mini|sheet"` 与 `data-imw-deck-requester`。桌面左右栏 280 / 260px，视口 ≤900px 收窄到 190 / 210px，给中栏进度轨留宽度。宿站没有歌手字段，点播者行只写「某某 点播」/「由你点播」，不要写成「歌手 · 某某」。
+- **底部条**：`src/page/components/room-deck/`（`RoomDeck` 桌面三栏 / 手机迷你条 / 展开层、`DeckProgress`、`ModeToggle`、`useDeck`），DOM 钩子 `data-imw-deck="room|mini|sheet"` 与 `data-imw-deck-requester`。桌面左右栏 280 / 260px，底部条自身宽度 <816px（容器查询，全屏时等于视口 <900px，窗口变窄时也生效）收窄到 190 / 210px，给中栏进度轨留宽度。宿站没有歌手字段，点播者行只写「某某 点播」/「由你点播」，不要写成「歌手 · 某某」。
 - 主面板配色跟随宿站主题：`.IIROSE_MEDIA_CONTAINER` 打开时写 `data-imw-theme="light|dark"`，深色样式用 Tailwind 自定义变体 `imw-dark:`（注册在 `src/app.css`）；点歌台是「纸/墨/蔷薇红」——`paper` 主区、`rail` 竖栏、`sheet` 抬起面，蔷薇红表示「点播」「房间正在放」「勾选与主按钮 / 分段选中」三类强调（其余只用墨色层级），平台品牌色只做 7px 来源圆点，从不整片铺底。宿站侧栏的进度入口与播放开关行（`src/app.css` 的 `--imw-entry-*`）同用一套蔷薇红。
 - `src/app.css` 只放 Tailwind 无法表达的东西：@keyframes、mdi 图标 `::before` content（反斜杠不能进 class 名）、JS 切换的状态类（`ShowIIROSE_MEDIA_CONTAINER`）、宿站元素选择器、动效基线（base 层默认过渡与 `--imw-fast/base/slow` 档位；按下反馈用 `floating-panel` 的 `deskPress`）；其余样式一律写进组件的 Tailwind 类，**不要新增 SCSS**。
 
@@ -85,6 +86,9 @@
 - Playwright 自动化注入纪律：验证前必须 reload 后**只注入一次** bundle——重复注入产生双实例（`.IIROSE_MEDIA_CONTAINER` ×2），两份模块级窗口状态（Announce 的 forceDepth/快照栈等）互相独立，行为不可复现地错乱；注入前先断言 `document.querySelectorAll('.IIROSE_MEDIA_CONTAINER').length === 0`，需要换 bundle 版本时先 reload 再注入。
 
 <!-- /bmad:context -->
+
+- **窗口态不能带 `transform`**（包括动效里的 `scale`）：`OrderMenu` 的坐标和菜单的 `fixed inset-0` 遮罩都靠「`fixed` 以视口为基准」，带上就会菜单错位、点窗口外收不起来。容器也不设 `overflow: hidden`（抓取区伸在窗口外），圆角裁切放在标题栏和 `#IIROSE_MEDIA` 上；抓取区 `z-20` 必须低于菜单遮罩 `z-30`。判断面板开合看 `ShowIIROSE_MEDIA_CONTAINER` 类，窗口态的计算 `transform` 是 `none`，不是 skill 里写的单位矩阵。
+- **窗口模式下焦点可能在宿站输入框**：新增面板级键盘处理要先问 `isHostTextTarget(event.target)`，别抢聊天框的按键；聊天框 `@词` 在面板已开时只搜索不切换开合（`isPanelOpen`）。
 
 ## 自动播放与真机联调（2026-10-25 实测补充）
 

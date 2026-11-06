@@ -15,6 +15,8 @@ interface SettingData {
   checked?: boolean;
   /** 外链行：值位用蔷薇红文字 + 外链图标，不用 emoji（DESIGN.md `about-card`）。 */
   external?: boolean;
+  /** 灰显（只读行）：这一项在当前环境不可用，值位说明原因。 */
+  muted?: boolean;
   /** 行动作：完成后回报新值（值 → 新文字；开关 → 新布尔），不回报则保持原态。 */
   action?: (report?: (actionTitle?: string, checked?: boolean) => void) => void;
 }

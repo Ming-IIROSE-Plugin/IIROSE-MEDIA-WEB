@@ -12,6 +12,7 @@ import {
   defaultSyncSettings,
   normalizeAnnounceMode,
   normalizeFavoritesPageSize,
+  normalizePanelDisplay,
   normalizeSyncSettings,
   type PluginSettingsInterface,
 } from "./normalize";
@@ -73,6 +74,7 @@ export function loadPluginSetting(): PluginSettingsInterface {
     parsed.favoritesPageSize = normalizeFavoritesPageSize(
       parsed.favoritesPageSize,
     );
+    parsed.panelDisplay = normalizePanelDisplay(parsed.panelDisplay);
     // 已退役的「随机包含专辑/歌单」：随机范围改由面板选择决定，旧值不再生效。
     delete (parsed as { shuffleIncludeCollections?: unknown })
       .shuffleIncludeCollections;
@@ -88,6 +90,7 @@ export function loadPluginSetting(): PluginSettingsInterface {
     searchViewMode: "card",
     announceMode: "card",
     favoritesPageSize: 10,
+    panelDisplay: "full",
     sync: defaultSyncSettings(),
   };
 }

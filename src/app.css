@@ -434,6 +434,111 @@
   transform: translateX(0);
 }
 
+/* 窗口态（类由 MainAppControlLayer 在视口放得下时加，几何由 PanelWindowPlacement 写内联样式）。
+   不用 transform：这样里面的 fixed 以视口为基准，来源 / 顺序菜单的遮罩才能盖住窗口外。
+   只在打开时淡入（关闭立即隐藏）：视口跨过阈值时，关着的面板不会闪一下。
+   关闭用 visibility 而不是 display:none：viewportMetrics 仍要量缩放比例。 */
+.IIROSE_MEDIA_CONTAINER.imw-panel-window {
+  --imw-titlebar: 32px;
+  --imw-grip: 8px;
+  padding-top: var(--imw-titlebar);
+  transform: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+.IIROSE_MEDIA_CONTAINER.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--imw-fast) var(--imw-ease);
+}
+
+/* 容器不能裁切（抓取区要伸到窗口外），圆角裁切放在内容根上 */
+.imw-panel-window #IIROSE_MEDIA {
+  overflow: hidden;
+  border-radius: 0 0 11px 11px;
+}
+
+/* 抓取区骑在窗口边上；z 低于菜单遮罩（z-30），开着菜单时不能缩放 */
+.imw-panel-grip {
+  position: absolute;
+  z-index: 20;
+  touch-action: none;
+}
+
+.imw-panel-grip[data-imw-grip="n"],
+.imw-panel-grip[data-imw-grip="s"] {
+  left: calc(var(--imw-grip) / 2);
+  right: calc(var(--imw-grip) / 2);
+  height: var(--imw-grip);
+  cursor: ns-resize;
+}
+
+.imw-panel-grip[data-imw-grip="e"],
+.imw-panel-grip[data-imw-grip="w"] {
+  top: calc(var(--imw-grip) / 2);
+  bottom: calc(var(--imw-grip) / 2);
+  width: var(--imw-grip);
+  cursor: ew-resize;
+}
+
+.imw-panel-grip[data-imw-grip="ne"],
+.imw-panel-grip[data-imw-grip="nw"],
+.imw-panel-grip[data-imw-grip="se"],
+.imw-panel-grip[data-imw-grip="sw"] {
+  width: var(--imw-grip);
+  height: var(--imw-grip);
+}
+
+.imw-panel-grip[data-imw-grip="ne"],
+.imw-panel-grip[data-imw-grip="sw"] {
+  cursor: nesw-resize;
+}
+
+.imw-panel-grip[data-imw-grip="nw"],
+.imw-panel-grip[data-imw-grip="se"] {
+  cursor: nwse-resize;
+}
+
+.imw-panel-grip[data-imw-grip="n"],
+.imw-panel-grip[data-imw-grip="ne"],
+.imw-panel-grip[data-imw-grip="nw"] {
+  top: calc(var(--imw-grip) / -2);
+}
+
+.imw-panel-grip[data-imw-grip="s"],
+.imw-panel-grip[data-imw-grip="se"],
+.imw-panel-grip[data-imw-grip="sw"] {
+  bottom: calc(var(--imw-grip) / -2);
+}
+
+.imw-panel-grip[data-imw-grip="w"],
+.imw-panel-grip[data-imw-grip="nw"],
+.imw-panel-grip[data-imw-grip="sw"] {
+  left: calc(var(--imw-grip) / -2);
+}
+
+.imw-panel-grip[data-imw-grip="e"],
+.imw-panel-grip[data-imw-grip="ne"],
+.imw-panel-grip[data-imw-grip="se"] {
+  right: calc(var(--imw-grip) / -2);
+}
+
+@media (pointer: coarse) {
+  .IIROSE_MEDIA_CONTAINER.imw-panel-window {
+    --imw-titlebar: 44px;
+    --imw-grip: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .IIROSE_MEDIA_CONTAINER.imw-panel-window.ShowIIROSE_MEDIA_CONTAINER {
+    transition: none;
+  }
+}
+
 /* --- 4. 宿站页面元素 --- */
 #mainContainer {
   transition: transform 0.25s;

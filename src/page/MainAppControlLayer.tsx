@@ -7,6 +7,8 @@ import {
 import { Input_Behavior_Module } from "../input-behavior-module/Input-Behavior-Module";
 import { closeSidebar } from "../iirose_func/CloseSideBar";
 import { Gesture } from "../listener/Gesture";
+import { isHostTextTarget, setPanelPresence } from "../listener/panelPresence";
+import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import { SyncManager } from "../sync/SyncManager";
 import { hostIsDark } from "../iirose_func/HostTheme";
 import { themeAttr } from "./components/floating-panel/floatingPanel";
@@ -14,12 +16,24 @@ import {
   hasOverlayLayers,
   setPanelBackHandler,
 } from "./components/desk/overlayLayers";
+import { PanelWindowChrome } from "./components/panel-window/PanelWindowChrome";
+import { PanelWindowPlacement } from "./components/panel-window/PanelWindowPlacement";
+import {
+  deskMenuShadow,
+  deskRule,
+  roundedLg,
+} from "./components/floating-panel/tokens";
 
 interface MainAppControlLayerState {
   mainAppDisplay: boolean;
   init: boolean;
   searchKeyword: string;
+  /** 面板按窗口显示（设置开启且视口放得下）；由 `PanelWindowPlacement` 回报。 */
+  windowed: boolean;
 }
+
+/** 窗口态的容器外观：状态类见 `app.css`，颜色只拼令牌。 */
+const WINDOW_CLASS = `imw-panel-window border border-solid ${roundedLg} ${deskRule} ${deskMenuShadow}`;
 
 export class MainAppControlLayer extends Component<
   object,
@@ -27,6 +41,8 @@ export class MainAppControlLayer extends Component<
 > {
   private mainHolder: HTMLElement | null = null;
   private unsubscribeSession?: () => void;
+  private placement?: PanelWindowPlacement;
+  private unsubscribePanelDisplay?: () => void;
   constructor(props: undefined) {
     super(props);
   }
@@ -35,10 +51,11 @@ export class MainAppControlLayer extends Component<
     mainAppDisplay: false,
     init: false,
     searchKeyword: "",
+    windowed: false,
   };
 
   render(): ComponentChild {
-    const { mainAppDisplay, init, searchKeyword } = this.state;
+    const { mainAppDisplay, init, searchKeyword, windowed } = this.state;
     const { changeSearchKeyword } = this.controller;
     const activeClass = mainAppDisplay
       ? "ShowIIROSE_MEDIA_CONTAINER"
@@ -46,8 +63,17 @@ export class MainAppControlLayer extends Component<
     return (
       <div
         id="IIROSE_MEDIA_CONTAINER"
-        class={`IIROSE_MEDIA_CONTAINER ${activeClass}`}
+        class={`IIROSE_MEDIA_CONTAINER ${activeClass} ${windowed ? WINDOW_CLASS : ""}`}
+        // 窗口态的事件隔离：范围与全屏时 body 上的拦截一致，窗口外的宿站不受影响
+        onMouseDown={windowed ? Gesture.IMCActiveEventHandler : undefined}
+        onTouchStart={windowed ? Gesture.IMCActiveEventHandler : undefined}
       >
+        {init && windowed && this.placement ? (
+          <PanelWindowChrome
+            placement={this.placement}
+            onClose={this.closeFromHostBack}
+          />
+        ) : null}
         {init ? (
           <MainApp
             ShowHideMainApp={this.ShowHideMainApp}
@@ -66,6 +92,7 @@ export class MainAppControlLayer extends Component<
 
     this.mainHolder = document.getElementById("mainHolder");
     this.applyTheme();
+    this.startPlacement();
 
     // 2. 初始化其他模块
     const { changeSearchKeyword } = this.controller;
@@ -105,6 +132,11 @@ export class MainAppControlLayer extends Component<
 
     // 3. 面板开着时被卸载（重复注入接管）：归还宿站聊天区，否则会一直隐藏
     this.mainHolder?.classList.remove("hidemainHolder");
+    this.unsubscribePanelDisplay?.();
+    this.unsubscribePanelDisplay = undefined;
+    this.placement?.dispose();
+    this.placement = undefined;
+    setPanelPresence({ open: false, windowed: false });
 
     // 4. 引用清理
     Gesture.ShowHideMainApp = undefined;
@@ -119,8 +151,51 @@ export class MainAppControlLayer extends Component<
       ?.setAttribute("data-imw-theme", themeAttr(hostIsDark()));
   }
 
+  /** 开始摆放窗口，并跟随设置开关（无需刷新）。 */
+  private startPlacement() {
+    const container = document.getElementById("IIROSE_MEDIA_CONTAINER");
+    if (!container) return;
+    this.placement = new PanelWindowPlacement(container, (windowed) => {
+      // 先写 presence：设置行紧接着要读它决定状态文字
+      setPanelPresence({ windowed });
+      this.setState({ windowed });
+    });
+    this.unsubscribePanelDisplay = PluginSettings.onPanelDisplayChange(
+      (display) => this.placement?.setEnabled(display === "window"),
+    );
+    this.placement.start(
+      PluginSettings.getPluginSetting().panelDisplay === "window",
+    );
+  }
+
+  /** 全屏打开时藏聊天区并拦截页面事件；窗口态和关闭时都交还宿站。 */
+  private applyHostCover(isShowing: boolean, windowed: boolean) {
+    if (!this.mainHolder) return;
+    if (isShowing && !windowed) {
+      this.mainHolder.classList.add("hidemainHolder");
+      document.body.addEventListener(
+        "mousedown",
+        Gesture.IMCActiveEventHandler,
+      );
+      document.body.addEventListener(
+        "touchstart",
+        Gesture.IMCActiveEventHandler,
+      );
+    } else {
+      this.mainHolder.classList.remove("hidemainHolder");
+      document.body.removeEventListener(
+        "mousedown",
+        Gesture.IMCActiveEventHandler,
+      );
+      document.body.removeEventListener(
+        "touchstart",
+        Gesture.IMCActiveEventHandler,
+      );
+    }
+  }
+
   // 将副作用逻辑提取成一个独立方法
-  private applyDisplaySideEffects(isShowing: boolean) {
+  private applyDisplaySideEffects(isShowing: boolean, windowed: boolean) {
     // 面板开着才需要 250ms 的媒体刷新（底部条要显示可用性）；关掉后退回 1s。
     mediaSession()?.setPanelOpen?.(isShowing);
     const el = document.getElementById("IIROSE_MEDIA_CONTAINER");
@@ -138,36 +213,17 @@ export class MainAppControlLayer extends Component<
     if (isShowing) SyncManager.onUiOpened();
     else SyncManager.onUiClosed();
 
-    if (this.mainHolder) {
-      if (isShowing) {
-        this.mainHolder.classList.add("hidemainHolder");
-        document.body.addEventListener(
-          "mousedown",
-          Gesture.IMCActiveEventHandler,
-        );
-        document.body.addEventListener(
-          "touchstart",
-          Gesture.IMCActiveEventHandler,
-        );
-      } else {
-        this.mainHolder.classList.remove("hidemainHolder");
-        document.body.removeEventListener(
-          "mousedown",
-          Gesture.IMCActiveEventHandler,
-        );
-        document.body.removeEventListener(
-          "touchstart",
-          Gesture.IMCActiveEventHandler,
-        );
-      }
-      closeSidebar();
-    }
+    this.applyHostCover(isShowing, windowed);
+    if (this.mainHolder) closeSidebar();
   }
 
   shouldComponentUpdate(
     _nextProps: object,
     nextState: MainAppControlLayerState,
   ) {
+    // `@` 搜索要问面板开没开；首次打开可能与初始化合批，放在所有分支之前
+    setPanelPresence({ open: nextState.mainAppDisplay });
+
     // 1. 初始化检查（与打开合批时也要先按当前主题着色）
     if (!this.state.init && nextState.init) {
       if (nextState.mainAppDisplay) this.applyTheme();
@@ -178,9 +234,20 @@ export class MainAppControlLayer extends Component<
     if (this.state.mainAppDisplay !== nextState.mainAppDisplay) {
       // 只在关→开时读宿站主题：面板开着期间（如搜索词变化）不跟随
       if (nextState.mainAppDisplay) this.applyTheme();
-      this.applyDisplaySideEffects(nextState.mainAppDisplay);
+      // 拖动中关窗口（Alt+S、Esc）：手势到此结束，移动过的照常保存
+      else this.placement?.endGesture();
+      this.applyDisplaySideEffects(
+        nextState.mainAppDisplay,
+        nextState.windowed,
+      );
       // 显示状态必须传给 MainApp（`active` 决定打开时是否把焦点放进搜索栏），
       // 不能像旧版那样在 searchKeyword 未变时拦截 render。
+      return true;
+    }
+
+    // 窗口态变化（开关、视口跨过阈值）：只重算藏聊天区和拦截
+    if (this.state.windowed !== nextState.windowed) {
+      this.applyHostCover(nextState.mainAppDisplay, nextState.windowed);
       return true;
     }
 
@@ -189,7 +256,10 @@ export class MainAppControlLayer extends Component<
       // 额外保险：确保在 render 前，容器样式是正确的。
       // 空词只来自面板内的清除，不再走这条（它会触发云同步拉取、收起侧栏）
       if (nextState.searchKeyword)
-        this.applyDisplaySideEffects(nextState.mainAppDisplay);
+        this.applyDisplaySideEffects(
+          nextState.mainAppDisplay,
+          nextState.windowed,
+        );
       return true;
     }
 
@@ -244,6 +314,8 @@ export class MainAppControlLayer extends Component<
       // 组合输入中的 Esc 不算关闭手势。
       if (event.defaultPrevented || event.isComposing) return;
       if (hasOverlayLayers()) return;
+      // 窗口开着、焦点在聊天框：这个 Esc 归宿站
+      if (isHostTextTarget(event.target)) return;
       this.setState({ mainAppDisplay: false });
     }
   };
