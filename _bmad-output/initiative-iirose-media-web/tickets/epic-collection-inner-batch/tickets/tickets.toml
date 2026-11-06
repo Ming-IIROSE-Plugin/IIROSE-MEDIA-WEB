@@ -1,0 +1,37 @@
+# 迁移自 v6:spec-collection-inner-batch
+
+[[entry]]
+id = 1
+type = "story"
+title = "批量点播即停与边取边发"
+description = "停止后中止该批次全部网络请求并修停止标记 1.4 秒后被清除导致循环复活的隐患；批量发送改为每 100 首边取详情边发（SPEC CAP-3、CAP-4）。"
+verify = "Problem: 批量点播（整张正序/乱序、选集多选）点「停止」后房间不再发歌，但插件仍在发网易云请求：发送前要串行取完全部曲目详情且期间不查停止，飞行中请求无法中止；停止标记约 1.4 秒后随浮窗卡片移除被清掉，准备阶段停止的批次会在详情取回后复活发歌（SPEC CAP-3、CAP-4）。"
+covers = ["R3", "R4"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "歌单/专辑内页分段加载"
+description = "进内页只取首段 100 首详情即显示，总页数按 trackIds 计算，翻到已取范围末页预取下一段、跳页按需取段（SPEC CAP-2）。"
+verify = "Problem: 网易云歌单/专辑「查看」进内页时，`processSongPlatformData` 把全部 `trackIds` 交给 `getNeteaseSongDetail` 串行取完才返回，万首歌单约 100 次请求后才出首屏（SPEC CAP-2）。"
+covers = ["R2"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "内页勾选多选点播"
+description = "歌单/专辑内页每行与网格卡前加勾选框，点选序号跨页保留，已选时选择条取代底部条/迷你条，按点选顺序点播（SPEC CAP-1）。"
+verify = "Problem: 网易云歌单/专辑「查看」内页只能逐首点播或「全部播放」，挑 2、3、10 首得逐个点（SPEC CAP-1）。"
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"

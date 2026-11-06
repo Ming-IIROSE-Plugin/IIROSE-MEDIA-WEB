@@ -1,0 +1,97 @@
+# 迁移自 v6:spec-media-desk-redesign
+
+[[entry]]
+id = 1
+type = "story"
+title = "新令牌、面板外壳、导航、搜索栏与范围行，同轮改写 AGENTS.md"
+description = "在 floating-panel 模块落地纸/墨/蔷薇红令牌并退役 themed* 与 accent.ts，主面板改为竖栏/底部标签栏 + 页头 + 搜索栏 + 范围行， 同一提交改写 AGENTS.md（SPEC CAP-1、CAP-2、CAP-3、CAP-4、CAP-13，CAP-14 的 Alt+S、/、Esc 部分）。"
+verify = "Problem: 主面板仍是旧四行顶栏（导航、工具栏、平台、分类）叠前轮天蓝强调色：平台占整行、搜索只是宿站弹窗、导航只有四项、没有模式概念。结果是修 story 2–8 时没有统一的令牌与外壳可依附，且 AGENTS.md 仍在要求 `themed*` 与 Row 1–4。"
+covers = ["R1", "R2", "R3", "R4", "R13", "R14"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "结果区：曲目表、音乐网格、视频卡、专辑/歌单内页与状态"
+description = "重写结果呈现（曲目表、music-tile、video-tile 含 MV/直播、collection-row/header 含「全部播放」顺序菜单）与加载/空/失败状态 （SPEC CAP-5，CAP-14 Tab 顺序）。"
+verify = "Problem: 外壳已是纸/墨/蔷薇红（story 1），结果区却仍是前轮的天蓝卡片：`media-card-container/` 的 `MediaCard`/`MediaListRow`/`MediaCardButton`/`MediaCardImg` 全部依赖 `themed*` 与 `--imw-accent`，卡内堆「播放/选歌」双按钮、没有曲目表、没有正在播放态、加载/空/失败三种状态混用同一个占位（失败与「没有结果」不可区分）、专辑/歌单没有内页头与「全部播放」，`switchToOutFromMultiPage` 无调用者（下钻后出不来），封面也没有 `http→https` 升级与 `onerror` 回退。"
+covers = ["R5", "R14"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "底部条、迷你条与展开的底部条"
+description = "面板内房间正在播放：桌面 room-deck、手机 mini-deck 与 room-deck-expanded，含跳转、直播态、空闲态与模式开关（SPEC CAP-6）。"
+verify = "Problem: 面板底部只有 story 1 留的两个 0 高度挂载点（`#imw-desk-room-deck` / `#imw-desk-mini-deck`），面板打开时看不到房间正在放什么、谁点的、进度，也无法在面板内切换单曲循环 / 收藏随机——这两件事目前只在面板关闭后的侧栏行与进度浮窗里存在。SPEC CAP-6 是唯一没有承载物的能力。"
+covers = ["R6"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"
+
+[[entry]]
+id = 4
+type = "story"
+title = "手机操作条与逐层关闭"
+description = "手机 action-sheet 与 Esc/宿站返回键逐层关闭、浮层焦点循环与归还（SPEC CAP-7、CAP-14）。"
+verify = "Problem: 手机上点曲目行 / 视频缩略图 / 音乐网格卡的主体仍然直接点播（story 2 为了让点击不落空，先回落成点播），既没有「收藏」「选集」入口，也没有「先看清楚再决定」的一步。同时整个面板没有层级概念：内页 `Esc` 靠 DOM 探针 `[data-imw-order-menu]` 让位、顺序菜单自带一份 `document` 捕获监听、展开的底部条完全没有 `Esc`（按下直接关掉整个面板），宿站返回键（`Utils.backward`）从未被接管——按一下就把人扔出房间。"
+covers = ["R7", "R14"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "4"
+
+[[entry]]
+id = 5
+type = "story"
+title = "选集面板替代宿站 buildSelect2"
+description = "插件自有选集面板（点选顺序徽章、全选、正序/乱序、点播所选），接入 B 站多 P、多源剧集与网易云歌单/专辑选集（SPEC CAP-8）。"
+verify = "Problem: 选集今天全靠宿站 `buildSelect2`：B 站多 P 先开三级菜单（`buildBiliSelect`：正序/乱序/选集）→ 多选弹窗 → `setTimeout(300)` 后再开二次顺序确认（`buildOrderConfirmSelect`），两次流转都踩宿站 `fadeOut` 冲突；「点选顺序」靠 `IIROSEUtils.buildSelect2` 在 `setTimeout(0)` 里接管宿站选项 `onclick` 与确定按钮的补丁维持（`selectedQueue` + 序号徽章 + sticky 确定钮）；多源剧集只有「正序点播全部」，没有单选分集。这与 CAP-8（插件自有面板、点选顺序=播放顺序、全选按列表顺序、取消不点播）冲突，也让 stale 的宿站选择器长期留在点播链路里。"
+covers = ["R8"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "5"
+
+[[entry]]
+id = 6
+type = "story"
+title = "收藏与电台模式、最近点播"
+description = "收藏与电台升为一级模式（来源筛选、类型范围、本地过滤），新增 localStorage 最近点播并在音乐首屏展示（SPEC CAP-9、CAP-10）。"
+verify = "Problem: 收藏模式还是「单来源 + 五个类型范围」，没有来源筛选、输入必须回车才过滤；电台模式只能按地区整表重取，输入不生效；音乐模式未搜索时只有一句引导，用户刚点过的歌无法再点。SPEC 的 CAP-9 / CAP-10 都未落地。"
+covers = ["R9", "R10"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "6"
+
+[[entry]]
+id = 7
+type = "story"
+title = "设置与关于换新外观"
+description = "settings-group / settings-row / settings-switch 与 about-card，保留全部现有设置项与关于动作（SPEC CAP-11）。"
+verify = "Problem: 设置页与关于页还是前轮外观：`SettingCard` 用 `themedCard`/`accentText` 与宿站弹窗式的 200px 卡片，图标是宿站 `mdi-*` 字形，开关是 `mdi-toggle-switch` 图形，关于页「项目源代码地址」的值写成「GitHub 🔗」带 emoji；设置的范围标签是摊平的六个子分组。SPEC CAP-11 要求的「平台分组作范围标签 + 每个子分组一张设置组卡 + `role=\"switch\"` 开关 + 外链图标」都未落地。"
+covers = ["R11"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "7"
+
+[[entry]]
+id = 8
+type = "story"
+title = "两个浮窗换新配色与总验收"
+description = "播放进度浮窗与收藏随机选择面板改用新令牌与焦点环，结构与行为不变；全量真站验收（SPEC CAP-12、Success signal）。"
+verify = "Problem: 播放进度浮窗（`#imw-media-progress-root`）与收藏随机选择面板（`#imw-shuffle-picker-root`）仍用前轮天蓝配色与 `panelTheme/borderTone(dark)` 的散装类（`bg-[#242a34]`、`text-sky-500`、`bg-sky-500`），与主面板的纸/墨/蔷薇红完全两套，DESIGN.md `components.floating-window` 要求二者与主面板视觉同源（SPEC CAP-12）；改版最后一个 story 还要在真站跑 J1–J5 总验收。"
+covers = ["R12"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "8"

@@ -1,0 +1,61 @@
+# 迁移自 v6:spec-favorites-system
+
+[[entry]]
+id = 1
+type = "story"
+title = "IndexedDB 基础存储层与数据访问服务"
+description = "实现 FavoritesStorageService 单例，封装 IndexedDB（IIROSE_MEDIA_DB, v1）生命周期； 设计复合主键 platform:type:rawId 与多维索引，实现添加、删除、判断存在、批量获取及条件检索，自动升级封面为 HTTPS 并处理异常降级。"
+verify = "实现 FavoritesStorageService 单例，封装 IndexedDB（IIROSE_MEDIA_DB, v1）生命周期； 设计复合主键 platform:type:rawId 与多维索引，实现添加、删除、判断存在、批量获取及条件检索，自动升级封面为 HTTPS 并处理异常降级。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "卡片与列表行的收藏触发按钮与全局状态同步"
+description = "在 src/app.css 中注入自包含图标类 .starOutlineIcon 与 .starSolidIcon； 在 MediaCard（右上角 36×36px 磨砂圆钮）与 MediaListRow（右侧内联按钮）集成收藏星标，支持乐观 UI 切换与宿站微提示。"
+verify = "在 src/app.css 中注入自包含图标类 .starOutlineIcon 与 .starSolidIcon； 在 MediaCard（右上角 36×36px 磨砂圆钮）与 MediaListRow（右侧内联按钮）集成收藏星标，支持乐观 UI 切换与宿站微提示。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Row 2 工具栏「⭐收藏模式」点亮/点暗双态开关与精确排版"
+description = "重构 MediaSearchBar，使 Row 2 严格按「卡片/列表 -> ⭐收藏模式 -> 搜索框 -> xx/xx -> 上一页 -> 下一页」排序； 实现「⭐收藏模式」按钮的点亮（金色实心星 + 深色底）与点暗（白色空心星 + 浅色底）双态切换，状态提升至 MainAppContainer。"
+verify = "重构 MediaSearchBar，使 Row 2 严格按「卡片/列表 -> ⭐收藏模式 -> 搜索框 -> xx/xx -> 上一页 -> 下一页」排序； 实现「⭐收藏模式」按钮的点亮（金色实心星 + 深色底）与点暗（白色空心星 + 浅色底）双态切换，状态提升至 MainAppContainer。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"
+
+[[entry]]
+id = 4
+type = "story"
+title = "收藏模式下平台与子分类联动过滤及收藏内本地实时搜索"
+description = "当收藏模式激活（点亮）时，Row 3 平台栏与 Row 4 子分类标签自动联动为收藏形态过滤器（网易云：全部/单曲/专辑/歌单；JOOX：单曲；B站：视频）； Row 2 搜索框在收藏模式下自动转为本地模糊过滤（按 title 与 author），0 延迟即时刷新当前列表与页码。"
+verify = "当收藏模式激活（点亮）时，Row 3 平台栏与 Row 4 子分类标签自动联动为收藏形态过滤器（网易云：全部/单曲/专辑/歌单；JOOX：单曲；B站：视频）； Row 2 搜索框在收藏模式下自动转为本地模糊过滤（按 title 与 author），0 延迟即时刷新当前列表与页码。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "4"
+
+[[entry]]
+id = 5
+type = "story"
+title = "收藏条目的同构直接点播与多集/歌单有序选集流转"
+description = "确保存储的 platformData 在恢复渲染时，各平台的播放上下文与点播动作完整绑定； 单曲点击直接点播，网易云歌单/专辑及 B 站视频点击「选歌/选集」无缝呼出带序号徽章的顺序多选弹窗，并支持二次流转正序/乱序点播；收藏模式内取消收藏采用温和保留态。"
+verify = "确保存储的 platformData 在恢复渲染时，各平台的播放上下文与点播动作完整绑定； 单曲点击直接点播，网易云歌单/专辑及 B 站视频点击「选歌/选集」无缝呼出带序号徽章的顺序多选弹窗，并支持二次流转正序/乱序点播；收藏模式内取消收藏采用温和保留态。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "5"

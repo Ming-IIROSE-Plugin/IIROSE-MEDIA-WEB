@@ -1,0 +1,74 @@
+# 迁移自 v6:spec-large-file-decomposition
+
+[[entry]]
+id = 1
+type = "story"
+title = "删除零引用死代码"
+description = "删除 src/tools/ImageTools.ts、src/Api/NeteaseAPI/NeteaseSearch/AlbumInterface.ts、 tokens.deskGutterWide 与 searchIntent.normalizeKeyword，落实 CAP-2。"
+verify = "<frozen-after-approval>"
+covers = ["R2"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "拆分 MainAppContainer"
+description = "把 1285 行的 MainAppContainer.tsx 按模式状态机、控制器接线、视图组装拆开，对外导出保持不变。"
+verify = "把 1285 行的容器类按职责拆开，每个文件 ≤400 行，对外导出与行为不变。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "拆分 NetEasePlatform"
+description = "把 1232 行的 NetEasePlatform.ts 按端点族拆成模块，平台类保留编排职责，对外静态方法不变。"
+verify = "把 1232 行的平台类按端点族拆开，每个文件 ≤400 行；公开静态方法签名与调用点不变，请求仍走 `SendFetch.neteaseRequest`。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"
+
+[[entry]]
+id = 4
+type = "story"
+title = "拆分 ShufflePicker"
+description = "把 1068 行的 ShufflePicker.tsx 拆成面板外壳、列表与虚拟分页、拖拽与定位、数据加载四块， 对外入口 openShufflePicker 与面板行为不变。"
+verify = "把 1068 行的随机选择面板拆成外壳、列表、工具栏、拖拽定位与数据接线，每个文件 ≤400 行，`openShufflePicker` / `releaseShufflePicker` 与 `ShufflePicker` 的 props 不变。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "4"
+
+[[entry]]
+id = 5
+type = "story"
+title = "拆分 BiliBiliVideoAPI"
+description = "把 1050 行的 BiliBiliVideoAPI/index.ts 按端点拆成模块并保留原有静态方法导出，落实 CAP-1。"
+verify = "把 1050 行的 B 站视频接口按用途拆开，每个文件 ≤400 行，对外仍只有 `BiliBiliVideoApi` 一个出口，调用点零改动。"
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "5"
+
+[[entry]]
+id = 6
+type = "story"
+title = "拆分 openShufflePicker（补做）"
+description = "`openShufflePicker.tsx` 411 行，不在原四个目标文件内（CAP-1 只约束那四个），属于自愿扩展：把宿站接线（单例、返回键包装、焦点判定）抽出去。注意这不是全局阈值——同一次交付里仍有 5 个文件 >400 行，按全局口径 CAP-1 不通过。"
+verify = "`openShufflePicker.tsx` 411 行，不在原四个目标文件内（CAP-1 只约束那四个），属于自愿扩展：把宿站接线（单例、返回键包装、焦点判定）抽出去。注意这不是全局阈值——同一次交付里仍有 5 个文件 >400 行，按全局口径 CAP-1 不通过。"
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "6"
+

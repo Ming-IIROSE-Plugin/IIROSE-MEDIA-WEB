@@ -1,0 +1,61 @@
+# 迁移自 v6:spec-bundle-and-startup-perf
+
+[[entry]]
+id = 1
+type = "story"
+title = "删除生产环境的 react-scan 外部脚本注入"
+description = "移除 src/main.ts 中向 head 注入 unpkg react-scan 的代码，落实 CAP-2 的“加载后不引入外部脚本”。 B 站扫码等业务行为不变。"
+verify = "<frozen-after-approval>"
+covers = ["R2"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "用 uqr 替换 qrcode 依赖链"
+description = "把仅供 B 站扫码登录使用的 qrcode 换成 uqr，去掉 qrcode/dijkstrajs/crypt/charenc/is-buffer 五包， 落实 CAP-1 的体积目标且保持二维码可扫。"
+verify = "<frozen-after-approval>"
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "收敛 Tailwind 扫描面到 src"
+description = "用 @source 限定 Tailwind 只能扫描 src 下的源码，消除 _bmad-output/specs 等 Markdown 误生成的 约 8.5 kB 无用 CSS。不改 important 配置（保留为 SPEC 的 open question）。"
+verify = "<frozen-after-approval>"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"
+
+[[entry]]
+id = 4
+type = "story"
+title = "依赖与静态检查卫生"
+description = "去掉 md5 依赖链、移除零引用依赖、修正 vite 入口文件名、开启并清零 noUnusedLocals/noUnusedParameters， 落实 CAP-3。"
+verify = "<frozen-after-approval>"
+covers = ["R3"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "4"
+
+[[entry]]
+id = 5
+type = "story"
+title = "启动时序与轮询启停"
+description = "让 CORS 环境就绪可等待、ipinfo 探测按天缓存，并让 HostMediaBridge 在无人订阅时完全停表， 落实 CAP-2 的静置开销要求。"
+verify = "<frozen-after-approval>"
+covers = ["R2"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "5"

@@ -1,0 +1,133 @@
+# 迁移自 v6:spec-playback-loop-shuffle
+
+[[entry]]
+id = 1
+type = "story"
+title = "侧栏开关行与点亮态"
+description = "在宿站侧栏 IIROSE-MEDIA-WEB 分组内新增一行点亮式开关（单曲循环、收藏随机）， 含互斥单选、禁用态与原因、幂等重建与卸载清理（SPEC CAP-1，sidebar-controls.md）。"
+verify = "Problem: 宿站侧栏的 IIROSE-MEDIA-WEB 分组目前只有「播放进度」一个入口，没有任何可常驻的播放模式开关；后续的单曲循环与收藏随机需要一个能承载多个按钮、状态一眼可辨的容器。"
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "点播归属守卫与生命周期"
+description = "以点播者字段判定本人点播，他人或未知时零动作待命；补齐换房、断线、媒体消失、 刷新、重复注入的停止与单实例语义（SPEC CAP-5、CAP-6，ownership-and-lifecycle.md）。"
+verify = "Problem: 开关行现在只反映「有没有媒体、时长是否已知」，不知道当前曲目是谁点的，也不感知换房；一旦后续 story 接上自动点播，就会在别人点的歌上插手，或在换房后把旧状态带进新房间。重复注入还会各起一套控制器。"
+covers = ["R5", "R6"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "单曲循环：静默快退与预发重播"
+description = "有媒体权限时剩余阈值内快退回 0；无权限时剩余 2 秒预发缓存的播放报文以抢在 宿站自动续播之前，含失败判定、迟发兜底与不抢占约束（SPEC CAP-2、CAP-3，loop-mechanics.md）。"
+verify = "Problem: 开关点亮后目前没有任何行为。宿站曲目播完会自动续播下一首，要重复听同一首只能手动点回去；有媒体管理权限的人可以静默定位，没有权限的人只能在播完后重新点播，而重新点播需要插件自己发过的播放报文。"
+covers = ["R2", "R3"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"
+
+[[entry]]
+id = 4
+type = "story"
+title = "收藏随机与专辑歌单设置项"
+description = "按面板 focus 平台从收藏抽曲，预取、去重、失败换曲与播报档位，并新增 「专辑/歌单参与随机」设置项（SPEC CAP-4、CAP-7，shuffle-mechanics.md）。"
+verify = "Problem: 点亮「收藏随机」目前没有行为。想连续听自己的收藏，只能一条条手动点；而收藏里既有单曲也有专辑与歌单，后者整张播会打断随机节奏。"
+covers = ["R4"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "4"
+
+[[entry]]
+id = 5
+type = "story"
+title = "随机范围与权重数据层"
+description = "随机只在面板确认的选择范围内抽取，支持按条目/按歌曲两种权重与按单首去重，选择按账号与平台存本机， 并退役「专辑/歌单参与随机」设置项（SPEC CAP-4、CAP-7、CAP-9、CAP-10，shuffle-mechanics.md）。"
+verify = "Problem: 收藏随机现在从全部收藏里等概率抽「条目」：一首单曲和一个 100 首的歌单各占一份，用户既不能限定从哪些歌里随机，也不能让歌单里的每首歌与单曲同权。"
+covers = ["R4", "R9", "R10"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "5"
+
+[[entry]]
+id = 6
+type = "story"
+title = "随机选择面板"
+description = "插件自有 Preact 面板：收藏列表、三态勾选与展开加载、搜索、权重切换、吸底摘要与确认，桌面卡片/移动抽屉（story 11 起移动端改为上半部浮动卡片） 与深浅主题（SPEC CAP-8，shuffle-picker-panel.md）。"
+verify = "Problem: story 5 已能按本机保存的选择与权重随机，但用户没有任何界面去选择范围、展开歌单勾单曲或切换权重。"
+covers = ["R8"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "6"
+
+[[entry]]
+id = 7
+type = "story"
+title = "侧栏随机按钮接入选择面板"
+description = "熄灭态点随机弹面板、确认才点亮、取消不变，面板单例与重复注入接管、关闭后焦点归还侧栏按钮， 并让移动端系统返回关闭面板（SPEC CAP-1、CAP-8，sidebar-controls.md、shuffle-picker-panel.md）。"
+verify = "Problem: 选择面板（story 6）与按选择抽取（story 5）都已就绪，但侧栏「收藏随机」按钮仍是一点即亮，用户在站内没有入口选择范围；手机上也无法用系统返回关闭面板。"
+covers = ["R1", "R8"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "7"
+
+[[entry]]
+id = 8
+type = "story"
+title = "面板内切换随机平台"
+description = "选择面板顶部加入网易云/B站标签，首次按插件启动默认页面、之后按上次确认的平台打开；确认时保存改动过的平台选择 并记下随机平台，控制器改读这份记录而不跟随主插件焦点（SPEC CAP-11，shuffle-mechanics.md、shuffle-picker-panel.md）。"
+verify = "Problem: 收藏随机的平台现在跟随主插件页面焦点：用户想随机 B站收藏就得先把主插件切到视频页；主插件停在无线电等页面时随机按钮直接不可用。"
+covers = ["R11"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "8"
+
+[[entry]]
+id = 9
+type = "story"
+title = "平台标签随数量自适应"
+description = "面板只显示有收藏的平台（另加已存随机平台），只剩一个时隐藏标签行；1～3 个等宽分段、4 个及以上可横向滑动的胶囊标签， 圆角按首尾自动处理（SPEC CAP-12，shuffle-picker-panel.md「平台标签」）。"
+verify = "Problem: 选择面板的平台标签固定列出网易云、B站两个，没有收藏的平台也占位；标签圆角写死为「左一个、右一个」，以后有收藏功能的平台变多时会挤、要改代码。"
+covers = ["R12"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "9"
+
+[[entry]]
+id = 10
+type = "story"
+title = "选择面板可拖动并记住位置"
+description = "按住面板头部拖动，位置存本机并在刷新后恢复，始终约束在视口内；复用播放进度浮窗的拖动约束与缩放换算 （SPEC CAP-13，shuffle-picker-panel.md「拖动与位置记忆」）。"
+verify = "Problem: 随机选择面板固定在桌面居中、移动贴底，会挡住用户想看的聊天内容，且每次打开都回到原处。"
+covers = ["R13"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "10"
+
+[[entry]]
+id = 11
+type = "story"
+title = "选择面板非模态化"
+description = "去掉遮罩与点外部取消，面板打开期间宿站可正常操作（回消息、点按钮、滚动）；不锁 Tab、Esc 仅在焦点于面板内时关闭； 手机首次打开不挡底部输入栏（SPEC CAP-14，shuffle-picker-panel.md）。"
+verify = "Problem: 选择面板是模态的：全屏遮罩挡住聊天室，点面板外就关闭（用户感觉像「返回」），打开期间不能回复消息或操作宿站。"
+covers = ["R14"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "11"

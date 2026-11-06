@@ -1,0 +1,78 @@
+# 迁移自 v6:每个带 stories.yaml 的 spec 一个 epic,按复盘日期排序。
+
+[[epic]]
+id = 1
+slug = "epic-at-link-playback"
+title = "输入框 @ 链接自动解析播放与私聊防泄露增强"
+description = "1. 在宿站私聊面板中输入 `@https://b23.tv/wHdK6aI`、`@https://163cn.tv/bit1nU3J` 及 `@晴天`，私聊记录不产生任何新消息，房间内媒体正常播放或插件面板展开并载入搜索； 2. 在房间输入框中测试网易云/B站长短链及 APP 分享文案，单曲与单 P 视频直接点播，歌单/专辑及多 P 视频弹出正序/乱序/选集多选对话框，完成选集后二次确认顺序并成功播放所选子集； 3. 输入有效直链媒体成功播放；探测超过 8 秒弹出“直链媒体探测超时”提示；输入未知 URL 放行宿站原生逻辑； 4. 设置中关闭“代理蔷薇@输入”后，输入框恢复宿站原生行为； 5. `npm run build` 成功完成单文件构建且无类型错误。"
+covers = []
+
+[[epic]]
+id = 2
+slug = "epic-favorites-system"
+title = "媒体收藏系统规格说明书"
+description = "- 用户在任意搜索结果中点击网易云歌曲/专辑/歌单、JOOX 歌曲、B 站视频的 ⭐ 图标，即可将其加入收藏；在 Row 2 工具栏点击 ⭐ 按钮点亮收藏模式后，能在音乐/视频各自对应的平台及类型标签下完整浏览、快速搜索并直接点播或选集播放。"
+covers = []
+
+[[epic]]
+id = 3
+slug = "epic-favorites-cloud-sync"
+title = "收藏云同步规格说明书"
+description = "- 用户在手机上收藏一首歌，在电脑上打开插件（同一 iirose 账号 + 同一同步口令）即可看到该收藏并直接点播；手机端删除后，电脑端下次同步不再出现；整个过程中云端对象对服务端始终不可读。"
+covers = []
+
+[[epic]]
+id = 4
+slug = "epic-playback-loop-shuffle"
+title = "侧栏单曲循环与收藏随机播放"
+description = "在真实站点桌面与移动视口：开启单曲循环后一首歌播到剩余 5 秒时无缝回到开头继续播（无权限时在结束前续上同一首）并只有一个按钮点亮；点随机弹出面板，勾选两首单曲加某歌单里的三首后确认，连续自动播放的曲目全部落在这五首内、无公屏消息污染，刷新后再开面板仍是这五首；切到「按歌曲」后整单 100 首的歌单明显占多数。他人点播期间两者零动作并保持待命；换房、断线、刷新后按钮回到熄灭且不产生任何自动发送。"
+covers = []
+
+[[epic]]
+id = 5
+slug = "epic-collection-inner-batch"
+title = "歌单/专辑内页多选点播、分段加载与批量即停"
+description = "真站打开一个上万首歌单的内页：网络面板首屏前只见 1 次歌单详情 + 1 次歌曲详情，翻到第 10 页时才出现第二段请求；在内页跨两页勾选 3 首点「点播所选」，房间按点选顺序收到 3 首。对 200 首歌单整张点播，发出几首后点停止：此后网络面板不再出现该批次的网易云请求，房间不再收到新歌，2 秒后仍如此。"
+covers = []
+
+[[epic]]
+id = 6
+slug = "epic-media-desk-redesign"
+title = "插件主面板「点歌台 Media Desk」重新设计"
+description = "- 在真站（iirose.com 视频分享房）以 1280×720 与 400×800、宿站浅色与深色四种组合打开点歌台：J1–J5 五条旅程（EXPERIENCE Key Flows）都能走到高潮——底部条/迷你条切到所点媒体、房间出现点播卡片（以聊天区 `div.msgholderBox` DOM 判定）；选集面板按点选顺序播放；两个浮窗与主面板并排视觉同源；brownfield.md「必须存活」清单逐项可演示，`npm test` 与 `npm run build` 通过。"
+covers = []
+
+[[epic]]
+id = 7
+slug = "epic-bundle-and-startup-perf"
+title = "产物体积与启动开销收口"
+description = "在真实站点装上新 bundle：产物 ≤ 450 kB（gzip ≤ 134 kB），Network 里看不到 unpkg 请求，同一天第二次进入不再请求 `ipinfo.io`，没有订阅者时媒体轮询定时器为 0，B 站扫码登录可完整走通一次（最后一项目前需人工完成）。"
+covers = []
+
+[[epic]]
+id = 8
+slug = "epic-standardization"
+title = "存储、分页、平台接口与错误提示的标准化"
+description = "生产代码里找不到成片的 `localStorage` 直连、分页 Promise 包装与同款错误提示；新增一个来源或平台时，只需要写它独有的那部分，公共部分从现有入口取；1258 条现有用例全绿，真机点播、收藏、设置三条主路径行为不变。"
+covers = []
+
+[[epic]]
+id = 9
+slug = "epic-bilibili-split-and-idle-guard"
+title = "B 站平台拆分与空闲轮询"
+description = "`BilibiliPlatform.ts` 不再是单一大文件且各模块 ≤400 行；面板关闭且未点亮时媒体轮询降到 1 秒，点亮后循环与随机行为与改动前一致。"
+covers = []
+
+[[epic]]
+id = 10
+slug = "epic-large-file-decomposition"
+title = "巨型文件拆分与死代码清零"
+description = "四个千行文件都不再存在、每个新模块 ≤400 行，死代码清单清零；装上新 bundle 后真机点播、循环/随机、收藏、设置四条主路径行为与改动前一致，产物 ≤450 kB / ≤134 kB gzip。"
+covers = []
+
+[[epic]]
+id = 11
+slug = "epic-main-panel-visual-unify"
+title = "插件主面板与浮窗审美统一"
+description = "在真站 1280×720 与 400×800、宿站浅色与深色下，打开主面板、收藏随机与播放进度并排对比：表面色、文字色、描边、圆角、按钮与标签样式、强调色一致；主面板所有页面无品牌色整条底、无木纹透出；既有功能与 AGENTS.md 布局约定的尺寸实测不变。"
+covers = []

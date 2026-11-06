@@ -1,0 +1,48 @@
+---
+id: story-sidebar-media-progress
+type: story
+title: "侧栏品牌替换与媒体进度浮窗"
+parent: none
+covers: []
+after: []
+assignee: ""
+refined: true
+hitl: false
+risk: low
+---
+
+# 侧栏品牌替换与媒体进度浮窗
+
+## Description
+
+用户希望将宿站侧栏的「盒子」区域改为 IIROSE-MEDIA-WEB 的媒体入口，移除旧电台卡片，并在聊天时随时查看和调整当前房间媒体进度，减少手动计算时间差的操作；调整仅发送媒体控制，不发送聊天。权限不足或信息未就绪时即时禁用并解释，避免无效发送与等待。
+
+## Requirements
+
+Verify: 在真实站点桌面和移动视口中，用户看到更名后的侧栏且旧电台卡片消失，能打开并移动显示当前媒体的唯一浮窗；denied/unknown控制即时禁用且零发送，权限恢复清除旧提示，失权或换房取消旧操作。在允许控制进度的测试场景中，将1:20拖到2:00产生 `!15[">","40s"]`，聊天DOM与草稿不变，并观察宿站实际定位回读及UI立即恢复。回退、步进、换曲及失效场景满足 companion 验收规则。
+
+Criteria (摘自 v6 SPEC 的 Capabilities):
+
+1. **CAP-1** 侧栏以插件品牌呈现媒体入口并移除旧电台卡片。 — 成功标准:「盒子」精确改名为「IIROSE-MEDIA-WEB」；旧电台整张卡片不可见且不占位；下方当前媒体卡片和原分组展开、折叠正常。
+2. **CAP-2** 用户从当前媒体旁打开独立的进度浮窗。 — 成功标准:入口可发现；重复点击只出现一个浮窗；可关闭、再次打开；关闭侧栏或插件主面板后仍可使用浮窗。
+3. **CAP-3** 用户查看当前房间媒体名称、封面和播放时间。 — 成功标准:名称、封面、已播放时间、总时长和进度随宿站更新，换曲后切换内容；封面失败显示占位；无媒体或未知时长时显示真实状态并禁用定位。
+4. **CAP-4** 用户将美观、紧凑的浮窗移动到便于查看的位置。 — 成功标准:鼠标和触控均可通过标题区移动浮窗；操作进度条不会移动窗口；缩放、旋转后仍可见且可关闭；呈现遵循 progress-interaction.md。
+5. **CAP-5** 用户通过进度控件静默调整房间媒体的播放位置。 — 成功标准:点击或拖动进度条、使用正负1秒与正负1分钟按钮，最多提交一条对应非零差值的独立媒体控制报文；拖动中仅预览，所有路径零聊天且保留草稿和选区。denied/unknown立即禁用、零发送零等待；有权时以真实宿站回读确认定位，即时回调立即恢复UI，无回执5秒提示未确认。
+6. **CAP-6** 播放进度浮窗与收藏随机面板看起来出自同一处，以收藏随机的风格为准。 — 成功标准:两窗共用同一套样式模块：外框、头部（SVG 图标、15px 标题、SVG 关闭钮、头部分隔线）、按钮（描边次要按钮、天蓝主按钮、悬停淡天蓝）、分区内边距、深浅主题配色与焦点环一致；播放进度去掉「⠿」与文字「×」，移动端有顶部拖拽条；交互、按钮语义、aria-label、键盘与拖动行为不变。
+
+## References
+
+- plan — _bmad-output/backlog/feature-sidebar-media-progress-plan.md
+- spec (v6, archived) — _bmad-output/initiative-iirose-media-web/archive-v6/spec-sidebar-media-progress/SPEC.md
+- retrospective — _bmad-output/backlog/story-sidebar-media-progress-retrospective.md
+- companion — _bmad-output/backlog/sidebar-media-progress-.memlog.md
+- companion — _bmad-output/backlog/sidebar-media-progress-progress-interaction.md
+- companion — _bmad-output/backlog/sidebar-media-progress-review-findings.json
+- companion — _bmad-output/backlog/sidebar-media-progress-sidebar-integration.md
+
+## Notes
+
+- Decision: 2026-11-06 由 v6 迁入,状态 done,不重新打开。
+- Assumption: 「控件复现在界面」解释为打开后常驻聊天界面的可关闭浮窗；入口放在当前媒体卡片附近，暂定名称「播放进度」。
+- Assumption: 保留原「盒子」分组图标和展开语义；不将分组标题改成插件主面板开关。
+- Assumption: 使用紧凑圆角卡片和四个步进按钮；第一版不跨刷新记忆浮窗位置与开关。 <!-- Open Questions 已全部结清（2026-11-02）： - 旧电台节点去留 → 维护者裁定「保持隐藏，不删除」。电台本来就不播，节点删不删用户无感；删除的收益为零，风险（正在播时被删）却没条件验证。插件维持「有节点才隐藏，藏之前若在播先替用户暂停并恢复音量」。 - 16 绝对定位参数 → `!16["<整数秒>s"]`，0 到时长内、超过拒绝。实测 `!16["9999s"]` 会被宿站收敛到时长末尾（301.5s），不会跳飞。 - 限频 → 1 秒内连发 10 条 `!16`（10s～100s）全部生效，最终停在 100s，未见限频或丢包。 - unknown 权限 → 把 `Info.room.identity` 置 null、`window.rank="4"` 后，进度浮窗显示「权限信息未就绪，暂时无法调整」，滑杆 disabled；刷新后置灰且零发送。 - 媒体标识与回执来源 → 歌名 `#shareMediaSongName`、进度 `shareMediaCurrentTime`、时长 `shareMediaDuration`、封面 `#shareMediaAvatar img`、点播者 `#shareMediaUserName.title`、播放态 `Utils.service.isShareMediaPlaying()` 均随房间实时更新（本人与他人点播都正确）；无权限时可定位能力为 false，浮窗显示「当前房间无媒体管理权限」且滑杆禁用。 -->

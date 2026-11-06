@@ -1,0 +1,37 @@
+# 迁移自 v6:spec-bilibili-split-and-idle-guard
+
+[[entry]]
+id = 1
+type = "story"
+title = "拆分 BilibiliPlatform"
+description = "把 782 行的 `src/platforms/BilibiliPlatform.ts` 按用途拆成搜索、详情与分 P、点播发送、选集几块， 每个文件 ≤400 行，公开静态方法签名与调用点不变。"
+verify = "把 782 行的平台类按用途拆开，每个文件 ≤400 行；公开静态方法签名与调用点不变。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "按需订阅媒体轮询"
+description = "让 LoopController 与 ShuffleController 跟随 PlaybackMode 的点亮状态订阅/退订媒体桥， 未点亮且浮窗未打开时零轮询，落实 CAP-2。"
+verify = "没有人观察时把媒体轮询降到 1 秒，面板打开 / 浮窗打开 / 模式点亮时恢复 250ms。"
+covers = ["R2"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "产物体积守门"
+description = "新增构建后体积检查脚本并接入 CI：bundle.js 超过 450 kB 或 gzip 超过 134 kB 时失败， 并打印实测值。该 story 已按维护者要求撤回，不再对应任何 CAP（SPEC 已无 CAP-3）。"
+verify = "构建后自动校验产物体积，超过 450 kB / 134 kB gzip 时失败并打印实测值。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"

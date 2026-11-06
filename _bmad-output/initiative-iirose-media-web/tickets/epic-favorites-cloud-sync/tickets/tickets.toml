@@ -1,0 +1,37 @@
+# 迁移自 v6:spec-favorites-cloud-sync
+
+[[entry]]
+id = 1
+type = "story"
+title = "收藏云同步后端服务（IIROSE-MEDIA-SYNC）"
+description = "Problem: 插件（`src/`）本身没有服务端，而收藏云同步的所有后端契约已经冻结在 `_bmad-output/specs/spec-favorites-cloud-sync/` 里——可端点还不存在。目前只有为它准备好的空壳：COS 桶 `iirose-media-sync-1309510434`（版本控制与生命周期已开）、执行角色 `IIROSE-MEDIA-SYNC-Role` 与只授 `sync/*` 前缀的策略。缺的是函数本体与部署链路。"
+verify = "Problem: 插件（`src/`）本身没有服务端，而收藏云同步的所有后端契约已经冻结在 `_bmad-output/specs/spec-favorites-cloud-sync/` 里——可端点还不存在。目前只有为它准备好的空壳：COS 桶 `iirose-media-sync-1309510434`（版本控制与生命周期已开）、执行角色 `IIROSE-MEDIA-SYNC-Role` 与只授 `sync/*` 前缀的策略。缺的是函数本体与部署链路。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "spec-favorites-cloud-sync-backend"
+
+[[entry]]
+id = 2
+type = "story"
+title = "收藏云同步引擎（src/sync/ + IndexedDB v2 + 设置面板启用入口）"
+description = "Problem: 收藏纯本地 IndexedDB，换设备、换浏览器、清缓存即整库消失。后端已上线并在线验证过（`IIROSE-MEDIA-SYNC`，函数 URL `https://1309510434-0wsqedndx7.ap-guangzhou.tencentscf.com`），协议冻结在 `_bmad-output/specs/spec-favorites-cloud-sync/`——但插件侧完全不知道它存在：`window.uid` 全仓零引用，没有任何网络同步代码，`FavoritesStorageService` 也没有「已同步 / 已删除」这类字段。"
+verify = "Problem: 收藏纯本地 IndexedDB，换设备、换浏览器、清缓存即整库消失。后端已上线并在线验证过（`IIROSE-MEDIA-SYNC`，函数 URL `https://1309510434-0wsqedndx7.ap-guangzhou.tencentscf.com`），协议冻结在 `_bmad-output/specs/spec-favorites-cloud-sync/`——但插件侧完全不知道它存在：`window.uid` 全仓零引用，没有任何网络同步代码，`FavoritesStorageService` 也没有「已同步 / 已删除」这类字段。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "spec-favorites-cloud-sync-client"
+
+[[entry]]
+id = 3
+type = "story"
+title = "收藏云同步：首次合并预览与确认"
+description = "Problem: 首次启用同步时，云端与本地被静默并集后直接上传——用户只在事后从提示条看到「云端 137 / 本地 89 / 合并后 152」这几个数字，而那时数据已经写进云端了。并集不是你想要的，也没有回头路。更麻烦的是 `enable()` 在 `performSync` 之前就把 `enabled` 置真，于是预览若停留几秒，任何一次收藏增删都会让 5 秒防抖把未经确认的合并结果写上去。"
+verify = "Problem: 首次启用同步时，云端与本地被静默并集后直接上传——用户只在事后从提示条看到「云端 137 / 本地 89 / 合并后 152」这几个数字，而那时数据已经写进云端了。并集不是你想要的，也没有回头路。更麻烦的是 `enable()` 在 `performSync` 之前就把 `enabled` 置真，于是预览若停留几秒，任何一次收藏增删都会让 5 秒防抖把未经确认的合并结果写上去。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "spec-favorites-cloud-sync-experience"

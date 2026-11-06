@@ -1,0 +1,37 @@
+# 迁移自 v6:spec-main-panel-visual-unify
+
+[[entry]]
+id = 1
+type = "story"
+title = "设计底座、主面板表面与顶部四行"
+description = "扩展共享视觉令牌与主题变体，主面板改为跟随宿站主题的实色表面，顶部导航、工具栏、平台行、分类行 改为浮窗风格，AGENTS.md 布局约定不变（SPEC CAP-1、CAP-2，visual-language.md）。"
+verify = "Problem: 插件主面板的顶部四行（Row1 导航、Row2 工具栏、Row3 平台、Row4 分类）与内容区底色仍是旧审美：透出宿站木纹、整条刷平台品牌色、实心药丸按钮，与收藏随机/播放进度两个浮窗像两个产品。"
+covers = ["R1", "R2"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "落实柔灰视觉（E）与卡片、列表、加载空状态"
+description = "浅色主题落实用户选定的原型 E（品牌强调、柔灰底、顶部光晕、白卡片、封面裁切与时长胶囊），深色主题中性天蓝； 清除原型切换机制（SPEC CAP-2、CAP-3，visual-language.md）。"
+verify = "Problem: 用户从原型中选定了 E（柔灰），但它目前只是工作区里未提交的原型：靠 `window.iirosemedia.setAccentVariant` 与 a–g 多套变体类叠加实现，代码重复、依赖 Tailwind 变体顺序；深色主题下内容区卡片仍是旧样式。"
+covers = ["R2", "R3"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "设置、关于与其余页面"
+description = "设置卡与开关、关于页、B 站等其余平台页面与收藏视图统一，清除剩余品牌色整条底（SPEC CAP-4）。"
+verify = "Problem: 主面板的设置页与关于页（都由 `SettingCard` 渲染）仍是旧样式：半透明白底、固定深灰字、大号字体图标，在柔灰（浅色）与深色表面上都格格不入；深色下文字几乎看不清。其余零散页面可能仍有旧样式残留。"
+covers = ["R4"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"

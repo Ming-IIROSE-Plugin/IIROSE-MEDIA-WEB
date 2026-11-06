@@ -1,0 +1,61 @@
+# 迁移自 v6:spec-at-link-playback
+
+[[entry]]
+id = 1
+type = "story"
+title = "输入框代理拦截重构与私聊防泄露契约修复"
+description = "重构 Input-Behavior-Module 为严格同步函数契约，命中 @ 指令时同步返回 false 清空输入框并阻断私聊 msgfetch 外发； 异步任务派发至后台解耦执行；严格响应 chatBox.isProxyAtInput 开关还原原生方法；纯文本 @歌名 呼出搜索并填词。"
+verify = "重构 Input-Behavior-Module 为严格同步函数契约，命中 @ 指令时同步返回 false 清空输入框并阻断私聊 msgfetch 外发； 异步任务派发至后台解耦执行；严格响应 chatBox.isProxyAtInput 开关还原原生方法；纯文本 @歌名 呼出搜索并填词。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "健壮 URL 提取器与短链重定向解析服务"
+description = "实现从复合分享文本中提取 URL 实体的通用解析器，自动补全缺失的协议前缀； 通过腾讯云 CORS 代理追踪 163cn.tv 和 b23.tv 的 302 重定向并提取 Location 目标长链与参数。"
+verify = "实现从复合分享文本中提取 URL 实体的通用解析器，自动补全缺失的协议前缀； 通过腾讯云 CORS 代理追踪 163cn.tv 和 b23.tv 的 302 重定向并提取 Location 目标长链与参数。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "网易云全形态点播与歌单/专辑选集多选流转"
+description = "支持网易云单曲长短链及分享文案（MOD 直接点播）； 专辑与歌单（长短链及分享文案）弹出一级选择器（正序 / 乱序 / 选集），选集模式支持勾选多曲并在二级确认正序/乱序后播放所选子集。"
+verify = "支持网易云单曲长短链及分享文案（MOD 直接点播）； 专辑与歌单（长短链及分享文案）弹出一级选择器（正序 / 乱序 / 选集），选集模式支持勾选多曲并在二级确认正序/乱序后播放所选子集。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"
+
+[[entry]]
+id = 4
+type = "story"
+title = "哔哩哔哩全形态链接解析与分 P 选集多选流转"
+description = "支持 B 站视频长短链及分享文案解析；若携带 ?p=N 则直接播放对应第 N P； 若未带 p 且为多分 P 视频，弹出一级选择器（正序 / 乱序 / 选集），选集模式支持勾选多个分 P 并在二级确认正序/乱序后播放所选子集。"
+verify = "支持 B 站视频长短链及分享文案解析；若携带 ?p=N 则直接播放对应第 N P； 若未带 p 且为多分 P 视频，弹出一级选择器（正序 / 乱序 / 选集），选集模式支持勾选多个分 P 并在二级确认正序/乱序后播放所选子集。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "4"
+
+[[entry]]
+id = 5
+type = "story"
+title = "直链媒体 8 秒智能嗅探与无感知优雅放行"
+description = "显式扩展名直链直接提取信息发送媒体卡片（默认封面与“直链播放”占位）； 隐式无扩展名进行 HEAD 探测（8 秒超时，超时弹窗提示），非媒体或探测失败则原样放行至宿站原生 moveinputDo。"
+verify = "显式扩展名直链直接提取信息发送媒体卡片（默认封面与“直链播放”占位）； 隐式无扩展名进行 HEAD 探测（8 秒超时，超时弹窗提示），非媒体或探测失败则原样放行至宿站原生 moveinputDo。"
+covers = []
+after = []
+hitl = false
+risk = "low"
+v6_key = "5"

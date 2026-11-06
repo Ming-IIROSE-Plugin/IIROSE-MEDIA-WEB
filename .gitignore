@@ -12,15 +12,17 @@
 /.claude
 /_bmad
 /_bmad-output/*
-# 规格与复盘入库（契约文档，跟着代码走）
-!/_bmad-output/specs/
-# 「点歌台」UX 规格（DESIGN.md / EXPERIENCE.md）入库；其余 BMAD 产物仍只留本机
-!/_bmad-output/initiative-media-desk-redesign/
-/_bmad-output/initiative-media-desk-redesign/*
-!/_bmad-output/initiative-media-desk-redesign/ux-media-desk/
-/_bmad-output/initiative-media-desk-redesign/ux-media-desk/*
-!/_bmad-output/initiative-media-desk-redesign/ux-media-desk/DESIGN.md
-!/_bmad-output/initiative-media-desk-redesign/ux-media-desk/EXPERIENCE.md
+# 规格与复盘入库(契约文档,跟着代码走):v7 之后它们在 initiative 的 epic / archive-v6 / backlog 里
+!/_bmad-output/initiative-iirose-media-web/
+!/_bmad-output/backlog/
+# 其余 BMAD 产物仍只留本机:独立构建记录、延期事项、调查记录
+/_bmad-output/backlog/*-plan.md
+/_bmad-output/initiative-iirose-media-web/deferred-work.md
+/_bmad-output/initiative-iirose-media-web/silent-media-control-investigation.md
+/_bmad-output/initiative-iirose-media-web/archive-v6/deferred-work-v6-resolved.md
+/_bmad-output/initiative-iirose-media-web/ux-media-desk/*
+!/_bmad-output/initiative-iirose-media-web/ux-media-desk/DESIGN.md
+!/_bmad-output/initiative-iirose-media-web/ux-media-desk/EXPERIENCE.md
 /.opencode
 /.bmad-loop
 

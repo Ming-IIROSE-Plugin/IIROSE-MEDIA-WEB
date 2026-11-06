@@ -1,0 +1,49 @@
+# 迁移自 v6:spec-standardization
+
+[[entry]]
+id = 1
+type = "story"
+title = "存储访问收敛"
+description = "把生产代码里约 50 处 localStorage 直连收敛到一个入口（读/写/删 + 编解码 + 异常兜底）， key 与数据格式保持不变，落实 CAP-1。"
+verify = "生产代码不再直接调用 `localStorage`，统一走 `src/storage/localStore.ts`；key 与落盘格式不变。"
+covers = ["R1"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "1"
+
+[[entry]]
+id = 2
+type = "story"
+title = "分页加载器"
+description = "用一个分页加载器替掉 7 个 Service 里重复的 mediaData Promise 包装，并把两份 splitByPage 合并为一处，落实 CAP-2。"
+verify = "把 7 个 Service 里重复的分页 Promise 包装抽成一份实现，两份 `splitByPage` 合并。"
+covers = ["R2"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "2"
+
+[[entry]]
+id = 3
+type = "story"
+title = "平台检索描述表"
+description = "把 mainAppCategories 里各平台范围的 searchAction 闭包提取为一份集中描述（平台 id / 标签 / 范围 + 取数函数），UI 分类表由它生成，落实 CAP-3。"
+verify = "把各平台的范围与取数闭包从视图层搬到一份集中描述，新增平台只加数据。"
+covers = ["R3"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "3"
+
+[[entry]]
+id = 4
+type = "story"
+title = "错误提示收敛"
+description = "把 18 处同款 catch + ShowMessage 收敛为分类上报入口，用户可见文案保持不变，落实 CAP-4。"
+verify = "把平台层散落的 `catch + ShowMessage` 收敛到一个入口，用户可见文案不变。"
+covers = ["R4"]
+after = []
+hitl = false
+risk = "low"
+v6_key = "4"
