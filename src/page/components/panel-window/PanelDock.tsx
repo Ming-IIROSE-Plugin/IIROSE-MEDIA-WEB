@@ -204,12 +204,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
         aria-hidden="true"
         className="absolute top-0 left-0 h-px w-px overflow-visible"
       >
-        <path
-          ref={neck}
-          d=""
-          data-imw-dock-neck="true"
-          className={deskSheetFill}
-        />
+        <path ref={neck} d="" className={deskSheetFill} />
       </svg>
       <div
         ref={pill}

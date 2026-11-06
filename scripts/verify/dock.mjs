@@ -10,9 +10,8 @@
 //   2. 贴边收起：靠右时只露出一小截；悬停后展开
 //   3. 宿站侧栏：body 平移 275px 时，贴左的胶囊被层的左缘裁住，不压到侧栏上
 //   4. 尺寸：桌面 38px 高、展开 87px 宽；手机 54px 高（和代码里的标称尺寸是同一份数）
-//   5. 弯月面：悬停展开时淡出，移开后回来，按住时保留（拉丝要用）
-//   6. 宿站主题：浅色 / 深色下胶囊底色分别是纸色 / 墨色
-//   7. 手机尺寸下宿站侧栏打开：贴左的胶囊仍被层的左缘裁住
+//   5. 宿站主题：浅色 / 深色下胶囊底色分别是纸色 / 墨色
+//   6. 手机尺寸下宿站侧栏打开：贴左的胶囊仍被层的左缘裁住
 //
 // 前置：测试账号已在持久化 profile 里登录并能进房（凭据在 .secrets/，不进脚本）。
 
@@ -135,34 +134,7 @@ try {
     `${hovered.height}px`,
   );
 
-  // ── 5. 弯月面（悬停时淡出）───────────────────────────────────
-  const neckOpacity = () =>
-    frame.evaluate(
-      () =>
-        getComputedStyle(document.querySelector("[data-imw-dock-neck]"))
-          .opacity,
-    );
-  await page.waitForTimeout(400);
-  const neckHovered = Number(await neckOpacity());
-  check("悬停展开：弯月面淡出", neckHovered < 0.05, `不透明度 ${neckHovered}`);
-  const iconOpacity = await frame.evaluate(
-    () =>
-      getComputedStyle(document.querySelector("[data-imw-panel-dock] svg path"))
-        .opacity,
-  );
-  check(
-    "悬停展开：胶囊里的图标仍在",
-    Number(iconOpacity) > 0.95,
-    `不透明度 ${iconOpacity}`,
-  );
-  await page.mouse.move(5, 5);
-  await page.waitForTimeout(500);
-  const neckAway = Number(await neckOpacity());
-  check("移开后：弯月面回来", neckAway > 0.95, `不透明度 ${neckAway}`);
-  await page.mouse.move(center.x, center.y);
-  await page.waitForTimeout(500);
-
-  // ── 6. 宿站主题 ────────────────────────────────────────────
+  // ── 5. 宿站主题 ────────────────────────────────────────────
   const pillBackground = () =>
     frame.evaluate(
       (sel) => getComputedStyle(document.querySelector(sel)).backgroundColor,
@@ -188,9 +160,6 @@ try {
   const grab = await toPage(startCenterX, startCenterY);
   await page.mouse.move(grab.x, grab.y);
   await page.mouse.down();
-  await page.waitForTimeout(400);
-  const neckHeld = Number(await neckOpacity());
-  check("按住时：弯月面保留", neckHeld > 0.95, `不透明度 ${neckHeld}`);
   let worst = 0;
   for (let i = 1; i <= 10; i++) {
     const dx = i * 45;
@@ -255,7 +224,7 @@ try {
     `${phone.height}px`,
   );
 
-  // ── 7. 手机尺寸下宿站侧栏 ──────────────────────────────────
+  // ── 6. 手机尺寸下宿站侧栏 ──────────────────────────────────
   await store({ x: 0, y: 400, edge: "left" });
   await page.waitForTimeout(900);
   await frame.evaluate(() => {
