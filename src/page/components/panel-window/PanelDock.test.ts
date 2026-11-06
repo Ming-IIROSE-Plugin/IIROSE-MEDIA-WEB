@@ -320,9 +320,14 @@ describe("拖动", () => {
       expect(edge()).toBeNull();
       expect(dock().style.scale).toBe("");
       expect(position().x).toBe(90);
+      // 手指还在拖：只弹形状，不能打开位置过渡（否则胶囊会缓动着追手指）
+      expect(dock().getAttribute("data-imw-dock-settling")).toBe("scale");
+      expect(dock().hasAttribute("data-imw-dock-dragging")).toBe(true);
       pointer("pointerup", restore(), 100, 500);
       expect(position()).toEqual({ x: 90, y: 500 });
       expect(stored()).toEqual({ x: 90, y: 500 });
+      expect(dock().hasAttribute("data-imw-dock-dragging")).toBe(false);
+      expect(dock().getAttribute("data-imw-dock-settling")).toBe("place");
     });
 
     it("自由拖近边缘：边缘提前伸出来；拖远又收回去", () => {
@@ -419,6 +424,15 @@ describe("样式表", () => {
       /@media \(hover: hover\) \{\s*\[data-imw-panel-dock\]\[data-imw-dock-edge\]:hover/,
     );
     expect(block).toMatch(/\[data-imw-dock-held\],\s*:has\(:focus-visible\)/);
+  });
+
+  it("拖动中没有位置过渡；只有松手才打开 left / top 的过渡", () => {
+    expect(css).toMatch(/\[data-imw-dock-settling="place"\] \{[^}]*left 300ms/);
+    expect(css).toMatch(/\[data-imw-dock-dragging\] \{\s*transition: none/);
+    const scaleOnly = css.match(
+      /\[data-imw-dock-dragging\]\[data-imw-dock-settling="scale"\] \{[^}]*\}/,
+    )![0];
+    expect(scaleOnly).not.toMatch(/\b(left|top|translate) \d/);
   });
 
   it("收起时文字淡出，不露半个字", () => {

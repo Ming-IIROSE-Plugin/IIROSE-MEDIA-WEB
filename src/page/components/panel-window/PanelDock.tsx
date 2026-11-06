@@ -56,8 +56,14 @@ const DOCK_DRAG_THRESHOLD = 4;
 const DOCK_ANCHOR_ID = "moveinputDisplay";
 /** 聊天区尺寸变化没有事件可听（输入框上方的内容也会把它顶走），低频轮询兜底。 */
 const DOCK_FOLLOW_MS = 500;
-/** 胶囊展开时的尺寸：窗口收起时胶囊还没挂载，用它算终点。 */
+/** 胶囊展开时的尺寸：窗口收起时胶囊还没挂载，用它算终点。手机和粗指针上更大，见 `app.css`。 */
 const DOCK_NOMINAL_SIZE: DockSize = { width: 87, height: 38 };
+const DOCK_NOMINAL_SIZE_LARGE: DockSize = { width: 110, height: 54 };
+
+const dockNominalSize = () =>
+  window.matchMedia?.("(max-width: 768px), (pointer: coarse)")?.matches
+    ? DOCK_NOMINAL_SIZE_LARGE
+    : DOCK_NOMINAL_SIZE;
 /** 颈缩回去、胶囊落定的时长；`app.css` 的 `data-imw-dock-settling` 规则与它同长。 */
 const DOCK_SETTLE_MS = 300;
 
@@ -94,7 +100,7 @@ function dockFrame(reference: HTMLElement) {
 /** 贴上下边时胶囊缩成图标，范围要按展开后算，否则靠右时悬停会伸出视口。 */
 function dockSize(element: HTMLElement): DockSize {
   return {
-    width: Math.max(element.offsetWidth, DOCK_NOMINAL_SIZE.width),
+    width: Math.max(element.offsetWidth, dockNominalSize().width),
     height: element.offsetHeight,
   };
 }
@@ -127,10 +133,11 @@ export function writeDockFlight(
   rect: PanelRect | null,
 ): void {
   const { width, height } = viewportMetrics(container);
+  const size = dockNominalSize();
   const flight = dockFlight(
     rect ?? { x: 0, y: 0, width, height },
-    measureDock(container, DOCK_NOMINAL_SIZE),
-    DOCK_NOMINAL_SIZE,
+    measureDock(container, size),
+    size,
   );
   container.style.setProperty("--imw-dock-x", `${flight.x}px`);
   container.style.setProperty("--imw-dock-y", `${flight.y}px`);
@@ -212,10 +219,13 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     neckFrame.current = requestAnimationFrame(tick);
   };
 
-  /** 落定用的过渡（left / top / scale），只在这一小段时间打开，拖动时不能有。 */
-  const settle = (element: HTMLElement) => {
+  /**
+   * 落定用的过渡，只在这一小段时间打开。断开时手指还在拖，只能弹 `scale`（`"scale"`）：
+   * 带上 left / top 胶囊就会缓动着追手指；松手后才用 `"place"`。
+   */
+  const settle = (element: HTMLElement, kind: "scale" | "place") => {
     window.clearTimeout(settleTimer.current);
-    element.setAttribute("data-imw-dock-settling", "true");
+    element.setAttribute("data-imw-dock-settling", kind);
     settleTimer.current = window.setTimeout(
       () => element.removeAttribute("data-imw-dock-settling"),
       DOCK_SETTLE_MS + 40,
@@ -231,7 +241,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     const tailLength = current.stuckDistance * 0.45;
     current.stuck = null;
     writeDockEdge(element, null);
-    settle(element);
+    settle(element, "scale");
     element.style.removeProperty("scale");
     animateNeck((remaining) => {
       const tail = neckGeometry(element, edge);
@@ -325,6 +335,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     drag.current = null;
     if (!element) return;
     element.removeAttribute("data-imw-dock-held");
+    element.removeAttribute("data-imw-dock-dragging");
     if (!finished?.moved) return;
     justDragged.current = true;
     const size = dockSize(element);
@@ -350,7 +361,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
         : edge === "right"
           ? bounds.maxX - point.x
           : point.y - bounds.minY;
-    settle(element);
+    settle(element, "place");
     element.style.removeProperty("scale");
     place(element, final);
     writeDockEdge(element, edge);
@@ -363,17 +374,18 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     onPlaced();
   };
 
-  // 粗指针上也要够得着：与其它粗指针目标同为 44px
-  const controlHeight = "h-9 max-[768px]:h-11 [@media(pointer:coarse)]:h-11";
+  // 手机和粗指针上要好点：52px 高，比其它目标的 44px 更大（尺寸同 `DOCK_NOMINAL_SIZE_LARGE`）
+  const controlHeight = "h-9 max-[768px]:h-13 [@media(pointer:coarse)]:h-13";
   return (
     <div
       ref={layer}
       data-imw-dock-layer="true"
       className={`pointer-events-none fixed inset-0 z-[90009] ${deskDockShadow}`}
     >
+      {/* 只占 1px、靠 overflow 画出去：铺满全屏的话，外层投影滤镜每帧都要处理整个屏幕，拖动会卡 */}
       <svg
         aria-hidden="true"
-        className="absolute inset-0 h-full w-full overflow-visible"
+        className="absolute top-0 left-0 h-px w-px overflow-visible"
       >
         <path ref={neck} d="" className={deskSheetFill} />
       </svg>
@@ -388,6 +400,9 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
           const element = pill.current;
           if (!element || !event.isPrimary || event.button !== 0) return;
           justDragged.current = false;
+          // 上一次松手的落定还没结束就又按下：不能带着过渡拖
+          window.clearTimeout(settleTimer.current);
+          element.removeAttribute("data-imw-dock-settling");
           const pointer = pointerPosition(
             reference(),
             event.clientX,
@@ -426,6 +441,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
           if (!current.moved && Math.hypot(dx, dy) < DOCK_DRAG_THRESHOLD)
             return;
           current.moved = true;
+          element.setAttribute("data-imw-dock-dragging", "true");
           const size = dockSize(element);
           const { anchor, viewport } = dockFrame(reference());
           const docked = { x: current.left, y: current.top };
@@ -464,7 +480,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
         <button
           type="button"
           aria-label="打开点歌台"
-          className={`m-0 flex cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-inherit ${controlHeight} ${typeButtonSm} ${deskFocusRing}`}
+          className={`m-0 flex cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-inherit max-[768px]:gap-2 max-[768px]:px-4 max-[768px]:text-[15px] max-[768px]:[&>svg]:size-5 [@media(pointer:coarse)]:gap-2 [@media(pointer:coarse)]:px-4 [@media(pointer:coarse)]:text-[15px] [@media(pointer:coarse)]:[&>svg]:size-5 ${controlHeight} ${typeButtonSm} ${deskFocusRing}`}
         >
           <DeskIcon name="mark" size={16} />
           <span data-imw-dock-label="true">点歌台</span>

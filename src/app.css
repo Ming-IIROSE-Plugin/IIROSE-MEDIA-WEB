@@ -562,23 +562,38 @@
 [data-imw-panel-dock] {
   --imw-dock-peek: 34px;
   --imw-dock-round-inset: 10px;
+  --imw-dock-pad: 0.75rem;
+  --imw-dock-gap: 0.375rem;
   transition: translate 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-@media (pointer: coarse) {
+/* 手机和粗指针上更大，好点（尺寸同 PanelDock 的 DOCK_NOMINAL_SIZE_LARGE） */
+@media (max-width: 768px), (pointer: coarse) {
   [data-imw-panel-dock] {
-    --imw-dock-peek: 44px;
-    --imw-dock-round-inset: 14px;
+    --imw-dock-peek: 54px;
+    --imw-dock-round-inset: 16px;
+    --imw-dock-pad: 1rem;
+    --imw-dock-gap: 0.5rem;
   }
 }
 
-/* 落定：离开手指后弹回位置，只在这一小段时间打开（时长见 PanelDock 的 DOCK_SETTLE_MS） */
-[data-imw-panel-dock][data-imw-dock-settling] {
+/* 落定只在这一小段时间打开（时长见 PanelDock 的 DOCK_SETTLE_MS）。
+   place：松手后弹回位置。scale：断开时手指还在拖，只弹形状，位置必须 1:1 跟手。 */
+[data-imw-panel-dock][data-imw-dock-settling="place"] {
   transition:
     translate 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
     left 300ms cubic-bezier(0.3, 1.3, 0.5, 1),
     top 300ms cubic-bezier(0.3, 1.3, 0.5, 1),
     scale 300ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+/* 拖动中不能有任何位置过渡，包括收起和展开的 translate */
+[data-imw-panel-dock][data-imw-dock-dragging] {
+  transition: none;
+}
+
+[data-imw-panel-dock][data-imw-dock-dragging][data-imw-dock-settling="scale"] {
+  transition: scale 300ms cubic-bezier(0.3, 1.6, 0.5, 1);
 }
 
 [data-imw-panel-dock] button,
@@ -650,8 +665,8 @@
     :has(:focus-visible)
   )
   button {
-  gap: 0.375rem !important;
-  padding-inline: 0.75rem !important;
+  gap: var(--imw-dock-gap) !important;
+  padding-inline: var(--imw-dock-pad) !important;
 }
 
 [data-imw-panel-dock][data-imw-dock-edge]:is(
@@ -669,8 +684,8 @@
   }
 
   [data-imw-panel-dock][data-imw-dock-edge]:hover button {
-    gap: 0.375rem !important;
-    padding-inline: 0.75rem !important;
+    gap: var(--imw-dock-gap) !important;
+    padding-inline: var(--imw-dock-pad) !important;
   }
 
   [data-imw-panel-dock][data-imw-dock-edge]:hover [data-imw-dock-label] {
@@ -681,7 +696,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   [data-imw-panel-dock],
-  [data-imw-panel-dock][data-imw-dock-settling],
+  [data-imw-panel-dock][data-imw-dock-settling="place"],
+  [data-imw-panel-dock][data-imw-dock-dragging][data-imw-dock-settling="scale"],
   [data-imw-panel-dock] button,
   [data-imw-dock-label] {
     transition: none;
