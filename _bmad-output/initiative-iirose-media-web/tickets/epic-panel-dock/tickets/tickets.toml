@@ -66,3 +66,13 @@ after = [5]
 hitl = false
 risk = "low"
 
+[[entry]]
+id = 7
+type = "story"
+title = "胶囊和粘连画成同一条轮廓"
+description = "把胶囊本体和粘连部分从两个独立形状改成同一条 SVG 轮廓，由一个纯函数算出，左、右、上三条边的静止、悬停、拉丝、断开都用它；下边仍然不粘。"
+verify = "`node scripts/verify/dock.mjs` 在真站全过，并新增：贴边展开时上下沿没有凹陷，上边收起和展开的中间帧没有方角，图标在胶囊正中；1:1 跟手偏差仍 ≤ 2px。"
+covers = ["R4", "R5"]
+after = [6]
+hitl = false
+risk = "medium"

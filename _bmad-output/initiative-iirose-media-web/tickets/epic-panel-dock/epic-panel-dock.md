@@ -7,7 +7,7 @@ covers: []
 after: []
 refined: true
 risk: low
-status: done
+status: in-progress
 ---
 # 点歌台窗口模式与常驻胶囊
 
@@ -64,3 +64,5 @@ status: done
 - Decision: 2026-11-06 维护者指定切成：窗口模式、最小化、常驻胶囊、吸附、蜂蜜拉丝，外加审查收口一张。
 - Open question: 原 plan（`plan-main-panel-window-mode`、`plan-panel-window-minimize`）在 v7 迁移时丢失，内容只能从提交说明与 AGENTS.md 还原。
 - Open question: 本 epic 未做过 `bmad-review` 之外的独立审查；2026-11-06 的一轮审查结果记在「审查收口」票里。
+- Decision: 2026-11-07 贴边的胶囊反复露出接缝和方角（上边收起时的方块、右边上下沿约 1px 的凹陷），根因是胶囊和粘连是两个要靠 CSS 和 TS 各写一遍才对齐的形状。维护者在原型上比较后选定「一笔画」（同一条轮廓），新增票 7；要求不变，只换实现。
+- Decision: 2026-11-07 下边不做粘连。`#moveinputDisplay` 占满整条底栏（灰框只是其中会随打字变长的 `#moveinputBubble`），贴输入栏顶边会悬空，贴屏幕底又要进入输入区；维护者决定不做。
