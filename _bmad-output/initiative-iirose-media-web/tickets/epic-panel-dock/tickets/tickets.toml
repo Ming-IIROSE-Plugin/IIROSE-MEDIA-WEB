@@ -76,3 +76,15 @@ covers = ["R4", "R5"]
 after = [6]
 hitl = false
 risk = "medium"
+
+[[entry]]
+id = 8
+type = "story"
+title = "面板从胶囊长出来"
+description = "点胶囊打开时，胶囊本身撑大成整个面板：露出的圆角矩形从胶囊看得见的那块长到面板矩形，内容在途中淡入；收起时缩回胶囊收起的样子。全屏、窗口、手机都一样，替换现在的 0.2 倍缩放加淡入。"
+verify = "真站逐帧量：打开第一帧露出的区域和展开的胶囊重合、收起最后一帧和收起的胶囊重合（误差 ≤ 1px）；停稳后面板没有 transform、scale、clip-path；减少动态效果时直接到位；`npm test`、`npm run build`、`node scripts/verify/dock.mjs` 全过。"
+covers = ["R1", "R3"]
+after = [7]
+hitl = true
+risk = "medium"
+notes = ["当我点击这个点歌台的时候，我想让页面像是从这里长出来", "做好先不要上线，可以给我玩一下控件，给我做几个版本", "A可以"]
