@@ -630,7 +630,7 @@ components:
 
 本设计不受宿站现有风格约束（用户授权），也不得有抄袭感或 AI 模板感：不用渐变光斑、毛玻璃、紫色、emoji 图标，也不用千篇一律的白卡加大阴影。
 
-**设计稿**：构图参考为 `imports/mock-v1/`（索引见 [ux-media-desk.md](ux-media-desk.md)）。→ 参考：[mock.html](imports/mock-v1/mock.html)（设计稿源文件：浅/深色令牌、布局、组件样式、图标 symbol）· [overview.png](imports/mock-v1/overview.png)（四帧总览：桌面/手机 × 浅/深）。**设计稿与本文件或 EXPERIENCE.md 冲突时，以两份规格为准**（已知偏离：ink3、star-on、圆角档位、手机搜索字号 16px）。
+**设计稿**：构图参考为 `imports/mock-v1/`（索引见 [ux-media-desk.md](ux-media-desk.md)）。→ 参考：[mock.html](imports/mock-v1/mock.html)（设计稿源文件：浅/深色令牌、布局、组件样式、图标 symbol）· [overview.png](imports/mock-v1/overview.png)（四帧总览：桌面/手机 × 浅/深）。**设计稿与本文件或 EXPERIENCE.md 冲突时，以两份规格为准**（已知偏离：ink3、star-on、圆角档位、手机搜索字号 16px、`mark` 图标）。
 
 ## Colors
 
@@ -776,7 +776,7 @@ components:
 
 数值一律以 frontmatter `components.*` 为准；本节只写构图与状态关系，括号内为组件键。行为（何时出现、点击后果、互斥）见 EXPERIENCE.md Component Patterns。
 
-所有图标为自包含内联 SVG（设计稿 `<symbol>`：note、film、radio、star、starf、gear、info、search、chev、left、right、play、send、list、grid、repeat、shuffle、close、mark，另补 check、spinner、refresh、sort 等），描边 1.6–1.9，`currentColor` 着色。
+所有图标为自包含内联 SVG（设计稿 `<symbol>`：note、film、radio、star、starf、gear、info、search、chev、left、right、play、send、list、grid、repeat、shuffle、close、mark，另补 check、spinner、refresh、sort 等），描边 1.6–1.9，`currentColor` 着色。`mark` 用在竖栏品牌标和常驻胶囊上，画的是 CD 线稿（外圈、中孔、一道反光弧）；设计稿里的花苞在小尺寸下像「♀」，宿站用户名旁边又正好有性别符号，已弃用（维护者 2026-11-07 选定）。
 
 **动效（`motion`）**：三档时长 fast 120ms / base 200ms / slow 280ms，统一缓动 `cubic-bezier(0.2, 0.8, 0.2, 1)`；默认只过渡颜色、透明度、阴影与缩放，宽高位置不过渡。小控件按下缩到 96%；范围标签共用一条下划线滑动；结果区换页 / 换范围 / 换视图 / 新结果到达时从下方 8px 淡入；收藏星只在用户点亮时弹跳；下拉菜单落下、手机抽屉升起。减少动态效果时去掉缩放与位移。
 
