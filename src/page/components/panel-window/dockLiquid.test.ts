@@ -4,6 +4,7 @@ import {
   dockCapsule,
   dockOutline,
   dockShape,
+  dockSilhouette,
   isStickyEdge,
   nearbyWall,
   pillTailPath,
@@ -381,5 +382,109 @@ describe("边缘", () => {
       gap: 10,
     });
     expect(nearbyWall({ x: 20, y: 30 }, bounds)?.edge).toBe("left");
+  });
+});
+
+describe("露出的那块（面板从这里长出来）", () => {
+  const EDGES: StickyEdge[] = ["left", "right", "top"];
+
+  for (const metrics of [SMALL, LARGE])
+    for (const edge of EDGES)
+      it(`${edge}（高 ${metrics.height}）：和轮廓去掉耳朵后的范围一致，靠墙一侧是直角`, () => {
+        const { point, bounds, wall } = attached(edge, metrics);
+        for (const open of [0, 0.5, 1]) {
+          const input = { edge, open, point, bounds, metrics };
+          const outline = sample(shapeOf(input).path);
+          const seen = dockSilhouette(input);
+          // 离边缘超过耳朵（8px）的部分才是胶囊本身
+          const body = outline.filter(({ x, y }) =>
+            edge === "top" ? y - wall > 10 : Math.abs(x - wall) > 10,
+          );
+          const xs = body.map((p) => p.x);
+          const ys = body.map((p) => p.y);
+          const far = outline.map((p) => (edge === "top" ? p.y : p.x));
+          if (edge === "top") {
+            expect(seen.y).toBe(wall);
+            expect(seen.y + seen.height).toBeCloseTo(Math.max(...far), 1);
+            expect(seen.x).toBeCloseTo(Math.min(...xs), 1);
+            expect(seen.x + seen.width).toBeCloseTo(Math.max(...xs), 1);
+          } else {
+            const tip = edge === "left" ? Math.max(...far) : Math.min(...far);
+            expect(edge === "left" ? seen.x + seen.width : seen.x).toBeCloseTo(
+              tip,
+              1,
+            );
+            expect(edge === "left" ? seen.x : seen.x + seen.width).toBe(wall);
+            expect(seen.y).toBeCloseTo(Math.min(...ys), 1);
+            expect(seen.y + seen.height).toBeCloseTo(Math.max(...ys), 1);
+          }
+          const wallCorners =
+            edge === "top" ? [0, 1] : edge === "left" ? [0, 3] : [1, 2];
+          for (const i of wallCorners) expect(seen.radii[i]).toBe(0);
+        }
+      });
+
+  it("贴右边收起只露 peek，展开是整个胶囊", () => {
+    const { point, bounds } = attached("right", SMALL);
+    expect(
+      dockSilhouette({ edge: "right", open: 0, point, bounds, metrics: SMALL }),
+    ).toEqual({
+      x: 1600 - 34,
+      y: 300,
+      width: 34,
+      height: 38,
+      radii: [19, 0, 0, 19],
+    });
+    expect(
+      dockSilhouette({ edge: "right", open: 1, point, bounds, metrics: SMALL }),
+    ).toMatchObject({ x: 1600 - 87, width: 87 });
+  });
+
+  it("下边是以中心展开的圆钮，自由状态是整个胶囊，四角都圆", () => {
+    const point = { x: 500, y: 700 };
+    const round = dockSilhouette({
+      edge: "bottom",
+      open: 0,
+      point,
+      bounds: BOUNDS,
+      metrics: SMALL,
+    });
+    expect(round).toEqual({
+      x: 524.5,
+      y: 700,
+      width: 38,
+      height: 38,
+      radii: [19, 19, 19, 19],
+    });
+    const box = shapeOf({ edge: "bottom", open: 0.5, point }).box;
+    expect(
+      dockSilhouette({
+        edge: "bottom",
+        open: 0.5,
+        point,
+        bounds: BOUNDS,
+        metrics: SMALL,
+      }),
+    ).toMatchObject({
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height,
+    });
+    expect(
+      dockSilhouette({
+        edge: null,
+        open: 0,
+        point,
+        bounds: BOUNDS,
+        metrics: SMALL,
+      }),
+    ).toEqual({
+      x: 500,
+      y: 700,
+      width: 87,
+      height: 38,
+      radii: [19, 19, 19, 19],
+    });
   });
 });

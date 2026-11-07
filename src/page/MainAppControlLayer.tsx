@@ -19,10 +19,16 @@ import {
 } from "./components/desk/overlayLayers";
 import {
   mountPanelDock,
-  writeDockFlight,
+  readDockSilhouette,
+  type PanelDockHandle,
 } from "./components/panel-window/PanelDock";
+import { restingDockSilhouette } from "./components/panel-window/dockMeasure";
+import { prefersReducedMotion } from "./components/panel-window/dockPainter";
+import { PANEL_WINDOW_RADIUS } from "./components/panel-window/geometry";
+import { createPanelGrow } from "./components/panel-window/panelGrow";
 import { PanelWindowChrome } from "./components/panel-window/PanelWindowChrome";
 import { PanelWindowPlacement } from "./components/panel-window/PanelWindowPlacement";
+import { viewportMetrics } from "../media-progress/viewport";
 import {
   deskMenuShadow,
   deskRule,
@@ -48,7 +54,12 @@ export class MainAppControlLayer extends Component<
   private unsubscribeSession?: () => void;
   private placement?: PanelWindowPlacement;
   private unsubscribePanelDisplay?: () => void;
-  private unmountDock?: () => void;
+  private dock?: PanelDockHandle;
+  /** 开合动画：打开时胶囊撑大成面板，收起时缩回胶囊。 */
+  private grow = createPanelGrow(
+    () => document.getElementById("IIROSE_MEDIA_CONTAINER"),
+    prefersReducedMotion,
+  );
   constructor(props: undefined) {
     super(props);
   }
@@ -116,34 +127,85 @@ export class MainAppControlLayer extends Component<
     window.addEventListener("touchend", Gesture.touchEnd);
   }
 
-  componentDidUpdate(): void {
-    this.syncDock();
+  componentDidUpdate(
+    _prevProps: object,
+    prevState: MainAppControlLayerState,
+  ): void {
+    // 已经提交 DOM、浏览器还没绘制：这时开始开合，第一帧就裁好了
+    if (prevState.mainAppDisplay !== this.state.mainAppDisplay)
+      this.startGrow(this.state.mainAppDisplay, this.state.windowed);
+    else this.syncDock();
   }
 
-  /** 胶囊常驻：面板没开着就显示，点它打开。 */
+  /** 胶囊常驻：面板没开着就显示，点它打开。开合时由 `startGrow` 交接，这里只在没有动画时对齐。 */
   private syncDock() {
-    const wanted = !this.state.mainAppDisplay;
-    if (wanted === !!this.unmountDock) return;
-    if (wanted) {
-      this.unmountDock = mountPanelDock({
-        onOpen: this.ShowHideMainApp,
-        onPlaced: this.writeFlight,
+    if (this.grow.running) return;
+    if (!this.state.mainAppDisplay) {
+      this.dock ??= mountPanelDock({ onOpen: this.ShowHideMainApp });
+      this.dock.reveal(1);
+      return;
+    }
+    this.dock?.unmount();
+    this.dock = undefined;
+  }
+
+  /** 开合动画（`panelGrow.ts`）：起点和终点都是胶囊此刻露出的那块。 */
+  private startGrow(open: boolean, windowed: boolean) {
+    const container = document.getElementById("IIROSE_MEDIA_CONTAINER");
+    if (!container) return;
+    const { width, height } = viewportMetrics(container);
+    const rect = (windowed && this.placement?.rect) || {
+      x: 0,
+      y: 0,
+      width,
+      height,
+    };
+    const radius = windowed ? PANEL_WINDOW_RADIUS : 0;
+    const panel = {
+      ...rect,
+      radii: [radius, radius, radius, radius] as [
+        number,
+        number,
+        number,
+        number,
+      ],
+    };
+    if (open) {
+      // 胶囊留到面板长完再卸载：头一段由动画把它淡出
+      const dock = this.dock;
+      this.grow.start({
+        direction: "open",
+        capsule: readDockSilhouette() ?? restingDockSilhouette(container),
+        panel,
+        // 淡出期间也点不到：双击不会又把面板关上
+        onDock: (amount) => dock?.reveal(amount, false),
+        onDone: () => {
+          if (this.dock !== dock) return;
+          dock?.unmount();
+          this.dock = undefined;
+        },
       });
       return;
     }
-    this.unmountDock?.();
-    this.unmountDock = undefined;
+    // 收起：胶囊先挂上但藏着（打开没走完时它还在），面板缩回它露出的那块后淡入
+    this.dock ??= mountPanelDock({
+      onOpen: this.ShowHideMainApp,
+      entrance: "handover",
+    });
+    const dock = this.dock;
+    this.grow.start({
+      direction: "close",
+      capsule: restingDockSilhouette(container),
+      panel,
+      onDock: (amount) => dock.reveal(amount),
+      onDone: () => dock.reveal(1),
+    });
   }
 
-  /** 面板开合时缩放的终点是胶囊。 */
-  private writeFlight = () => {
-    const container = document.getElementById("IIROSE_MEDIA_CONTAINER");
-    if (container) writeDockFlight(container, this.placement?.rect ?? null);
-  };
-
   componentWillUnmount(): void {
-    this.unmountDock?.();
-    this.unmountDock = undefined;
+    this.grow.finish();
+    this.dock?.unmount();
+    this.dock = undefined;
 
     // 卸载时面板一定不可见：撤掉 250ms 的活跃标记。
     this.unsubscribeSession?.();
@@ -266,10 +328,7 @@ export class MainAppControlLayer extends Component<
       // 只在关→开时读宿站主题：面板开着期间（如搜索词变化）不跟随
       if (nextState.mainAppDisplay) this.applyTheme();
       // 拖动中关窗口（Alt+S、Esc）：手势到此结束，移动过的照常保存
-      else {
-        this.placement?.endGesture();
-        this.writeFlight();
-      }
+      else this.placement?.endGesture();
       this.applyDisplaySideEffects(
         nextState.mainAppDisplay,
         nextState.windowed,

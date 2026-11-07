@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   clampDockPoint,
-  dockFlight,
   dockPosition,
   normalizeStoredDock,
   snapDockEdge,
@@ -146,16 +145,6 @@ describe("边缘吸附", () => {
       x: 1,
       y: 2,
       edge: "left",
-    });
-  });
-});
-
-describe("dockFlight", () => {
-  it("窗口中心到胶囊中心的位移", () => {
-    const rect = { x: 100, y: 100, width: 1000, height: 600 };
-    expect(dockFlight(rect, { x: 1280, y: 758 }, size)).toEqual({
-      x: 1340 - 600,
-      y: 776 - 400,
     });
   });
 });

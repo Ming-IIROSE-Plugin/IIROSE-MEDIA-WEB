@@ -1,5 +1,5 @@
 // 最小化停靠件的定位：只有纯函数，坐标都是 `viewport.ts` 换算后的（宿站缩放前的）CSS 像素。
-import { PANEL_EDGE, type PanelRect, type PanelViewport } from "./geometry";
+import { PANEL_EDGE, type PanelViewport } from "./geometry";
 
 /** 胶囊底缘与输入框的间距。 */
 export const DOCK_GAP = 6;
@@ -144,17 +144,5 @@ export function dockPosition(
       ),
     ),
     y: anchor.top - DOCK_GAP - size.height,
-  };
-}
-
-/** 窗口中心飞到胶囊中心的位移（`transform-origin` 是 center，缩放不影响它）。 */
-export function dockFlight(
-  windowRect: PanelRect,
-  position: DockPoint,
-  size: DockSize,
-): DockPoint {
-  return {
-    x: position.x + size.width / 2 - (windowRect.x + windowRect.width / 2),
-    y: position.y + size.height / 2 - (windowRect.y + windowRect.height / 2),
   };
 }

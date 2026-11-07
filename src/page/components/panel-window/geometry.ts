@@ -7,6 +7,8 @@ export const PANEL_DEFAULT_WIDTH = 1000;
 export const PANEL_DEFAULT_HEIGHT = 680;
 /** 距视口边的留白（与 `constrainPosition` 的 12px 一致）。 */
 export const PANEL_EDGE = 12;
+/** 窗口的圆角，与容器上的 `roundedLg` 同值：开合动画长到最后用它收尾，停稳时才对得上。 */
+export const PANEL_WINDOW_RADIUS = 12;
 
 export interface PanelRect {
   x: number;

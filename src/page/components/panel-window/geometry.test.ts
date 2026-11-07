@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { roundedLg } from "../floating-panel/tokens";
 import {
+  PANEL_WINDOW_RADIUS,
   defaultRect,
   dragRect,
   fitRect,
@@ -156,5 +158,11 @@ describe("normalizeStoredRect", () => {
     ["过矮", { ...rect, height: 519 }],
   ])("%s 按没有存档处理", (_name, raw) => {
     expect(normalizeStoredRect(raw)).toBeNull();
+  });
+});
+
+describe("窗口圆角", () => {
+  it("开合动画收尾用的圆角和窗口自己的圆角是同一个数", () => {
+    expect(roundedLg).toBe(`rounded-[${PANEL_WINDOW_RADIUS}px]`);
   });
 });

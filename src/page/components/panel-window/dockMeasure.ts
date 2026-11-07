@@ -1,9 +1,13 @@
 // 胶囊的量取与存档：输入框在哪、视口多大、胶囊该摆哪、存的位置。不碰胶囊自己的拖动状态。
 import { viewportMetrics } from "../../../media-progress/viewport";
 import { readJson, writeJson } from "../../../storage/localStore";
-import type { DockMetrics } from "./dockLiquid";
 import {
-  dockFlight,
+  dockSilhouette,
+  type DockMetrics,
+  type DockSilhouette,
+} from "./dockLiquid";
+import {
+  dockBounds,
   dockPosition,
   normalizeStoredDock,
   type DockAnchor,
@@ -12,7 +16,7 @@ import {
   type DockSize,
   type StoredDock,
 } from "./dockPlacement";
-import type { PanelRect, PanelViewport } from "./geometry";
+import type { PanelViewport } from "./geometry";
 
 export const PANEL_DOCK_POSITION_KEY = "imwPanelDockPosition";
 /** 真站 `#moveinput` 的外层；`#mainHolder` 隐藏时尺寸为 0，按缺失处理。 */
@@ -113,20 +117,19 @@ export function measureDock(reference: HTMLElement, size: DockSize): DockPoint {
 }
 
 /**
- * 写面板缩向胶囊的位移（CSS 变量，见 `app.css`）。`rect` 是窗口展开时的矩形，全屏传 null。
- * 收起中的容器量不准，所以不读它的矩形。
+ * 胶囊停好以后露出来的那块（贴边时是收起的样子）：面板收起时缩回到这里，接着胶囊在原处淡入。
+ * 按存档和当前视口算，不量胶囊本身：收起开始时胶囊才刚挂上。
  */
-export function writeDockFlight(
-  container: HTMLElement,
-  rect: PanelRect | null,
-): void {
-  const { width, height } = viewportMetrics(container);
-  const size = dockMetrics();
-  const flight = dockFlight(
-    rect ?? { x: 0, y: 0, width, height },
-    measureDock(container, size),
-    size,
-  );
-  container.style.setProperty("--imw-dock-x", `${flight.x}px`);
-  container.style.setProperty("--imw-dock-y", `${flight.y}px`);
+export function restingDockSilhouette(reference: HTMLElement): DockSilhouette {
+  const metrics = dockMetrics();
+  const size = { width: metrics.width, height: metrics.height };
+  const { anchor, viewport } = dockFrame(reference);
+  const edge = readStoredDock()?.edge ?? null;
+  return dockSilhouette({
+    point: measureDock(reference, size),
+    edge,
+    open: edge ? 0 : 1,
+    metrics,
+    bounds: dockBounds(anchor, size, viewport),
+  });
 }

@@ -423,11 +423,12 @@
 }
 
 /* --- 3. 插件容器开关状态（JS 用 classList 切换，见 MainAppControlLayer） ---
-   全屏和窗口共用一套开合：收起时缩向胶囊并淡出（--imw-dock-x/y 由 writeDockFlight 写），动画结束才隐藏；
-   打开时从胶囊展开。全屏是原地盖住页面，不滑动，也不把宿站聊天区推走。
-   打开并停稳时 transform / scale / translate 都是 none：这样里面的 fixed 以视口为基准，
+   全屏和窗口共用一套开合，由 panel-window/panelGrow.ts 驱动：打开时露出的范围（clip-path）从胶囊
+   长到面板，收起反过来缩回胶囊。动画期间的 clip-path、translate、visibility 都是内联样式，走完就清掉，
+   所以这里不写过渡。全屏是原地盖住页面，不滑动，也不把宿站聊天区推走。
+   打开并停稳时 transform / scale / translate / clip-path 都是 none：这样里面的 fixed 以视口为基准，
    来源 / 顺序菜单的遮罩才能盖住窗口外（scale 写 1 同样会改变 fixed 的基准）。
-   收起用 visibility 而不是 display:none：viewportMetrics 仍要量缩放比例，也因此要除掉元素自身的 scale。 */
+   收起用 visibility 而不是 display:none：viewportMetrics 仍要量缩放比例。 */
 .IIROSE_MEDIA_CONTAINER {
   position: fixed;
   top: 0;
@@ -436,27 +437,14 @@
   height: 100%;
   z-index: 90000;
   opacity: 0;
-  translate: var(--imw-dock-x, 0) var(--imw-dock-y, 0);
-  scale: 0.2;
   visibility: hidden;
   pointer-events: none;
-  transition:
-    opacity var(--imw-base) var(--imw-ease),
-    scale var(--imw-base) var(--imw-ease),
-    translate var(--imw-base) var(--imw-ease),
-    visibility 0s linear var(--imw-base);
 }
 
 .IIROSE_MEDIA_CONTAINER.ShowIIROSE_MEDIA_CONTAINER {
   opacity: 1;
-  translate: none;
-  scale: none;
   visibility: visible;
   pointer-events: auto;
-  transition:
-    opacity var(--imw-base) var(--imw-ease),
-    scale var(--imw-base) var(--imw-ease),
-    translate var(--imw-base) var(--imw-ease);
 }
 
 /* 窗口态（类由 MainAppControlLayer 在视口放得下时加，几何由 PanelWindowPlacement 写内联样式） */
@@ -543,15 +531,6 @@
     --imw-titlebar: 44px;
     --imw-grip: 44px;
     --imw-grip-inset: 6px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .IIROSE_MEDIA_CONTAINER,
-  .IIROSE_MEDIA_CONTAINER.ShowIIROSE_MEDIA_CONTAINER {
-    translate: none;
-    scale: none;
-    transition: none;
   }
 }
 

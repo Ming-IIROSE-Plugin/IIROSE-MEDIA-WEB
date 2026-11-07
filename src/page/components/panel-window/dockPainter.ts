@@ -2,10 +2,12 @@
 // 内容的摆放，再一起写进 DOM，所以形状和文字永远在同一帧。形状算法在 `dockLiquid.ts`，手势在 `PanelDock.tsx`。
 import {
   dockShape,
+  dockSilhouette,
   isStickyEdge,
   nearbyWall,
   type DockBox,
   type DockMetrics,
+  type DockSilhouette,
   type StickyEdge,
 } from "./dockLiquid";
 import { dockMetrics, dockFrame, dockSize } from "./dockMeasure";
@@ -47,6 +49,8 @@ export interface DockPainter {
   cancelSettle(): void;
   /** 丝断开：两端的尖头各自缩回去。`distance` 是断开前离边缘的距离。 */
   detach(edge: StickyEdge, distance: number): void;
+  /** 胶囊此刻露出来的那块（含展开到一半、落定没走完）：面板从这里长出来。 */
+  silhouette(): DockSilhouette | null;
   stop(): void;
 }
 
@@ -118,10 +122,8 @@ export function createDockPainter(parts: DockPainterParts): DockPainter {
   const openTarget = (element: HTMLElement) =>
     !readEdge(element) || hovered || held || focused || dragging ? 1 : 0;
 
-  const paint = () => {
-    const element = parts.pill();
-    const path = parts.shape();
-    if (!element || !path) return;
+  /** 这一帧的几何输入：位置含落定没走完的偏移。 */
+  const geometry = (element: HTMLElement) => {
     const metrics = dockMetrics();
     const { anchor, viewport } = dockFrame(parts.reference());
     const bounds = dockBounds(anchor, dockSize(element), viewport);
@@ -129,8 +131,15 @@ export function createDockPainter(parts: DockPainterParts): DockPainter {
     const point = settle
       ? { x: base.x + settle.offset.x, y: base.y + settle.offset.y }
       : base;
-    const edge = readEdge(element);
     if (open === null) open = openTarget(element);
+    return { metrics, bounds, base, point, edge: readEdge(element), open };
+  };
+
+  const paint = () => {
+    const element = parts.pill();
+    const path = parts.shape();
+    if (!element || !path) return;
+    const { metrics, bounds, base, point, edge, open } = geometry(element);
     const {
       path: d,
       tips: tipsPath,
@@ -254,6 +263,12 @@ export function createDockPainter(parts: DockPainterParts): DockPainter {
         start: null,
       };
       wake();
+    },
+    silhouette() {
+      const element = parts.pill();
+      if (!element) return null;
+      const { metrics, bounds, point, edge, open } = geometry(element);
+      return dockSilhouette({ point, edge, open, metrics, bounds });
     },
     stop() {
       if (frame) cancelAnimationFrame(frame);

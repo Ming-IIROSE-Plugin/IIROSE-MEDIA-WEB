@@ -51,6 +51,10 @@ import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
 import { isPanelOpen, isPanelWindowed } from "../listener/panelPresence";
 import { PANEL_WINDOW_RECT_KEY } from "./components/panel-window/PanelWindowPlacement";
 import { InputPlatformAnalysis } from "../input-behavior-module/InputPlatformAnalysis";
+import {
+  GROW_CLOSE_MS,
+  GROW_OPEN_MS,
+} from "./components/panel-window/panelGrow";
 
 // 构造函数签名写的是 props: undefined，这里只按无 props 组件挂载。
 const Layer = MainAppControlLayer as unknown as ComponentType<object>;
@@ -300,6 +304,10 @@ describe("窗口模式", () => {
     document.body.append(mainHolder);
     // 宿站的监听挂在 document 上：body 的拦截是用 stopImmediatePropagation 不让它收到
     document.addEventListener("mousedown", bodyMouseDown);
+    // 这一组看开合的结果：减少动态效果让开合直接到位。动画和胶囊交接见「开合动画」和 panelGrow.test.ts
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("prefers-reduced-motion"),
+    }));
   });
 
   afterEach(() => {
@@ -480,7 +488,7 @@ describe("窗口模式", () => {
       await toggle();
       expect(isOpen()).toBe(false);
       expect(dock()).not.toBeNull();
-      expect(panel().style.getPropertyValue("--imw-dock-x")).not.toBe("");
+      expect(panel().getAttribute("style") ?? "").not.toMatch(/clip-path/);
     });
 
     it("窗口上没有 X；最小化收回胶囊，保留挂载和窗口位置、不写盘", async () => {
@@ -508,7 +516,7 @@ describe("窗口模式", () => {
       expect(mainAppMounts.count).toBe(mounts);
       expect({ ...localStorage }).toEqual(before);
       expect(panel().style.left).toBe("40px");
-      expect(panel().style.getPropertyValue("--imw-dock-x")).not.toBe("");
+      expect(panel().style.clipPath).toBe("");
 
       await click("打开点歌台");
       expect(isOpen()).toBe(true);
@@ -629,6 +637,97 @@ describe("窗口模式", () => {
       expect(dock()).not.toBeNull();
       render(null, host);
       expect(document.getElementById("imw-panel-dock-root")).toBeNull();
+    });
+
+    describe("开合动画", () => {
+      const root = () => document.getElementById("imw-panel-dock-root");
+      const followers = () => document.querySelectorAll("[data-imw-grow]");
+      const frames = async (ms: number) => {
+        await act(async () => {
+          vi.advanceTimersByTime(ms);
+        });
+      };
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        vi.stubGlobal("matchMedia", () => ({ matches: false }));
+      });
+      afterEach(() => vi.useRealTimers());
+
+      it("打开时胶囊留到面板长完再卸载，期间点不到；收起时先藏着挂上，缩回后淡入", async () => {
+        await mount();
+        await click("打开点歌台");
+        expect(isOpen()).toBe(true);
+        expect(root()).not.toBeNull();
+        expect(root()!.hasAttribute("inert")).toBe(true);
+        expect(panel().style.clipPath).toMatch(/^inset\(/);
+        expect(followers()).toHaveLength(2);
+        await frames(GROW_OPEN_MS + 100);
+        expect(root()).toBeNull();
+        expect(panel().getAttribute("style") ?? "").toBe("");
+        expect(followers()).toHaveLength(0);
+
+        await toggle();
+        expect(isOpen()).toBe(false);
+        const layer = () => root()!.firstElementChild as HTMLElement;
+        expect(layer().style.opacity).toBe("0");
+        expect(root()!.hasAttribute("inert")).toBe(true);
+        expect(panel().style.visibility).toBe("visible");
+        expect(
+          dock()!.closest("[data-imw-dock-layer]")!.className,
+        ).not.toContain("imwRiseIn");
+        await frames(GROW_CLOSE_MS + 100);
+        expect(layer().style.opacity).toBe("");
+        expect(root()!.hasAttribute("inert")).toBe(false);
+        expect(panel().getAttribute("style") ?? "").toBe("");
+        expect(followers()).toHaveLength(0);
+      });
+
+      it("Alt+S 打开时胶囊是收起的：从露出的那一小截长出来", async () => {
+        localStorage.setItem(
+          "imwPanelDockPosition",
+          JSON.stringify({ x: 0, y: 300, edge: "right" }),
+        );
+        await mount();
+        await toggle();
+        expect(isOpen()).toBe(true);
+        // 视口 1600×900，贴右边收起只露 34px，靠墙那侧是直角
+        expect(panel().style.clipPath).toBe(
+          "inset(300px 0px 562px 1566px round 19px 0px 0px 19px)",
+        );
+      });
+
+      it("没长完就收起：还是同一个胶囊，从当前形状缩回去", async () => {
+        await mount();
+        await click("打开点歌台");
+        const first = root();
+        await frames(120);
+        await toggle();
+        expect(root()).toBe(first);
+        await frames(GROW_CLOSE_MS + 100);
+        expect(root()).toBe(first);
+        expect(root()!.hasAttribute("inert")).toBe(false);
+        expect(panel().getAttribute("style") ?? "").toBe("");
+      });
+
+      it("窗口模式：长完停在窗口的位置，没有残留的裁切和位移", async () => {
+        await mountWindow();
+        await click("打开点歌台");
+        await frames(GROW_OPEN_MS + 100);
+        expect(isWindow()).toBe(true);
+        expect(panel().style.clipPath).toBe("");
+        expect(panel().style.translate).toBe("");
+        expect(panel().style.left).not.toBe("");
+      });
+
+      it("开合中途卸载：清掉裁切和跟随元素", async () => {
+        await mount();
+        await click("打开点歌台");
+        await frames(100);
+        render(null, host);
+        expect(followers()).toHaveLength(0);
+        expect(root()).toBeNull();
+      });
     });
   });
 });

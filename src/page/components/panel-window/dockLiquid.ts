@@ -269,6 +269,89 @@ export interface DockBox {
 /** 文字「点歌台」放得下的宽度。 */
 const LABEL_MAX_EM = 4;
 
+/**
+ * 贴边胶囊在边上的量：墙在哪、胶囊中心、离墙多远开始、沿边多长、横向半宽。
+ * 轮廓（`dockShape`）和露出的那块（`dockSilhouette`）都从这里算，两边不会对不上。
+ */
+function stuckMeasure(
+  edge: StickyEdge,
+  { point, open, metrics, bounds }: DockSilhouetteInput,
+) {
+  const { width, height, peek } = metrics;
+  const side = edge !== "top";
+  const wall = wallOf(edge, bounds, width);
+  const distance = Math.max(
+    edge === "left"
+      ? point.x - bounds.minX
+      : edge === "right"
+        ? bounds.maxX - point.x
+        : point.y - bounds.minY,
+    0,
+  );
+  const center = side ? point.y + height / 2 : point.x + width / 2;
+  const stretch = clamp(distance / DOCK_DETACH_PULL, 0, 1);
+  const base = side
+    ? lerp(peek, width, open)
+    : lerp(height - TOP_TUCK, height, open);
+  const length = base * (1 + DOCK_STRETCH_ALONG * stretch);
+  // 以胶囊中心为基准拉长：中心才能 1:1 跟手
+  const start = Math.max(distance - (length - base) / 2, 0);
+  const half =
+    (side ? height / 2 : lerp(height / 2, width / 2, open)) *
+    (1 - DOCK_STRETCH_ACROSS * stretch);
+  return { wall, center, start, length, half };
+}
+
+export type DockSilhouetteInput = Pick<
+  DockShapeInput,
+  "point" | "edge" | "open" | "metrics" | "bounds"
+>;
+
+/** 胶囊露出来的那块，不含贴边的耳朵：面板从它长出来，也缩回到它。 */
+export interface DockSilhouette {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** 左上、右上、右下、左下。靠墙那侧是直角。 */
+  radii: [number, number, number, number];
+}
+
+export function dockSilhouette(input: DockSilhouetteInput): DockSilhouette {
+  const { point, edge, open, metrics } = input;
+  const { width, height } = metrics;
+  if (isStickyEdge(edge)) {
+    const { wall, center, start, length, half } = stuckMeasure(edge, input);
+    // 和 `dockOutline` 里远端两个角同一个半径
+    const r = Math.min(height / 2, half, length);
+    if (edge === "top")
+      return {
+        x: center - half,
+        y: wall + start,
+        width: half * 2,
+        height: length,
+        radii: [0, 0, r, r],
+      };
+    return {
+      x: edge === "left" ? wall + start : wall - start - length,
+      y: center - half,
+      width: length,
+      height: half * 2,
+      radii: edge === "left" ? [0, r, r, 0] : [r, 0, 0, r],
+    };
+  }
+  // 下边是圆钮，以中心为基准展开；自由状态是完整的胶囊
+  const current = edge === "bottom" ? lerp(height, width, open) : width;
+  const r = Math.min(current, height) / 2;
+  return {
+    x: point.x + width / 2 - current / 2,
+    y: point.y,
+    width: current,
+    height,
+    radii: [r, r, r, r],
+  };
+}
+
 export function dockShape({
   point,
   edge,
@@ -282,27 +365,13 @@ export function dockShape({
   const r = height / 2;
   const shape = (): { path: string; box: DockBox } => {
     if (isStickyEdge(edge)) {
-      const side = edge !== "top";
-      const wall = wallOf(edge, bounds, width);
-      const distance = Math.max(
-        edge === "left"
-          ? point.x - bounds.minX
-          : edge === "right"
-            ? bounds.maxX - point.x
-            : point.y - bounds.minY,
-        0,
-      );
-      const center = side ? point.y + height / 2 : point.x + width / 2;
-      const stretch = clamp(distance / DOCK_DETACH_PULL, 0, 1);
-      const base = side
-        ? lerp(peek, width, open)
-        : lerp(height - TOP_TUCK, height, open);
-      const length = base * (1 + DOCK_STRETCH_ALONG * stretch);
-      // 以胶囊中心为基准拉长：中心才能 1:1 跟手
-      const start = Math.max(distance - (length - base) / 2, 0);
-      const half =
-        (side ? height / 2 : lerp(height / 2, width / 2, open)) *
-        (1 - DOCK_STRETCH_ACROSS * stretch);
+      const { wall, center, start, length, half } = stuckMeasure(edge, {
+        point,
+        edge,
+        open,
+        metrics,
+        bounds,
+      });
       const path = dockOutline(
         edge,
         wall,

@@ -40,7 +40,8 @@
   - 数据只单向流动：几何算出尺寸写给 DOM，不从 DOM 量回胶囊的宽度。尺寸、内边距、字号、图标大小和圆角都由 `dockMeasure.ts` 的 `dockMetrics` 和 `dockShape` 给，写成内联样式，胶囊和按钮上不要加 `h-9`、`px-3`、`gap-2`、`text-[13px]`、`size-5`、`rounded-*` 这类工具类（Tailwind 带 `!important`，会压过内联样式；`h-full`、`w-full` 没问题）。靠边那一侧的圆角是直的，否则靠墙的角点不到。范围一律用 `dockSize`（按展开宽度）算：胶囊被拉长或收起时 `offsetWidth` 会变，按它算范围会跟着抖。`left/top` 始终是展开时的左上角，存档也是它，收起和落定只是 `translate`。
   - 收起：左右只露 `peek`，上边缩成圆钮再藏 8px，上下都以中心为基准展开，图标在看得见的那一段正中；悬停（只在 `hover: hover` 设备）、按住或键盘聚焦（`:focus-visible`）展开；触屏也收起；减少动态效果时直接到位、没有拉丝。**下边不粘**，只是图标圆钮：`#moveinputDisplay` 占满整条底栏，灰框 `#moveinputBubble` 只是其中会随打字变长的一段，贴上栏顶会悬空，贴屏幕底又进了输入区（维护者决定不做）。
   - **蜂蜜拉丝**：往外拉时胶囊中心始终 1:1 跟手（不要加阻尼或追赶，维护者试过，会跟不上手指），粘只表现在形状上，丝先粗后急细，离开 56px 断开，两端尖头各自缩回；松手前没断就弹回。验证跟手要量 `getBoundingClientRect`，读 `style.left` 看不出滞后。改胶囊后跑 `node scripts/verify/dock.mjs` 做真站回归（贴边收起、轮廓的凹陷和方角、拉断时有没有洞、靠墙的角点不点得到、跟手、侧栏、浅深主题、桌面与手机尺寸），需要先 `npm run build` 和已登录的 profile。
-  - 胶囊一按下就捕获指针，捕获后点击可能落在外层，所以打开写在外层 `onClick`，别挪回按钮上。面板开合动画是容器收起态的 `translate`（`--imw-dock-x/y`）+ `scale: 0.2`，打开停稳后都是 `none`；起点用 `PanelWindowPlacement.rect`（全屏用视口）算，不要量收起中的容器。
+  - 胶囊一按下就捕获指针，捕获后点击可能落在外层，所以打开写在外层 `onClick`，别挪回按钮上。
+  - **面板从胶囊长出来**（`panel-window/panelGrow.ts`，维护者在试玩页选定的方案 A）：只裁不缩，打开时容器露出的范围（`clip-path`）从胶囊露出的那块（`dockSilhouette`，悬停时是展开的胶囊，Alt+S 时是收起的 peek）长到面板矩形，收起反过来缩回收起的胶囊；胶囊在窗口范围外时露出的那块靠 `translate` 挪过去，长到最后归零。另有两个跟着形状走的 fixed 元素：上层 `deskSheet` 底盖住还没浮现的内容，下层是投影。停稳后容器上的内联样式和这两个元素全部清掉，`app.css` 的容器规则里没有过渡、位移和缩放。和胶囊交接：打开时胶囊留到动画结束才卸载，期间 `inert`（双击不会落到刚露出的「点播」钮上）；收起时胶囊以 `entrance: "handover"` 藏着挂上，最后淡入。终点那一帧要先画出来、下一帧再清：收起的曲线越走越快，同一帧清掉会让最后两成一下子没了。改开合后跑 `node scripts/verify/grow.mjs`（起点、终点、停稳状态、减少动态效果、全屏 / 窗口 / 手机，并打印帧间隔）。
 - **面板内浮层层级单点调度**：`src/page/components/desk/overlayLayers.ts` 登记层（`deck` / `order` / `source` 互斥，`inner` 下一档，`episode` 独立根），`Esc` 与宿站 `Utils.backward` 只问「最上层是谁」，每按一次只关一层；焦点规则走 `desk/focusTrap.ts`。**新增面板内浮层必须登记一层**，不要再用 DOM 探针或自管 `document` 捕获监听。
 - **网易云歌单/专辑内页分段加载**：`src/platforms/CollectionSegments.ts` 按 `trackIds` 每 100 首一段取详情，翻到已加载的最后一页即预取下一段、并发去重、失败段单独重试、离开内页即 abort；加载器存进模式快照并配每模式 ticket（迟到结果作废）。内页的 `allMediaData` 切片现在只剩 B 站多 P。
 - **内页多选**：选中按绝对位置记，跨页、跨模式保留；离开内页 / 新搜索 / 换来源 / 换范围时清空，点播只在真正 `"sent"` 后才清。`playSelection` → `guardedRequest(..., ':selected')` → `NetEasePlatform.playSongIds`（与选集面板共用）；`SelectionBar` 原位替换 `RoomDeck`，不新增浮层层级。
@@ -95,7 +96,7 @@
 
 - **宿站侧栏打开时给 `body` 加 `translateX(275px)`（`Probe.functionHolderAnimate`）**：`body` 里的 `fixed` 全部跟着平移，屏幕边缘不再裁得到贴边收起的胶囊，所以胶囊的层自带 `overflow-hidden`；从 `getBoundingClientRect` 读宿站元素来算胶囊位置时要减去 `body` 的偏移。
 - **面板停稳时不能带 `transform`**（`scale` 也必须是 `none`，写 `1` 同样会改变 `fixed` 的基准；缩放只在开合动画期间存在；`transform: none` 和 `scale: none` 不能写在同一条规则，lightningcss 会合并成 `transform: scale(1)`）：`OrderMenu` 的坐标和菜单的 `fixed inset-0` 遮罩都靠「`fixed` 以视口为基准」，带上就会菜单错位、点窗口外收不起来。容器也不设 `overflow: hidden`（抓取区伸在窗口外），圆角裁切放在标题栏和 `#IIROSE_MEDIA` 上；抓取区 `z-20` 必须低于菜单遮罩 `z-30`。判断面板开合看 `ShowIIROSE_MEDIA_CONTAINER` 类，打开时的计算 `transform` 是 `none`，不是 skill 里写的单位矩阵。
-- **`viewportMetrics` 量的是宿站缩放，元素自身的 `scale` 要除掉**：收起的窗口带 `scale: 0.2`，不除的话视口被算大 5 倍，放不下也判成窗口。另外 `offsetWidth` 是取整的，别拿小元素量（胶囊约 113px，1.15 倍下差 4px），要量就用宽的参照物。
+- **`viewportMetrics` 量的是宿站缩放，元素自身的 `scale` 要除掉**：开合动画现在只裁不缩，容器不再带 `scale`，但这层处理保留着：以前收起的窗口带 `scale: 0.2`，不除的话视口被算大 5 倍，放不下也判成窗口。另外 `offsetWidth` 是取整的，别拿小元素量（胶囊约 113px，1.15 倍下差 4px），要量就用宽的参照物。
 - **窗口模式下焦点可能在宿站输入框**：新增面板级键盘处理要先问 `isHostTextTarget(event.target)`，别抢聊天框的按键；聊天框 `@词` 在面板已开时只搜索不切换开合（`isPanelOpen`）。
 
 ## 自动播放与真机联调（2026-10-25 实测补充）

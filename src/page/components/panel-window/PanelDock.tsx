@@ -1,6 +1,7 @@
 // 常驻的胶囊：面板没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
 // 拖到边缘时吸附并收起，悬停展开；粘在边上像蜂蜜，拉出一条丝后断开。这里只管手势和存档，
 // 胶囊的形状是一条 SVG 轮廓（`dockLiquid.ts` 算，`dockPainter.ts` 画），DOM 上的胶囊只放文字和图标。
+// 面板开合时和胶囊交接（`panelGrow.ts`）：打开时胶囊在面板长出来的头一段淡出，收起时最后淡入。
 // 挂在 body 独立根上（宿站主容器会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。
 // 不改宿站输入框 DOM。
 import { render } from "preact";
@@ -20,6 +21,7 @@ import {
   DOCK_DETACH_PULL,
   isStickyEdge,
   stuckPull,
+  type DockSilhouette,
   type StickyEdge,
 } from "./dockLiquid";
 import {
@@ -32,7 +34,6 @@ import {
   readStoredDock,
   saveStoredDock,
   writeDockEdge,
-  writeDockFlight,
 } from "./dockMeasure";
 import { createDockPainter, prefersReducedMotion } from "./dockPainter";
 import {
@@ -46,7 +47,7 @@ import {
 
 export const PANEL_DOCK_ROOT_ID = "imw-panel-dock-root";
 // 量取与存档在 `dockMeasure.ts`；这里转出去，调用方和测试仍从 `PanelDock` 取
-export { PANEL_DOCK_POSITION_KEY, writeDockFlight };
+export { PANEL_DOCK_POSITION_KEY };
 /** 按下后移动超过它才算拖动，否则是点击还原。 */
 const DOCK_DRAG_THRESHOLD = 4;
 /** 聊天区尺寸变化没有事件可听（输入框上方的内容也会把它顶走），低频轮询兜底。 */
@@ -54,8 +55,18 @@ const DOCK_FOLLOW_MS = 500;
 
 export interface PanelDockProps {
   onOpen: () => void;
-  /** 胶囊摆好或移动后调用：窗口缩放的终点要跟上。 */
-  onPlaced: () => void;
+  /**
+   * 怎么出现：`rise` 从下往上浮出（页面刚加载）；`handover` 先藏着，等面板缩回来再由
+   * `reveal` 淡入（面板收起时）。
+   */
+  entrance?: "rise" | "handover";
+}
+
+/** 当前挂着的胶囊此刻露出的那块：面板从这里长出来。没有胶囊时为 null。 */
+let liveSilhouette: (() => DockSilhouette | null) | null = null;
+
+export function readDockSilhouette(): DockSilhouette | null {
+  return liveSilhouette?.() ?? null;
 }
 
 interface DockDrag {
@@ -83,7 +94,7 @@ function isKeyboardFocus(target: EventTarget | null) {
   }
 }
 
-export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
+export function PanelDock({ onOpen, entrance = "rise" }: PanelDockProps) {
   const layer = useRef<HTMLDivElement>(null);
   const pill = useRef<HTMLDivElement>(null);
   const shape = useRef<SVGPathElement>(null);
@@ -126,21 +137,23 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
       painter.refresh();
       // 胶囊常驻：宿站换主题也要跟上
       layer.current?.setAttribute("data-imw-theme", themeAttr(hostIsDark()));
-      onPlaced();
     };
     sync();
+    const silhouette = painter.silhouette;
+    liveSilhouette = silhouette;
     const timer = window.setInterval(sync, DOCK_FOLLOW_MS);
     window.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("scroll", sync);
     return () => {
+      if (liveSilhouette === silhouette) liveSilhouette = null;
       window.clearInterval(timer);
       painter.stop();
       window.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("scroll", sync);
     };
-  }, [onPlaced]);
+  }, []);
 
   const endDrag = () => {
     const finished = drag.current;
@@ -177,7 +190,6 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     const saved: StoredDock = edge ? { ...final, edge } : final;
     saveStoredDock(saved);
     painter.refresh();
-    onPlaced();
   };
 
   return (
@@ -185,7 +197,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
       ref={layer}
       data-imw-dock-layer="true"
       // overflow-hidden：拉丝和展开都不能画到层外。宿站侧栏把 body 推走时，层的左缘就是胶囊贴着的那条边
-      className={`pointer-events-none fixed inset-0 z-[90009] overflow-hidden animate-[imwRiseIn_200ms_ease-out] motion-reduce:animate-none ${deskDockShadow}`}
+      className={`pointer-events-none fixed inset-0 z-[90009] overflow-hidden ${entrance === "rise" ? "animate-[imwRiseIn_200ms_ease-out] motion-reduce:animate-none" : ""} ${deskDockShadow}`}
     >
       {/* 只占 1px、靠 overflow 画出去：铺满全屏的话，外层投影滤镜每帧都要处理整个屏幕，拖动会卡 */}
       <svg
@@ -318,17 +330,42 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
   );
 }
 
-/** 挂到 body；返回卸载函数。 */
-export function mountPanelDock(props: PanelDockProps): () => void {
+export interface PanelDockHandle {
+  unmount(): void;
+  /**
+   * 和面板交接时胶囊的可见程度：0 看不见，1 正常。`interactive` 为 false 时整个胶囊 `inert`，
+   * 点不到也聚焦不到；默认只有完全显示时才能点。
+   */
+  reveal(amount: number, interactive?: boolean): void;
+}
+
+/** 挂到 body。`handover` 挂上时是藏着的，等 `reveal(1)`。 */
+export function mountPanelDock(props: PanelDockProps): PanelDockHandle {
   releasePanelDock();
   const root = document.createElement("div");
   root.id = PANEL_DOCK_ROOT_ID;
   document.body.appendChild(root);
-  render(<PanelDock {...props} />, root);
-  return () => {
-    render(null, root);
-    root.remove();
+  const handle: PanelDockHandle = {
+    unmount() {
+      render(null, root);
+      root.remove();
+    },
+    reveal(amount, interactive = amount >= 1) {
+      const visible = Math.min(Math.max(amount, 0), 1);
+      // 透明度写在带 z-index 的那一层上。写在根节点上的话，没有定位的根会变成 z 0 的层叠上下文，
+      // 整个胶囊沉到面板和盖在面板上的底色下面，淡出淡入都看不见
+      const layer = root.firstElementChild as HTMLElement | null;
+      if (layer) {
+        if (visible >= 1) layer.style.removeProperty("opacity");
+        else layer.style.opacity = `${visible}`;
+      }
+      root.toggleAttribute("inert", !interactive);
+    },
   };
+  render(<PanelDock {...props} />, root);
+  // 同一个任务里藏好，浏览器还没绘制，不会闪出来
+  if (props.entrance === "handover") handle.reveal(0);
+  return handle;
 }
 
 export function releasePanelDock(): void {
