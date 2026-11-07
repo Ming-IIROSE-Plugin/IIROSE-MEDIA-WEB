@@ -11,8 +11,8 @@ import type { PanelRect } from "./geometry";
 export type GrowShape = DockSilhouette;
 export type GrowDirection = "open" | "close";
 
-export const GROW_OPEN_MS = 300;
-export const GROW_CLOSE_MS = 220;
+export const GROW_OPEN_MS = 100;
+export const GROW_CLOSE_MS = 100;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const lerp = (from: number, to: number, amount: number) =>

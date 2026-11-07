@@ -701,7 +701,7 @@ describe("窗口模式", () => {
         await mount();
         await click("打开点歌台");
         const first = root();
-        await frames(120);
+        await frames(32 + GROW_OPEN_MS * 0.3);
         await toggle();
         expect(root()).toBe(first);
         await frames(GROW_CLOSE_MS + 100);
@@ -723,7 +723,7 @@ describe("窗口模式", () => {
       it("开合中途卸载：清掉裁切和跟随元素", async () => {
         await mount();
         await click("打开点歌台");
-        await frames(100);
+        await frames(32 + GROW_OPEN_MS * 0.3);
         render(null, host);
         expect(followers()).toHaveLength(0);
         expect(root()).toBeNull();

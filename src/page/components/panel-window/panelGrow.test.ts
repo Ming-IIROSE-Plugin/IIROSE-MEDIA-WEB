@@ -258,11 +258,12 @@ describe("驱动", () => {
     const driver = grow();
     // 悬停时从展开的胶囊长出来，收起要缩回收起的胶囊：两头不一样也不能跳
     driver.start(run("open", full, expanded));
-    vi.advanceTimersByTime(130);
+    vi.advanceTimersByTime(32 + GROW_OPEN_MS * 0.3);
     const left = () => parseFloat(veil().style.left);
     const width = () => parseFloat(veil().style.width);
     const before = { left: left(), width: width() };
     expect(before.width).toBeGreaterThan(expanded.width * 4);
+    expect(driver.running).toBe(true);
     driver.start(run("close", full, tucked));
     expect(left()).toBeCloseTo(before.left, 1);
     expect(width()).toBeCloseTo(before.width, 1);
@@ -297,7 +298,7 @@ describe("驱动", () => {
   it("卸载时立刻走完并清掉", () => {
     const driver = grow();
     driver.start(run("open"));
-    vi.advanceTimersByTime(100);
+    vi.advanceTimersByTime(32 + GROW_OPEN_MS * 0.3);
     driver.finish();
     expect(container.getAttribute("style") ?? "").toBe("");
     expect(followers()).toHaveLength(0);
