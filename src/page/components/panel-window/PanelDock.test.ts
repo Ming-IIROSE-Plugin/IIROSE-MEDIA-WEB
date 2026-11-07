@@ -2,9 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
-import { DOCK_NOMINAL_SIZE, DOCK_NOMINAL_SIZE_LARGE } from "./dockMeasure";
 import {
-  DOCK_HEIGHT_CLASS,
   mountPanelDock,
   PANEL_DOCK_POSITION_KEY,
   PANEL_DOCK_ROOT_ID,
@@ -56,13 +54,30 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("胶囊尺寸的两处写法", () => {
-  const px = (utility: string) => Number(utility.match(/h-(\d+)/)?.[1]) * 4;
-  it("按钮高度类 + 2px 边框 = 标称尺寸，桌面与手机各一份", () => {
-    const [desktop, phone, coarse] = DOCK_HEIGHT_CLASS.split(" ");
-    expect(px(desktop) + 2).toBe(DOCK_NOMINAL_SIZE.height);
-    expect(px(phone) + 2).toBe(DOCK_NOMINAL_SIZE_LARGE.height);
-    expect(px(coarse)).toBe(px(phone));
+/** 把媒体查询打桩：`matches` 决定哪些查询算命中。 */
+const stubMedia = (matches: (query: string) => boolean) =>
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: matches(query) }));
+
+describe("胶囊尺寸", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("桌面 38px 高；手机和粗指针上 54px 高，内容也跟着放大", () => {
+    mount();
+    expect(dock().style.height).toBe("38px");
+    expect(dock().style.width).toBe("87px");
+    releasePanelDock();
+    stubMedia((query) => query.includes("max-width: 768px"));
+    mount();
+    expect(dock().style.height).toBe("54px");
+    expect(dock().style.width).toBe("110px");
+    const button = dock().querySelector("button")!;
+    expect(button.style.gap).toBe("8px");
+    expect(button.style.fontSize).toBe("15px");
+    expect(button.querySelector("svg")!.style.width).toBe("20px");
+    // 尺寸只写在 TS 里：工具类带 !important，留着会压过内联样式
+    expect(button.className).not.toMatch(
+      /(^|[\s:])(h-\d|px-\d|gap-\d|size-\d|text-\[|rounded-)/,
+    );
   });
 });
 
@@ -315,7 +330,26 @@ describe("拖动", () => {
     expect(position().y).toBe(794);
   });
 
-  const neck = () => document.querySelector(`#${PANEL_DOCK_ROOT_ID} path`)!;
+  const shape = () =>
+    document.querySelector("[data-imw-dock-shape]")!.getAttribute("d")!;
+  const tips = () =>
+    document.querySelector("[data-imw-dock-tips]")!.getAttribute("d")!;
+  /** 路径里出现过的所有 x（点按 x y 成对）。 */
+  const xs = (path: string) =>
+    (path.match(/-?\d+(\.\d+)?/g) ?? [])
+      .map(Number)
+      .filter((_, i) => i % 2 === 0);
+  /** 胶囊内容在屏幕上的矩形：left / top 是展开时的位置，再加上画师写的 translate。 */
+  const box = () => {
+    const [dx, dy] = (dock().style.translate || "0px 0px")
+      .split(" ")
+      .map(parseFloat);
+    return {
+      x: position().x + dx,
+      y: position().y + dy,
+      width: parseFloat(dock().style.width),
+    };
+  };
 
   describe("液体粘连", () => {
     const seedEdge = (edge: string, x = 0, y = 500) =>
@@ -324,75 +358,123 @@ describe("拖动", () => {
         JSON.stringify({ x, y, edge }),
       );
 
-    describe("胶囊宽度变化时", () => {
-      let resized: (() => void) | undefined;
-      let disconnect: ReturnType<typeof vi.fn>;
-      beforeEach(() => {
-        disconnect = vi.fn();
-        vi.stubGlobal(
-          "ResizeObserver",
-          class {
-            constructor(callback: () => void) {
-              resized = callback;
-            }
-            observe() {}
-            disconnect = disconnect;
-          },
-        );
-      });
-      afterEach(() => {
-        vi.unstubAllGlobals();
-        resized = undefined;
-      });
-      const widen = () =>
-        Object.defineProperty(dock(), "offsetWidth", {
-          configurable: true,
-          value: 87,
-        });
+    describe("展开和收起", () => {
+      const hover = (type: string) =>
+        dock().dispatchEvent(new MouseEvent(type, { bubbles: false }));
+      beforeEach(() => vi.useFakeTimers());
+      afterEach(() => vi.unstubAllGlobals());
 
-      it("上边：颈的中心当场跟上胶囊，不等轮询", () => {
+      it("悬停：轮廓和内容逐帧一起展开，中心不动；移开收回", () => {
+        stubMedia((query) => query === "(hover: hover)");
         addInput(input);
         seedEdge("top", 500, 0);
         mount();
-        const before = neck().getAttribute("d");
-        widen();
-        resized?.();
-        expect(neck().getAttribute("d")).not.toBe(before);
+        expect(box().width).toBe(38);
+        const center = box().x + 19;
+        hover("pointerenter");
+        for (let frame = 0; frame < 30; frame++) {
+          vi.advanceTimersByTime(16);
+          const width = box().width;
+          // 内容的宽度和轮廓的宽度是同一个数，所以每一帧都对得上
+          const path = xs(shape());
+          expect(Math.max(...path) - Math.min(...path)).toBeCloseTo(
+            width + 16,
+            0,
+          );
+          expect(box().x + width / 2).toBeCloseTo(center, 1);
+        }
+        expect(box().width).toBe(87);
+        hover("pointerleave");
+        vi.advanceTimersByTime(500);
+        expect(box().width).toBe(38);
       });
 
-      it("拖动中不重画：那时的颈归拖动管", () => {
+      it("触屏没有悬停：只有按住才展开，松手收回", () => {
+        stubMedia(() => false);
+        addInput(input);
+        seedEdge("right", 0, 500);
+        mount();
+        expect(box().width).toBe(34);
+        hover("pointerenter");
+        vi.advanceTimersByTime(500);
+        expect(box().width).toBe(34);
+        pointer("pointerdown", restore(), 1590, 500);
+        vi.advanceTimersByTime(500);
+        expect(box().width).toBe(87);
+        pointer("pointerup", restore(), 1590, 500);
+        vi.advanceTimersByTime(500);
+        expect(box().width).toBe(34);
+      });
+
+      it("键盘聚焦展开；鼠标点击留下的焦点不展开", () => {
+        addInput(input);
+        seedEdge("right", 0, 500);
+        mount();
+        const button = dock().querySelector("button")!;
+        const focus = (visible: boolean) => {
+          button.matches = () => visible;
+          button.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+          vi.advanceTimersByTime(500);
+        };
+        focus(false);
+        expect(box().width).toBe(34);
+        focus(true);
+        expect(box().width).toBe(87);
+        button.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+        vi.advanceTimersByTime(500);
+        expect(box().width).toBe(34);
+      });
+
+      it("减少动态效果：直接到位，不留动画", () => {
+        stubMedia((query) => !query.includes("max-width"));
         addInput(input);
         seedEdge("top", 500, 0);
         mount();
-        pointer("pointerdown", restore(), 500, 10);
-        const before = neck().getAttribute("d");
-        widen();
-        resized?.();
-        expect(neck().getAttribute("d")).toBe(before);
-        pointer("pointerup", restore(), 500, 10);
+        expect(vi.getTimerCount()).toBe(1);
+        hover("pointerenter");
+        expect(box().width).toBe(87);
+        expect(vi.getTimerCount()).toBe(1);
       });
 
-      it("卸载时断开监听", () => {
+      it("减少动态效果：拖离和拖近边缘都不画拉丝", () => {
+        stubMedia((query) => !query.includes("max-width"));
+        addInput(input);
+        seedEdge("left");
+        mount();
+        pointer("pointerdown", restore(), 10, 500);
+        pointer("pointermove", restore(), 20, 500);
+        // 一动就离开这条边，胶囊还是完整的胶囊
+        expect(edge()).toBeNull();
+        expect(Math.min(...xs(shape()))).toBe(position().x);
+        expect(tips()).toBe("");
+        pointer("pointerup", restore(), 20, 500);
+      });
+
+      it("卸载时停掉动画", () => {
+        stubMedia((query) => query === "(hover: hover)");
         addInput(input);
         seedEdge("top", 500, 0);
-        mount();
-        releasePanelDock();
-        expect(disconnect).toHaveBeenCalled();
+        const unmount = mount();
+        hover("pointerenter");
+        unmount();
+        expect(vi.getTimerCount()).toBe(0);
       });
     });
 
-    it("贴边静止就有弯月面；离开边缘和贴下边都没有", () => {
+    it("贴边静止：同一条轮廓连着边缘，胶囊本身不带底色；贴下边没有耳朵", () => {
       addInput(input);
       seedEdge("left");
       mount();
-      expect(neck().getAttribute("d")).not.toBe("");
+      expect(Math.min(...xs(shape()))).toBe(0);
+      expect(shape().match(/M/g)).toHaveLength(1);
+      expect(dock().className).not.toMatch(/\bbg-/);
       releasePanelDock();
       seedEdge("bottom", 500, 300);
       mount();
-      expect(neck().getAttribute("d")).toBe("");
+      expect(Math.min(...xs(shape()))).toBeGreaterThan(500);
     });
 
-    it("没拉到阈值：胶囊跟手、略微拉长，还算贴在这条边上", () => {
+    it("没拉到阈值：胶囊中心跟手、内容不变形，还算贴在这条边上", () => {
       addInput(input);
       seedEdge("left");
       mount();
@@ -402,10 +484,15 @@ describe("拖动", () => {
       expect(edge()).toBe("left");
       // 胶囊 1:1 跟手，粘只表现在形状上
       expect(position().x).toBe(30);
-      expect(dock().style.scale).not.toBe("");
+      expect(box().x + box().width / 2).toBeCloseTo(30 + 87 / 2, 5);
+      expect(box().width).toBeGreaterThan(87);
+      expect(dock().style.scale).toBeFalsy();
+      // 丝从边缘连到胶囊
+      expect(Math.min(...xs(shape()))).toBe(0);
     });
 
     it("没拉到阈值就松手：弹回边缘，存档的边不变，也不算点击", () => {
+      vi.useFakeTimers();
       addInput(input);
       seedEdge("left");
       mount();
@@ -417,11 +504,15 @@ describe("拖动", () => {
       expect(edge()).toBe("left");
       expect(stored()).toEqual({ x: 0, y: 460, edge: "left" });
       expect(dock().hasAttribute("data-imw-dock-held")).toBe(false);
-      expect(dock().style.scale).toBe("");
       expect(onOpen).not.toHaveBeenCalled();
+      // 存档马上到位，看到的胶囊从松手的地方走回去，丝也一起收回
+      expect(box().x).toBeGreaterThan(20);
+      vi.advanceTimersByTime(600);
+      expect(box()).toMatchObject({ x: 0, y: 460, width: 34 });
     });
 
-    it("拉过阈值：断开，不再贴边，拉伸撤掉", () => {
+    it("拉过阈值：断开，不再贴边；尖头缩完只剩胶囊", () => {
+      vi.useFakeTimers();
       addInput(input);
       seedEdge("left");
       mount();
@@ -429,16 +520,17 @@ describe("拖动", () => {
       pointer("pointermove", restore(), 40, 500);
       pointer("pointermove", restore(), 100, 500);
       expect(edge()).toBeNull();
-      expect(dock().style.scale).toBe("");
       expect(position().x).toBe(90);
-      // 手指还在拖：只弹形状，不能打开位置过渡（否则胶囊会缓动着追手指）
-      expect(dock().getAttribute("data-imw-dock-settling")).toBe("scale");
-      expect(dock().hasAttribute("data-imw-dock-dragging")).toBe(true);
+      // 手指还在拖：胶囊就在指针下，没有位置动画
+      expect(box()).toMatchObject({ x: 90, width: 87 });
+      expect(shape().match(/M/g)).toHaveLength(1);
+      expect(tips().match(/M/g)).toHaveLength(2);
+      vi.advanceTimersByTime(400);
+      expect(tips()).toBe("");
+      expect(box()).toMatchObject({ x: 90, width: 87 });
       pointer("pointerup", restore(), 100, 500);
       expect(position()).toEqual({ x: 90, y: 500 });
       expect(stored()).toEqual({ x: 90, y: 500 });
-      expect(dock().hasAttribute("data-imw-dock-dragging")).toBe(false);
-      expect(dock().getAttribute("data-imw-dock-settling")).toBe("place");
     });
 
     it("自由拖近边缘：边缘提前伸出来；拖远又收回去", () => {
@@ -448,12 +540,13 @@ describe("拖动", () => {
         JSON.stringify({ x: 400, y: 400 }),
       );
       mount();
-      expect(neck().getAttribute("d")).toBe("");
+      expect(Math.min(...xs(shape()))).toBe(400);
       pointer("pointerdown", restore(), 400, 400);
       pointer("pointermove", restore(), 10, 400);
-      expect(neck().getAttribute("d")).not.toBe("");
+      expect(Math.min(...xs(shape()))).toBe(0);
+      expect(position().x).toBe(10);
       pointer("pointermove", restore(), 300, 400);
-      expect(neck().getAttribute("d")).toBe("");
+      expect(Math.min(...xs(shape()))).toBe(300);
       pointer("pointerup", restore(), 300, 400);
     });
   });
@@ -514,42 +607,15 @@ describe("样式表", () => {
   const css = readFileSync(resolve(process.cwd(), "src/app.css"), "utf8");
 
   it("减少动态效果时开合没有位移和缩放，也没有过渡", () => {
-    const reduced = css.slice(
-      css.lastIndexOf(
-        "@media (prefers-reduced-motion: reduce)",
-        css.indexOf("胶囊吸附在边缘时收起"),
-      ),
-    );
-    expect(reduced).toMatch(
-      /\.IIROSE_MEDIA_CONTAINER\.ShowIIROSE_MEDIA_CONTAINER \{\s*translate: none;\s*scale: none;\s*transition: none/,
-    );
-    expect(reduced).toMatch(/transition: none/);
-  });
-
-  it("收起不分设备；悬停只在有悬停的设备上展开，按住和键盘聚焦都展开", () => {
-    const block = css.slice(css.indexOf("胶囊吸附在边缘时收起"));
-    expect(block.indexOf('[data-imw-dock-edge="right"]')).toBeLessThan(
-      block.indexOf("@media (hover: hover)"),
-    );
-    expect(block).toMatch(
-      /@media \(hover: hover\) \{\s*\[data-imw-panel-dock\]\[data-imw-dock-edge\]:hover/,
-    );
-    expect(block).toMatch(/\[data-imw-dock-held\],\s*:has\(:focus-visible\)/);
-  });
-
-  it("拖动中没有位置过渡；只有松手才打开 left / top 的过渡", () => {
-    expect(css).toMatch(/\[data-imw-dock-settling="place"\] \{[^}]*left 300ms/);
-    expect(css).toMatch(/\[data-imw-dock-dragging\] \{\s*transition: none/);
-    const scaleOnly = css.match(
-      /\[data-imw-dock-dragging\]\[data-imw-dock-settling="scale"\] \{[^}]*\}/,
-    )![0];
-    expect(scaleOnly).not.toMatch(/\b(left|top|translate) \d/);
-  });
-
-  it("收起时文字淡出，不露半个字", () => {
     expect(css).toMatch(
-      /\[data-imw-panel-dock\]\[data-imw-dock-edge\] \[data-imw-dock-label\] \{\s*opacity: 0/,
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.IIROSE_MEDIA_CONTAINER,\s*\.IIROSE_MEDIA_CONTAINER\.ShowIIROSE_MEDIA_CONTAINER \{\s*translate: none;\s*scale: none;\s*transition: none/,
     );
+  });
+
+  it("胶囊的形状和收起都不归 CSS 管", () => {
+    expect(css).not.toContain("data-imw-panel-dock");
+    expect(css).not.toContain("data-imw-dock-edge");
+    expect(css).not.toContain("data-imw-dock-label");
   });
 
   it("独立根进了边框基线和盒模型两条选择器", () => {

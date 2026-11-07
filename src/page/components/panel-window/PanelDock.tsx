@@ -1,5 +1,6 @@
 // 常驻的胶囊：面板没开着时显示，点它打开。默认贴在输入框左上方，可拖动并记住位置，但进不了输入框；
-// 拖到边缘时吸附并收起，悬停展开；粘在边上像蜂蜜，拉出一条丝后断开（几何在 `dockLiquid.ts`）。
+// 拖到边缘时吸附并收起，悬停展开；粘在边上像蜂蜜，拉出一条丝后断开。这里只管手势和存档，
+// 胶囊的形状是一条 SVG 轮廓（`dockLiquid.ts` 算，`dockPainter.ts` 画），DOM 上的胶囊只放文字和图标。
 // 挂在 body 独立根上（宿站主容器会平移），只占胶囊自己的矩形，其余区域的点击和按键都归宿站。
 // 不改宿站输入框 DOM。
 import { render } from "preact";
@@ -12,19 +13,18 @@ import {
   deskFocusRing,
   deskDockShadow,
   deskInk,
-  deskSheet,
   deskSheetFill,
-  typeButtonSm,
+  fontSans,
 } from "../floating-panel/tokens";
 import {
   DOCK_DETACH_PULL,
   isStickyEdge,
-  stretchScale,
   stuckPull,
   type StickyEdge,
 } from "./dockLiquid";
 import {
   dockFrame,
+  dockMetrics,
   dockSize,
   forgetUnsavedDock,
   measureDock,
@@ -34,10 +34,9 @@ import {
   writeDockEdge,
   writeDockFlight,
 } from "./dockMeasure";
-import { createNeckController, prefersReducedMotion } from "./dockNeck";
+import { createDockPainter, prefersReducedMotion } from "./dockPainter";
 import {
   clampDockPoint,
-  dockBounds,
   pinToEdge,
   snapDockEdge,
   type DockEdge,
@@ -50,13 +49,6 @@ export const PANEL_DOCK_ROOT_ID = "imw-panel-dock-root";
 export { PANEL_DOCK_POSITION_KEY, writeDockFlight };
 /** 按下后移动超过它才算拖动，否则是点击还原。 */
 const DOCK_DRAG_THRESHOLD = 4;
-/**
- * 按钮高度类。手机和粗指针上要好点：52px 高，比其它目标的 44px 更大。
- * 与 `dockMeasure.ts` 的 `DOCK_NOMINAL_SIZE(_LARGE)` 是同一件事的两处写法（高度 + 上下 2px 边框），
- * 测试会核对两边，改一处另一处不跟就会失败。
- */
-export const DOCK_HEIGHT_CLASS =
-  "h-9 max-[768px]:h-13 [@media(pointer:coarse)]:h-13";
 /** 聊天区尺寸变化没有事件可听（输入框上方的内容也会把它顶走），低频轮询兜底。 */
 const DOCK_FOLLOW_MS = 500;
 
@@ -79,30 +71,42 @@ interface DockDrag {
   stuckDistance: number;
 }
 
+/** 只在真有悬停的设备上悬停展开：触屏的 :hover 会粘住。 */
+const canHover = () => !!window.matchMedia?.("(hover: hover)")?.matches;
+
+/** 只认键盘带来的焦点：鼠标拖动留下的焦点不能让胶囊一直展开。 */
+function isKeyboardFocus(target: EventTarget | null) {
+  try {
+    return !!(target as HTMLElement | null)?.matches?.(":focus-visible");
+  } catch {
+    return false;
+  }
+}
+
 export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
   const layer = useRef<HTMLDivElement>(null);
   const pill = useRef<HTMLDivElement>(null);
-  const neck = useRef<SVGPathElement>(null);
+  const shape = useRef<SVGPathElement>(null);
+  const tips = useRef<SVGPathElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const label = useRef<HTMLSpanElement>(null);
   const drag = useRef<DockDrag | null>(null);
   const justDragged = useRef(false);
 
   const reference = () => layer.current as HTMLElement;
 
-  // 颈的绘制与落定动画在 `dockNeck.ts`；组件只拿它的方法
-  const neckRef = useRef<ReturnType<typeof createNeckController>>();
-  if (!neckRef.current)
-    neckRef.current = createNeckController(reference, () => neck.current);
-  const {
-    writeNeck,
-    drawNeck,
-    animating,
-    stop: stopNeckAnimation,
-    animate: animateNeck,
-    settle,
-    cancelSettle,
-    detach,
-    drawApproach,
-  } = neckRef.current;
+  // 形状和动画都在 `dockPainter.ts`；这里只管手势和存档
+  const painterRef = useRef<ReturnType<typeof createDockPainter>>();
+  if (!painterRef.current)
+    painterRef.current = createDockPainter({
+      reference,
+      pill: () => pill.current,
+      shape: () => shape.current,
+      tips: () => tips.current,
+      button: () => button.current,
+      label: () => label.current,
+    });
+  const painter = painterRef.current;
 
   const place = (element: HTMLElement, { x, y }: DockPoint) => {
     element.style.left = `${x}px`;
@@ -114,14 +118,12 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     if (!element) return;
     const sync = () => {
       if (drag.current) return;
+      // 位置要按胶囊的高度算，所以先定高度
+      element.style.height = `${dockMetrics().height}px`;
       const { x, y } = measureDock(reference(), dockSize(element));
       place(element, { x, y });
-      const edge = readStoredDock()?.edge;
-      writeDockEdge(element, edge);
-      if (!animating()) {
-        if (isStickyEdge(edge)) drawNeck(element, edge, 0);
-        else writeNeck("");
-      }
+      writeDockEdge(element, readStoredDock()?.edge);
+      painter.refresh();
       // 胶囊常驻：宿站换主题也要跟上
       layer.current?.setAttribute("data-imw-theme", themeAttr(hostIsDark()));
       onPlaced();
@@ -131,22 +133,9 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     window.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("resize", sync);
     window.visualViewport?.addEventListener("scroll", sync);
-    // 悬停展开和缩回时胶囊的宽度逐帧变：颈要同一帧跟上，等轮询的话会有约半秒露出一块方形
-    const resizes = window.ResizeObserver
-      ? new ResizeObserver(() => {
-          if (drag.current || animating()) return;
-          const edge = element.getAttribute(
-            "data-imw-dock-edge",
-          ) as DockEdge | null;
-          if (isStickyEdge(edge)) drawNeck(element, edge, 0);
-        })
-      : null;
-    resizes?.observe(element);
     return () => {
-      resizes?.disconnect();
       window.clearInterval(timer);
-      cancelSettle();
-      stopNeckAnimation();
+      painter.stop();
       window.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("resize", sync);
       window.visualViewport?.removeEventListener("scroll", sync);
@@ -159,7 +148,8 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
     drag.current = null;
     if (!element) return;
     element.removeAttribute("data-imw-dock-held");
-    element.removeAttribute("data-imw-dock-dragging");
+    painter.stopDragging();
+    painter.setHeld(false);
     if (!finished?.moved) return;
     justDragged.current = true;
     // 取消拖拽后不会再有点击：标记不清掉的话，下一次键盘激活会被吞一次
@@ -180,58 +170,61 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
       size,
       viewport,
     );
-    // 落定前离边缘多远：颈从这里收回弯月面
-    const bounds = dockBounds(anchor, size, viewport);
-    const gap = !isStickyEdge(edge)
-      ? 0
-      : edge === "left"
-        ? point.x - bounds.minX
-        : edge === "right"
-          ? bounds.maxX - point.x
-          : point.y - bounds.minY;
-    settle(element, "place");
-    element.style.removeProperty("scale");
+    // 位置马上到终点，视觉上从松手的地方走回去；还粘着的话，丝也跟着收回耳朵
+    painter.settleFrom({ x: point.x - final.x, y: point.y - final.y });
     place(element, final);
     writeDockEdge(element, edge);
-    if (isStickyEdge(edge)) {
-      animateNeck((remaining) => drawNeck(element, edge, gap * remaining));
-    } else if (!animating()) {
-      writeNeck("");
-    }
     const saved: StoredDock = edge ? { ...final, edge } : final;
     saveStoredDock(saved);
+    painter.refresh();
     onPlaced();
   };
 
-  const controlHeight = DOCK_HEIGHT_CLASS;
   return (
     <div
       ref={layer}
       data-imw-dock-layer="true"
-      // overflow-hidden：收起靠裁切。宿站侧栏把 body 推走时，屏幕边缘裁不到它，藏着的部分会露在侧栏上
-      className={`pointer-events-none fixed inset-0 z-[90009] overflow-hidden ${deskDockShadow}`}
+      // overflow-hidden：拉丝和展开都不能画到层外。宿站侧栏把 body 推走时，层的左缘就是胶囊贴着的那条边
+      className={`pointer-events-none fixed inset-0 z-[90009] overflow-hidden animate-[imwRiseIn_200ms_ease-out] motion-reduce:animate-none ${deskDockShadow}`}
     >
       {/* 只占 1px、靠 overflow 画出去：铺满全屏的话，外层投影滤镜每帧都要处理整个屏幕，拖动会卡 */}
       <svg
         aria-hidden="true"
         className="absolute top-0 left-0 h-px w-px overflow-visible"
       >
-        <path ref={neck} d="" className={deskSheetFill} />
+        <path
+          ref={shape}
+          d=""
+          data-imw-dock-shape="true"
+          className={deskSheetFill}
+        />
+        <path
+          ref={tips}
+          d=""
+          data-imw-dock-tips="true"
+          className={deskSheetFill}
+        />
       </svg>
       <div
         ref={pill}
         role="group"
         aria-label="点歌台"
         data-imw-panel-dock="true"
-        className={`pointer-events-auto fixed flex touch-none select-none rounded-full border border-solid border-transparent whitespace-nowrap animate-[imwRiseIn_200ms_ease-out] motion-reduce:animate-none ${deskSheet} ${deskInk}`}
+        className={`pointer-events-auto fixed flex touch-none select-none border border-solid border-transparent whitespace-nowrap transition-none ${deskInk}`}
         {...stopHostGestures}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== "touch" && canHover())
+            painter.setHovered(true);
+        }}
+        onPointerLeave={() => painter.setHovered(false)}
+        onFocusIn={(event) => painter.setFocused(isKeyboardFocus(event.target))}
+        onFocusOut={() => painter.setFocused(false)}
         onPointerDown={(event) => {
           const element = pill.current;
           if (!element || !event.isPrimary || event.button !== 0) return;
           justDragged.current = false;
-          // 上一次松手的落定还没结束就又按下：不能带着过渡拖
-          cancelSettle();
-          element.removeAttribute("data-imw-dock-settling");
+          // 上一次松手的落定还没结束就又按下：直接到终点，再开始拖
+          painter.cancelSettle();
           const pointer = pointerPosition(
             reference(),
             event.clientX,
@@ -252,6 +245,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
           };
           // 按住就展开（触屏没有悬停）
           element.setAttribute("data-imw-dock-held", "true");
+          painter.setHeld(true);
           // 一按下就捕获：快速拖出胶囊也不丢。捕获后点击可能落在胶囊上，所以打开写在外层的 onClick
           element.setPointerCapture?.(event.pointerId);
         }}
@@ -270,7 +264,7 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
           if (!current.moved && Math.hypot(dx, dy) < DOCK_DRAG_THRESHOLD)
             return;
           current.moved = true;
-          element.setAttribute("data-imw-dock-dragging", "true");
+          painter.startDragging();
           const size = dockSize(element);
           const { anchor, viewport } = dockFrame(reference());
           const docked = { x: current.left, y: current.top };
@@ -281,17 +275,15 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
           if (current.stuck) {
             const pull = stuckPull(current.stuck, docked, point);
             if (pull < DOCK_DETACH_PULL) {
-              const distance = Math.max(pull, 0);
-              current.stuckDistance = distance;
-              element.style.scale = stretchScale(current.stuck, distance);
-              drawNeck(element, current.stuck, distance);
+              current.stuckDistance = Math.max(pull, 0);
+              painter.paint();
               return;
             }
-            detach(element, current);
-            return;
+            painter.detach(current.stuck, current.stuckDistance);
+            current.stuck = null;
           }
           writeDockEdge(element, null);
-          drawApproach(element, point);
+          painter.paint();
         }}
         onPointerUp={(event) => {
           if (drag.current?.pointer === event.pointerId) endDrag();
@@ -307,12 +299,19 @@ export function PanelDock({ onOpen, onPlaced }: PanelDockProps) {
         }}
       >
         <button
+          ref={button}
           type="button"
           aria-label="打开点歌台"
-          className={`m-0 flex cursor-pointer items-center gap-1.5 rounded-full border-0 bg-transparent px-3 text-inherit max-[768px]:gap-2 max-[768px]:px-4 max-[768px]:text-[15px] max-[768px]:[&>svg]:size-5 [@media(pointer:coarse)]:gap-2 [@media(pointer:coarse)]:px-4 [@media(pointer:coarse)]:text-[15px] [@media(pointer:coarse)]:[&>svg]:size-5 ${controlHeight} ${typeButtonSm} ${deskFocusRing}`}
+          className={`m-0 flex h-full w-full cursor-pointer items-center border-0 bg-transparent text-inherit transition-none [&>svg]:shrink-0 ${fontSans} ${deskFocusRing}`}
         >
           <DeskIcon name="mark" size={16} />
-          <span data-imw-dock-label="true">点歌台</span>
+          <span
+            ref={label}
+            data-imw-dock-label="true"
+            className="inline-block overflow-hidden transition-none"
+          >
+            点歌台
+          </span>
         </button>
       </div>
     </div>

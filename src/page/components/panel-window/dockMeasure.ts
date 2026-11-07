@@ -1,6 +1,7 @@
 // 胶囊的量取与存档：输入框在哪、视口多大、胶囊该摆哪、存的位置。不碰胶囊自己的拖动状态。
 import { viewportMetrics } from "../../../media-progress/viewport";
 import { readJson, writeJson } from "../../../storage/localStore";
+import type { DockMetrics } from "./dockLiquid";
 import {
   dockFlight,
   dockPosition,
@@ -17,18 +18,30 @@ export const PANEL_DOCK_POSITION_KEY = "imwPanelDockPosition";
 /** 真站 `#moveinput` 的外层；`#mainHolder` 隐藏时尺寸为 0，按缺失处理。 */
 const DOCK_ANCHOR_ID = "moveinputDisplay";
 
-/**
- * 胶囊展开时的尺寸：窗口收起时胶囊还没挂载，用它算终点。手机和粗指针上更大，见 `app.css`。
- * 高度 = 按钮高度 + 上下各 1px 边框：桌面 `h-9`(36) + 2 = 38，手机 `h-13`(52) + 2 = 54。
- * `PanelDock.test.ts` 会拿按钮上的高度类和这里核对，改一边另一边不跟就会失败。
- */
-export const DOCK_NOMINAL_SIZE: DockSize = { width: 87, height: 38 };
-export const DOCK_NOMINAL_SIZE_LARGE: DockSize = { width: 110, height: 54 };
+/** 胶囊的尺寸只有这一处；手机和粗指针上更大，好点。高度比其它目标的 44px 还大一些。 */
+export const DOCK_METRICS: DockMetrics = {
+  width: 87,
+  height: 38,
+  peek: 34,
+  pad: 12,
+  gap: 6,
+  icon: 16,
+  font: 13,
+};
+export const DOCK_METRICS_LARGE: DockMetrics = {
+  width: 110,
+  height: 54,
+  peek: 54,
+  pad: 16,
+  gap: 8,
+  icon: 20,
+  font: 15,
+};
 
-export const dockNominalSize = (): DockSize =>
+export const dockMetrics = (): DockMetrics =>
   window.matchMedia?.("(max-width: 768px), (pointer: coarse)")?.matches
-    ? DOCK_NOMINAL_SIZE_LARGE
-    : DOCK_NOMINAL_SIZE;
+    ? DOCK_METRICS_LARGE
+    : DOCK_METRICS;
 
 function readAnchor(scale: number): DockAnchor | null {
   const anchor = document.getElementById(DOCK_ANCHOR_ID);
@@ -59,12 +72,11 @@ export function dockFrame(reference: HTMLElement) {
   return { anchor: readAnchor(scale), viewport };
 }
 
-/** 贴上下边时胶囊缩成图标，范围要按展开后算，否则靠右时悬停会伸出视口。 */
+/**
+ * 范围一律按展开后的宽度算：收起时胶囊变窄，往外拉时又被拉长，按实际宽度算范围会跟着抖。
+ */
 export function dockSize(element: HTMLElement): DockSize {
-  return {
-    width: Math.max(element.offsetWidth, dockNominalSize().width),
-    height: element.offsetHeight,
-  };
+  return { width: dockMetrics().width, height: element.offsetHeight };
 }
 
 /** 存储写不进去（隐私模式、被禁用）时的内存兜底：否则拖完的位置会在下一次轮询被默认位置覆盖。 */
@@ -85,7 +97,7 @@ export function forgetUnsavedDock(): void {
   unsavedDock = null;
 }
 
-/** 吸附在边缘的胶囊由 `app.css` 收起，悬停时伸出。 */
+/** 胶囊贴着哪条边：`dockPainter.ts` 读它决定怎么画。 */
 export function writeDockEdge(
   element: HTMLElement,
   edge: DockEdge | null | undefined,
@@ -109,7 +121,7 @@ export function writeDockFlight(
   rect: PanelRect | null,
 ): void {
   const { width, height } = viewportMetrics(container);
-  const size = dockNominalSize();
+  const size = dockMetrics();
   const flight = dockFlight(
     rect ?? { x: 0, y: 0, width, height },
     measureDock(container, size),

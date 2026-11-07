@@ -8,7 +8,7 @@ import { h } from "preact";
 
 // ---------------------------------------------------------------- 字体栈
 // 不加载网络字体：黑体 / 宋体 / 等宽一律回退系统字体（DESIGN.md Typography）。
-const fontSans = "font-['PingFang_SC','Microsoft_YaHei',sans-serif]";
+export const fontSans = "font-['PingFang_SC','Microsoft_YaHei',sans-serif]";
 const fontSerif = "font-['Songti_SC','SimSun',serif]";
 const fontMono = "font-[ui-monospace,'SF_Mono',monospace]";
 // 数字：系统界面字体 + 表格数字（等宽对齐，字形正常）。等宽栈在 Windows 上会落到
