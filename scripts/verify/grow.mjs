@@ -12,7 +12,10 @@
 //   3. 停稳：容器的 clip-path、translate、transform、scale 都是 none，跟随元素已移除
 //   4. 全屏贴右边、贴上边，窗口模式，手机尺寸各量一遍
 //   5. 减少动态效果：任何一帧都没有裁切，直接到位
-//   6. 交接：把动画冻在胶囊淡出 / 淡入的半途截图，胶囊的字和图标要看得见（压在面板的底色上面）
+//   6. 交接：胶囊一开始淡出 / 淡入就把动画冻住，在同一帧里把胶囊透明度临时定成 0 和 0.5
+//      各截一张：0.5 那张的字和图标要明显比 0 那张清楚（胶囊压在面板的底色上面）。
+//      开合只有 100ms，淡出只占一两帧，帧与帧之间没有「半途」可冻，所以查的是层级，
+//      不是某一帧的透明度；参照也不能用静止时的胶囊（背后是深色的宿站，交接时是浅色底）。
 //   7. 双击胶囊：第二下被吞掉，面板照常打开，没有落到宿站
 // 另外打印每段动画里形状在动的那些帧的最长一帧（形状停着等的帧不算），以及面板打开后静止时最长的一帧。
 // 帧间隔只打印、不判：这台机器没有显卡，全靠软件渲染，CPU 被别的任务占满时连静止的面板都会掉帧，
@@ -249,7 +252,7 @@ async function contrast(png) {
   }
 }
 
-/** 胶囊淡到半途时把动画冻住（截住后续帧），截图之后再放行。 */
+/** 胶囊一开始淡出 / 淡入就把动画冻住（截住后续帧），截图之后再放行。 */
 const freezeWhen = (mode) =>
   frame.evaluate((mode) => {
     const original = window.requestAnimationFrame;
@@ -260,17 +263,44 @@ const freezeWhen = (mode) =>
       )?.firstElementChild;
       const raw = layer?.style.opacity;
       const value = raw ? parseFloat(raw) : null;
-      const hold =
-        value !== null &&
-        (mode === "open" ? value < 0.8 : value > 0.2 && value < 0.9);
+      // 打开：第一帧还是 1，之后开始淡出；收起：胶囊挂上时是 0，淡入前都算交接中
+      const hold = value !== null && value < 1;
       if (!hold) return original.call(window, callback);
       window.__imwHeld.callbacks.push(callback);
       return 0;
     };
   }, mode);
+/** 冻住后把胶囊透明度临时定成 `opacity`（返回冻住时的实际值），放行前还原。 */
+const holdOpacity = (opacity) =>
+  frame.evaluate((opacity) => {
+    const layer = document.getElementById(
+      "imw-panel-dock-root",
+    )?.firstElementChild;
+    if (!layer) return null;
+    window.__imwHeld.opacity ??= layer.style.opacity;
+    layer.style.opacity = opacity;
+    return window.__imwHeld.opacity;
+  }, opacity);
+
+/** 冻住时胶囊确实在交接中：带 z-index 的那一层写着小于 1 的透明度（没冻住或写错了层都不算）。 */
+const inHandover = (actual) =>
+  typeof actual === "string" && actual !== "" && Number(actual) < 1;
+
+/** 同一冻结帧里胶囊藏掉（0）和半透明（0.5）两张截图的亮度离散。 */
+async function handoverContrast(rect) {
+  const actual = await holdOpacity("0");
+  const hidden = await contrast(await shotOf(rect));
+  await holdOpacity("0.5");
+  const shown = await contrast(await shotOf(rect));
+  return { actual, hidden, shown };
+}
 const releaseFrames = () =>
   frame.evaluate(() => {
-    const { original, callbacks } = window.__imwHeld;
+    const { original, callbacks, opacity } = window.__imwHeld;
+    const layer = document.getElementById(
+      "imw-panel-dock-root",
+    )?.firstElementChild;
+    if (layer && opacity !== undefined) layer.style.opacity = opacity;
     window.requestAnimationFrame = original;
     for (const callback of callbacks) original.call(window, callback);
   });
@@ -299,18 +329,15 @@ async function handoverOnTop(minimizeLabel) {
   await freezeWhen("open");
   await page.mouse.click(center.x, center.y);
   await page.waitForTimeout(400);
-  const fading = await frame.evaluate(
-    () =>
-      document.getElementById("imw-panel-dock-root")?.firstElementChild?.style
-        .opacity,
-  );
-  const opening = await contrast(await shotOf(expanded));
+  const opening = await handoverContrast(expanded);
   await releaseFrames();
   await page.waitForTimeout(800);
   check(
-    "打开头一段：胶囊在面板的底色上面淡出，冻在半途还看得见",
-    opening > resting * 0.3 && opening > 5,
-    `胶囊透明度 ${fading}，截图亮度离散 ${opening.toFixed(1)}（静止时 ${resting.toFixed(1)}）`,
+    "打开头一段：胶囊在面板的底色上面淡出，冻住时（透明度定在 0.5）看得见",
+    inHandover(opening.actual) &&
+      opening.shown > 5 &&
+      opening.shown > opening.hidden + 5,
+    `冻住时胶囊透明度 ${opening.actual}，亮度离散：藏掉 ${opening.hidden.toFixed(1)}、0.5 时 ${opening.shown.toFixed(1)}（静止时 ${resting.toFixed(1)}）`,
   );
 
   const minimize = await rectOf(`[aria-label="${minimizeLabel}"]`);
@@ -321,19 +348,16 @@ async function handoverOnTop(minimizeLabel) {
   await freezeWhen("close");
   await page.mouse.click(button.x, button.y);
   await page.waitForTimeout(500);
-  const appearing = await frame.evaluate(
-    () =>
-      document.getElementById("imw-panel-dock-root")?.firstElementChild?.style
-        .opacity,
-  );
   const tucked = await rectOf(PILL);
-  const closing = await contrast(await shotOf(tucked));
+  const closing = await handoverContrast(tucked);
   await releaseFrames();
   await page.waitForTimeout(800);
   check(
-    "收起最后一段：胶囊在面板的底色上面淡入，冻在半途就看得见",
-    closing > 5,
-    `胶囊透明度 ${appearing}，截图亮度离散 ${closing.toFixed(1)}`,
+    "收起：胶囊在面板的底色上面淡入，冻住时（透明度定在 0.5）看得见",
+    inHandover(closing.actual) &&
+      closing.shown > 5 &&
+      closing.shown > closing.hidden + 5,
+    `冻住时胶囊透明度 ${closing.actual}，亮度离散：藏掉 ${closing.hidden.toFixed(1)}、0.5 时 ${closing.shown.toFixed(1)}`,
   );
 }
 
