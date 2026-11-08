@@ -7,7 +7,7 @@ import { SettingsCards } from "../settings/SettingsGroup";
 import { MediaContainerContext } from "../media-container-context/MediaContainerContext";
 import { MODE } from "../desk/deskModes";
 import { deskGutter, deskInk, typeLabelStrong } from "../floating-panel/tokens";
-import { ResultsPlaceholder } from "./ResultsPlaceholder";
+import { placeholderKind, ResultsPlaceholder } from "./ResultsPlaceholder";
 import { ResultsRows } from "./ResultsRows";
 import { ResultsTiles } from "./ResultsTiles";
 import { StateMessage } from "./StateMessage";
@@ -16,6 +16,7 @@ import { subscribeNowPlayingTitle } from "./nowPlaying";
 import { notifyRoomUnsupported, roomSupportsRequest } from "./roomSupport";
 import {
   emptyMessage,
+  isRowShape,
   musicGridClass,
   RADIO_MIN_PENDING_MS,
   settingsPageClass,
@@ -80,6 +81,12 @@ export function ResultsArea({
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
 
   const scrollerRef = useRef<HTMLDivElement>(null);
+  /** 当前进场块的键、它出现前的加载状态和选中的动画（见渲染处）。 */
+  const motion = useRef<{
+    key: string;
+    status: Load["status"];
+    fade: boolean;
+  }>({ key: "", status: "idle", fade: false });
   /** 外层结果的实时滚动位置（内页期间的滚动不更新它）。 */
   const outerScroll = useRef(0);
   /** 进入内页前的外层滚动位置与数据承诺（返回时只有同一份数据才还原位置）。 */
@@ -220,6 +227,7 @@ export function ResultsArea({
           scopeIndex={scopeIndex}
           trimmedKeyword={trimmedKeyword}
           isInnerPage={isInnerPage}
+          selectable={selectable}
           onRetry={onRetry}
         />
       );
@@ -242,14 +250,10 @@ export function ResultsArea({
     }
 
     const square = shape === "musicGrid" || shape === "favoritesGrid";
-    const recentHeading = firstScreen && (
-      <h2 className={`mb-1 mt-4 ${typeLabelStrong} ${deskInk}`}>最近点播</h2>
-    );
 
     if (square || shape === "videoGrid") {
       return (
         <div className={deskGutter}>
-          {recentHeading}
           <div className={square ? musicGridClass : videoGridClass}>
             <ResultsTiles
               items={items}
@@ -269,13 +273,6 @@ export function ResultsArea({
 
     return (
       <div className={deskGutter}>
-        {recentHeading}
-        {shape !== "radio" && (
-          <TracklistHeader
-            durationLabel={durationLabel}
-            selectable={selectable}
-          />
-        )}
         <ResultsRows
           items={items}
           shape={shape}
@@ -290,6 +287,51 @@ export function ResultsArea({
     );
   };
 
+  // 表头和「最近点播」标题放在动画块外面：骨架和结果都有它，换页、数据落地时不跟着闪。
+  // 只在要列东西的时候出（骨架，或有结果），失败、提示和空态不带表头。
+  const listing =
+    shape !== "settings" &&
+    (load.status === "ready"
+      ? load.data.platformData.length > 0
+      : placeholderKind({
+          load,
+          mode,
+          scopeIndex,
+          trimmedKeyword,
+          isInnerPage,
+        }) === "skeleton");
+  const showHeader = listing && isRowShape(shape) && shape !== "radio";
+  const lead = listing && (firstScreen || showHeader) && (
+    <div className={deskGutter}>
+      {firstScreen && (
+        <h2 className={`mb-1 mt-4 ${typeLabelStrong} ${deskInk}`}>最近点播</h2>
+      )}
+      {showHeader && (
+        <TracklistHeader
+          durationLabel={durationLabel}
+          selectable={selectable}
+        />
+      )}
+    </div>
+  );
+
+  // 进场：换页 / 换范围 / 换视图时内容从下方 8px 淡入；骨架换成结果只淡入不位移，
+  // 骨架和结果是平齐的，位移会让整页先往下掉再回来。按进场的键记住选了哪种，
+  // 同一块内容重渲染（正在播放标题变了等）不会换动画、不会重播。
+  const motionKey = `${load.status}:${shape}:${scopeIndex}:${pageOffset}`;
+  if (motion.current.key !== motionKey) {
+    const before = motion.current.status;
+    motion.current = {
+      key: motionKey,
+      status: load.status,
+      fade:
+        load.status === "ready" && (before === "loading" || before === "idle"),
+    };
+  }
+  const entrance = motion.current.fade
+    ? "animate-[imwFadeIn_160ms_var(--imw-ease)]"
+    : "animate-[imwRiseIn_200ms_var(--imw-ease)]";
+
   return (
     <div className="h-full min-h-0">
       <div
@@ -299,10 +341,10 @@ export function ResultsArea({
         onScroll={handleScroll}
         onClick={handleAreaClick}
       >
-        {/* 换页 / 换范围 / 换视图 / 新结果到达：内容整体从下方 8px 淡入，不整块闪 */}
+        {lead}
         <div
-          key={`${load.status}:${shape}:${scopeIndex}:${pageOffset}`}
-          className="animate-[imwRiseIn_200ms_var(--imw-ease)] motion-reduce:animate-none"
+          key={motionKey}
+          className={`${entrance} motion-reduce:animate-none`}
         >
           {body()}
         </div>

@@ -312,6 +312,16 @@
   }
 }
 
+/* 只淡入不位移：骨架换成平齐的结果时用，位移会让整页先掉再回来 */
+@keyframes imwFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* 下拉菜单展开：淡入并从上方 4px 落下 */
 @keyframes imwMenuIn {
   from {

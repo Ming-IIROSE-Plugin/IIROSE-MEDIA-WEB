@@ -22,10 +22,12 @@ import {
   RequestButton,
   TracklistHeader,
   TracklistRow,
+  rowBox,
   selectableTrackColumns,
   trackColumns,
 } from "./TracklistRow";
 import { VideoTile } from "./VideoTile";
+import type { ResultsPayload } from "./resultsModel";
 import { hasOverlayLayers } from "../desk/overlayLayers";
 import {
   formatDuration,
@@ -1005,6 +1007,98 @@ describe("结果区状态机", () => {
     expect(
       host.querySelectorAll("[data-imw-skeleton-tile]").length,
     ).toBeGreaterThan(0);
+  });
+
+  it("加载中留着表头，骨架行与表头、真行同一列模板；表头在数据落地前后是同一个节点", async () => {
+    let resolve!: (value: ResultsPayload) => void;
+    const pending = new Promise<ResultsPayload>((r) => (resolve = r));
+    await mount(
+      results({ ...resultsBase, keyword: "晴天", mediaData: pending }),
+    );
+    const header = host.querySelector("[data-imw-tracklist-header]");
+    expect(header).not.toBeNull();
+    const skeleton = host.querySelector("[data-imw-skeleton-row]")!;
+    expect(skeleton.getAttribute("class")).toContain(trackColumns);
+    expect(skeleton.getAttribute("class")).toContain(rowBox);
+
+    await act(async () => resolve({ platformData: [song], totalPage: 1 }));
+    expect(host.querySelector("[data-imw-skeleton-row]")).toBeNull();
+    expect(host.querySelector("[data-imw-tracklist-header]")).toBe(header);
+    expect(
+      host.querySelector("[data-imw-tracklist-row]")!.getAttribute("class"),
+    ).toContain(rowBox);
+  });
+
+  it("音乐首屏加载中也有「最近点播」标题；失败、提示、空态不带表头", async () => {
+    await mount(results({ ...resultsBase, mediaData: new Promise(() => {}) }));
+    expect(host.textContent).toContain("最近点播");
+
+    render(null, host);
+    await mount(results({ ...resultsBase, mode: MODE.video }));
+    expect(host.querySelector("[data-imw-tracklist-header]")).toBeNull();
+
+    render(null, host);
+    const failed = Promise.reject(new Error("x"));
+    failed.catch(() => {});
+    await mount(results({ ...resultsBase, keyword: "a", mediaData: failed }));
+    expect(host.textContent).toContain("加载失败");
+    expect(host.querySelector("[data-imw-tracklist-header]")).toBeNull();
+
+    render(null, host);
+    const empty = ready([]);
+    await mount(
+      results({ ...resultsBase, keyword: "a", mediaData: empty }),
+      empty,
+    );
+    expect(host.querySelector("[data-imw-tracklist-header]")).toBeNull();
+  });
+
+  it("内页可勾选时骨架行也多出勾选列；电台骨架只有台标、台名和点播列", async () => {
+    await mount(
+      results({
+        ...resultsBase,
+        isInnerPage: true,
+        mediaData: new Promise(() => {}),
+        selection: { orderOf: () => undefined, onToggle: () => {} },
+      }),
+    );
+    expect(
+      host.querySelector("[data-imw-skeleton-row]")!.getAttribute("class"),
+    ).toContain(selectableTrackColumns);
+
+    render(null, host);
+    await mount(
+      results({
+        ...resultsBase,
+        mode: MODE.radio,
+        mediaData: new Promise(() => {}),
+      }),
+    );
+    expect(host.querySelector("[data-imw-tracklist-header]")).toBeNull();
+    const row = host.querySelector("[data-imw-skeleton-row]")!;
+    // 封面块 + 标题条 + 副行条 + 点播钮
+    expect(
+      row.querySelectorAll(`.${CSS.escape(tokens.deskSkeleton.split(" ")[0])}`),
+    ).toHaveLength(4);
+  });
+
+  it("骨架换成结果只淡入不位移；换页仍从下方淡入", async () => {
+    let resolve!: (value: ResultsPayload) => void;
+    const pending = new Promise<ResultsPayload>((r) => (resolve = r));
+    const props = { ...resultsBase, keyword: "晴天", mediaData: pending };
+    await mount(results(props));
+    const entrance = () =>
+      host.querySelector("[data-imw-results]")!.lastElementChild!.className;
+    await act(async () => resolve({ platformData: [song], totalPage: 2 }));
+    expect(entrance()).toContain("imwFadeIn");
+    expect(entrance()).not.toContain("imwRiseIn");
+
+    // 换页：先出骨架，从下方淡入
+    await mount(
+      results({ ...props, mediaData: new Promise(() => {}), pageOffset: 10 }),
+    );
+    expect(host.querySelector("[data-imw-skeleton-row]")).not.toBeNull();
+    expect(entrance()).toContain("imwRiseIn");
   });
 
   it("失败显示「加载失败」+「重试」，点重试回调外层", async () => {

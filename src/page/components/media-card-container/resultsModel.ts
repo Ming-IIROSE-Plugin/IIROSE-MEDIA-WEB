@@ -24,6 +24,16 @@ export type Shape =
   | "favorites"
   | "favoritesGrid";
 
+/** 行形态（曲目表、专辑歌单行、收藏列表、电台）；其余是网格或设置页。 */
+export function isRowShape(shape: Shape): boolean {
+  return (
+    shape === "tracklist" ||
+    shape === "collections" ||
+    shape === "favorites" ||
+    shape === "radio"
+  );
+}
+
 export type Load =
   | { status: "idle" }
   | { status: "loading" }

@@ -43,7 +43,10 @@ export const trackColumns =
 export const selectableTrackColumns =
   "grid grid-cols-[32px_38px_56px_1.6fr_1fr_74px_44px_96px] items-center gap-3 max-[768px]:grid-cols-[32px_48px_1fr_auto_40px_40px] max-[768px]:gap-2";
 
-const rowFrame = `group w-[calc(100%+28px)] border-0 ${deskRowRule} bg-transparent text-left ${deskRowHover} mx-[-14px] px-[14px] max-[768px]:mx-0 max-[768px]:w-full max-[768px]:px-0`;
+/** 行外框：桌面左右各外扩 14px 给悬停高亮，底线画回内容宽度；骨架行共用它，列位和真行对齐。 */
+export const rowBox = `w-[calc(100%+28px)] border-0 ${deskRowRule} mx-[-14px] px-[14px] max-[768px]:mx-0 max-[768px]:w-full max-[768px]:px-0`;
+
+const rowFrame = `group ${rowBox} bg-transparent text-left ${deskRowHover}`;
 
 /** 三根 3px 蔷薇红音柱：替换序号表示「房间正在播放」（不只靠颜色）。 */
 export function NowPlayingBars({

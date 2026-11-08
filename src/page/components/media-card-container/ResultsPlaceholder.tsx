@@ -6,37 +6,31 @@ import { deskGutter } from "../floating-panel/tokens";
 import { SkeletonRows, SkeletonTiles } from "./Skeletons";
 import { StateMessage } from "./StateMessage";
 import {
+  isRowShape,
   musicGridClass,
   videoGridClass,
   type Load,
   type Shape,
 } from "./resultsModel";
 
-export interface ResultsPlaceholderProps {
+export interface PlaceholderInput {
   load: Load;
-  shape: Shape;
   mode: number;
   scopeIndex: number;
   trimmedKeyword: string;
   isInnerPage: boolean;
-  onRetry: () => void;
 }
 
-export function ResultsPlaceholder({
+/** 数据没就绪时出哪一种：失败、搜索提示还是骨架（就绪时为 null）。容器据此决定表头留不留。 */
+export function placeholderKind({
   load,
-  shape,
   mode,
   scopeIndex,
   trimmedKeyword,
   isInnerPage,
-  onRetry,
-}: ResultsPlaceholderProps): JSX.Element | null {
-  if (load.status === "error")
-    return <StateMessage message="加载失败" action="重试" onAction={onRetry} />;
-
-  // 方形卡网格：音乐网格与收藏网格
-  const square = shape === "musicGrid" || shape === "favoritesGrid";
-
+}: PlaceholderInput): "error" | "prompt" | "skeleton" | null {
+  if (load.status === "error") return "error";
+  if (load.status === "ready") return null;
   // idle = 还没有任何数据承诺（首次进入某模式 / 恢复到 `mediaData: null` 的快照）：
   // 此时渲染骨架，不能落到空态——否则会闪一帧「没有找到结果」。
   // 例外：空关键词的视频模式 / 音乐专辑·歌单·MV 范围不会自己发请求，idle 是常态，
@@ -46,37 +40,61 @@ export function ResultsPlaceholder({
     !trimmedKeyword &&
     !isInnerPage &&
     (mode === MODE.video || (mode === MODE.music && scopeIndex !== 0))
-  ) {
+  )
+    return "prompt";
+  return "skeleton";
+}
+
+export interface ResultsPlaceholderProps extends PlaceholderInput {
+  shape: Shape;
+  /** 内页可勾选：骨架行多出勾选列，与表头、真行同一列模板。 */
+  selectable?: boolean;
+  onRetry: () => void;
+}
+
+export function ResultsPlaceholder({
+  shape,
+  selectable = false,
+  onRetry,
+  ...input
+}: ResultsPlaceholderProps): JSX.Element | null {
+  const kind = placeholderKind(input);
+  if (kind === "error")
+    return <StateMessage message="加载失败" action="重试" onAction={onRetry} />;
+
+  if (kind === "prompt")
     return (
       <StateMessage
         message={
-          mode === MODE.video
+          input.mode === MODE.video
             ? "输入关键词或粘贴 BV 号，搜索视频。"
             : "输入关键词开始搜索。"
         }
       />
     );
-  }
 
-  if (load.status === "idle" || load.status === "loading") {
-    return shape === "tracklist" ||
-      shape === "collections" ||
-      shape === "favorites" ||
-      shape === "radio" ? (
+  if (kind !== "skeleton") return null;
+
+  if (isRowShape(shape))
+    return (
       <div className={deskGutter}>
-        <SkeletonRows />
-      </div>
-    ) : (
-      <div
-        className={`${deskGutter} ${square ? musicGridClass : videoGridClass}`}
-      >
-        <SkeletonTiles
-          count={square ? 10 : 8}
-          aspect={square ? "square" : "video"}
+        <SkeletonRows
+          variant={shape === "radio" ? "radio" : "track"}
+          selectable={selectable}
         />
       </div>
     );
-  }
 
-  return null;
+  // 方形卡网格：音乐网格与收藏网格
+  const square = shape === "musicGrid" || shape === "favoritesGrid";
+  return (
+    <div
+      className={`${deskGutter} ${square ? musicGridClass : videoGridClass}`}
+    >
+      <SkeletonTiles
+        count={square ? 10 : 8}
+        aspect={square ? "square" : "video"}
+      />
+    </div>
+  );
 }
