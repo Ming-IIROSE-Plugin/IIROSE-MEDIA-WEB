@@ -48,6 +48,7 @@ import {
   setPanelBackHandler,
 } from "./components/desk/overlayLayers";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
+import { Gesture } from "../listener/Gesture";
 import { isPanelOpen, isPanelWindowed } from "../listener/panelPresence";
 import { PANEL_WINDOW_RECT_KEY } from "./components/panel-window/PanelWindowPlacement";
 import { InputPlatformAnalysis } from "../input-behavior-module/InputPlatformAnalysis";
@@ -632,6 +633,97 @@ describe("窗口模式", () => {
       release();
     });
 
+    describe("点歌台入口", () => {
+      const seedEntry = (panelEntry: string) =>
+        localStorage.setItem(
+          "imwPluginSetting",
+          JSON.stringify({ panelEntry, chatBox: { isProxyAtInput: true } }),
+        );
+      /** 两指从 y=100 往下滑过视口的 1/5（900 / 5 = 180）。 */
+      const swipe = async () => {
+        const touches = [{ clientY: 100 }, { clientY: 100 }];
+        Gesture.handleTouchStart({ touches } as unknown as TouchEvent);
+        const move = new Event("touchmove", { cancelable: true });
+        Object.defineProperty(move, "touches", {
+          value: [{ clientY: 300 }, { clientY: 300 }],
+        });
+        await act(async () => {
+          window.dispatchEvent(move);
+        });
+        Gesture.touchEnd();
+      };
+
+      it("各档下双指下滑打开 / 收起有没有反应", async () => {
+        const cases: [string, boolean, boolean][] = [
+          // 档位, 关着时下滑打开, 开着时下滑收起
+          ["pillSwipe", true, true],
+          ["pillSwipeClose", false, true],
+          ["pill", false, false],
+          ["swipe", true, true],
+        ];
+        for (const [entry, opens, closes] of cases) {
+          seedEntry(entry);
+          await mount();
+          await swipe();
+          expect([entry, "打开", isOpen()]).toEqual([entry, "打开", opens]);
+          if (!opens) await toggle();
+          expect(isOpen()).toBe(true);
+          await swipe();
+          expect([entry, "收起", !isOpen()]).toEqual([entry, "收起", closes]);
+          render(null, host);
+        }
+      });
+
+      it("只用双指下滑：一直没有胶囊，开合照常，收起后不留裁切", async () => {
+        seedEntry("swipe");
+        await mount();
+        expect(dock()).toBeNull();
+        await swipe();
+        expect(isOpen()).toBe(true);
+        await swipe();
+        expect(isOpen()).toBe(false);
+        expect(dock()).toBeNull();
+        expect(panel().getAttribute("style") ?? "").not.toMatch(/clip-path/);
+        // Alt+S 在任何档位都能开关
+        await toggle();
+        expect(isOpen()).toBe(true);
+        await toggle();
+        expect(isOpen()).toBe(false);
+        expect(dock()).toBeNull();
+      });
+
+      it("改档位立即生效：胶囊马上卸下或挂回，不用刷新", async () => {
+        await mount();
+        expect(dock()).not.toBeNull();
+        await act(async () => {
+          PluginSettings.savePanelEntry("swipe");
+        });
+        expect(dock()).toBeNull();
+        await act(async () => {
+          PluginSettings.savePanelEntry("pill");
+        });
+        expect(dock()).not.toBeNull();
+        // 面板开着时改：下次收起才按新档位
+        await toggle();
+        expect(dock()).toBeNull();
+        await act(async () => {
+          PluginSettings.savePanelEntry("swipe");
+        });
+        await toggle();
+        expect(isOpen()).toBe(false);
+        expect(dock()).toBeNull();
+      });
+
+      it("卸载后改档位不再挂胶囊", async () => {
+        await mount();
+        render(null, host);
+        await act(async () => {
+          PluginSettings.savePanelEntry("pill");
+        });
+        expect(dock()).toBeNull();
+      });
+    });
+
     it("卸载时带走胶囊", async () => {
       await mountWindow();
       expect(dock()).not.toBeNull();
@@ -718,6 +810,38 @@ describe("窗口模式", () => {
         expect(panel().style.clipPath).toBe("");
         expect(panel().style.translate).toBe("");
         expect(panel().style.left).not.toBe("");
+      });
+
+      it("只用双指下滑：从胶囊本该在处的中心点长出来、缩回那个点，不挂胶囊", async () => {
+        localStorage.setItem(
+          "imwPluginSetting",
+          JSON.stringify({
+            panelEntry: "swipe",
+            chatBox: { isProxyAtInput: true },
+          }),
+        );
+        localStorage.setItem(
+          "imwPanelDockPosition",
+          JSON.stringify({ x: 0, y: 300, edge: "right" }),
+        );
+        await mount();
+        await toggle();
+        expect(isOpen()).toBe(true);
+        // 贴右边收起的胶囊露出 inset(300 0 562 1566)（34×38），中心是 (1583, 319)
+        expect(panel().style.clipPath).toBe(
+          "inset(319px 17px 581px 1583px round 0px 0px 0px 0px)",
+        );
+        expect(root()).toBeNull();
+        await frames(GROW_OPEN_MS + 100);
+        expect(panel().getAttribute("style") ?? "").toBe("");
+
+        await toggle();
+        expect(isOpen()).toBe(false);
+        expect(root()).toBeNull();
+        await frames(GROW_CLOSE_MS + 100);
+        expect(root()).toBeNull();
+        expect(panel().getAttribute("style") ?? "").toBe("");
+        expect(followers()).toHaveLength(0);
       });
 
       it("开合中途卸载：清掉裁切和跟随元素", async () => {

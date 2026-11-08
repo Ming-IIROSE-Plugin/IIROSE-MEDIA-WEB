@@ -121,6 +121,18 @@ export const buildPluginGroups = async (
           },
         },
         buildPanelDisplayRow(ps.panelDisplay),
+        {
+          key: "panelEntry",
+          title: "点歌台入口",
+          kind: "value",
+          actionTitle: PluginSettings.parsePanelEntry(ps.panelEntry),
+          // 胶囊上的同一个品牌标：这一行管的就是它
+          icon: "mark",
+          action: (report) =>
+            PluginSettings.setPanelEntry((actionTitle) =>
+              report?.(actionTitle),
+            ),
+        },
       ],
     },
     await buildSyncGroup(refresh),

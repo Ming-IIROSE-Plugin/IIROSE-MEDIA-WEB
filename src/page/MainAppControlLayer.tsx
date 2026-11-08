@@ -9,6 +9,7 @@ import { closeSidebar } from "../iirose_func/CloseSideBar";
 import { Gesture } from "../listener/Gesture";
 import { isHostTextTarget, setPanelPresence } from "../listener/panelPresence";
 import { PluginSettings } from "../settings/pluginSettings/PluginSettings";
+import { panelEntryShowsPill } from "../settings/pluginSettings/normalize";
 import { SyncManager } from "../sync/SyncManager";
 import { hostIsDark } from "../iirose_func/HostTheme";
 import { themeAttr } from "./components/floating-panel/floatingPanel";
@@ -23,6 +24,7 @@ import {
   type PanelDockHandle,
 } from "./components/panel-window/PanelDock";
 import { restingDockSilhouette } from "./components/panel-window/dockMeasure";
+import type { GrowShape } from "./components/panel-window/panelGrow";
 import { prefersReducedMotion } from "./components/panel-window/dockPainter";
 import { PANEL_WINDOW_RADIUS } from "./components/panel-window/geometry";
 import { createPanelGrow } from "./components/panel-window/panelGrow";
@@ -43,6 +45,19 @@ interface MainAppControlLayerState {
   windowed: boolean;
 }
 
+/** 没有胶囊时开合的起点 / 终点：胶囊本该在的那块的中心，一个点。 */
+const centerPoint = (shape: GrowShape): GrowShape => ({
+  x: shape.x + shape.width / 2,
+  y: shape.y + shape.height / 2,
+  width: 0,
+  height: 0,
+  radii: [0, 0, 0, 0],
+});
+
+/** 「点歌台入口」这一档显示不显示胶囊（选「只用双指下滑」时不显示）。 */
+const showsPill = () =>
+  panelEntryShowsPill(PluginSettings.getPluginSetting().panelEntry);
+
 /** 窗口态的容器外观：状态类见 `app.css`，颜色只拼令牌。 */
 const WINDOW_CLASS = `imw-panel-window border border-solid ${roundedLg} ${deskRule} ${deskMenuShadow}`;
 
@@ -54,6 +69,7 @@ export class MainAppControlLayer extends Component<
   private unsubscribeSession?: () => void;
   private placement?: PanelWindowPlacement;
   private unsubscribePanelDisplay?: () => void;
+  private unsubscribePanelEntry?: () => void;
   private dock?: PanelDockHandle;
   /** 开合动画：打开时胶囊撑大成面板，收起时缩回胶囊。 */
   private grow = createPanelGrow(
@@ -111,6 +127,10 @@ export class MainAppControlLayer extends Component<
     this.applyTheme();
     this.startPlacement();
     this.syncDock();
+    // 「点歌台入口」改了立刻生效：胶囊按新档位挂上或卸下（面板开着时本来就没有胶囊）
+    this.unsubscribePanelEntry = PluginSettings.onPanelEntryChange(() =>
+      this.syncDock(),
+    );
 
     // 2. 初始化其他模块
     const { changeSearchKeyword } = this.controller;
@@ -137,10 +157,13 @@ export class MainAppControlLayer extends Component<
     else this.syncDock();
   }
 
-  /** 胶囊常驻：面板没开着就显示，点它打开。开合时由 `startGrow` 交接，这里只在没有动画时对齐。 */
+  /**
+   * 胶囊：面板没开着就显示（「点歌台入口」选了只用双指下滑时不显示），点它打开。
+   * 开合时由 `startGrow` 交接，这里只在没有动画时对齐。
+   */
   private syncDock() {
     if (this.grow.running) return;
-    if (!this.state.mainAppDisplay) {
+    if (!this.state.mainAppDisplay && showsPill()) {
       this.dock ??= mountPanelDock({ onOpen: this.ShowHideMainApp });
       this.dock.reveal(1);
       return;
@@ -171,6 +194,17 @@ export class MainAppControlLayer extends Component<
       ],
     };
     if (open) {
+      // 没有胶囊（只用双指下滑）：从胶囊本该在的地方的中心点长出来
+      if (!this.dock) {
+        this.grow.start({
+          direction: "open",
+          capsule: centerPoint(restingDockSilhouette(container)),
+          panel,
+          onDock: () => {},
+          onDone: () => {},
+        });
+        return;
+      }
       // 胶囊留到面板长完再卸载：头一段由动画把它淡出
       const dock = this.dock;
       this.grow.start({
@@ -184,6 +218,19 @@ export class MainAppControlLayer extends Component<
           dock?.unmount();
           this.dock = undefined;
         },
+      });
+      return;
+    }
+    // 只用双指下滑：缩回胶囊本该在的地方的中心点，不挂胶囊
+    if (!showsPill()) {
+      this.dock?.unmount();
+      this.dock = undefined;
+      this.grow.start({
+        direction: "close",
+        capsule: centerPoint(restingDockSilhouette(container)),
+        panel,
+        onDock: () => {},
+        onDone: () => {},
       });
       return;
     }
@@ -203,6 +250,8 @@ export class MainAppControlLayer extends Component<
   }
 
   componentWillUnmount(): void {
+    this.unsubscribePanelEntry?.();
+    this.unsubscribePanelEntry = undefined;
     this.grow.finish();
     this.dock?.unmount();
     this.dock = undefined;

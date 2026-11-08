@@ -16,9 +16,11 @@ import {
   defaultSyncSettings,
   normalizeAnnounceMode,
   normalizeFavoritesPageSize,
+  normalizePanelEntry,
   normalizeSyncSettings,
   type AnnounceMode,
   type PanelDisplay,
+  type PanelEntry,
   type PluginSettingsInterface,
   type PluginSyncSettings,
   type SearchViewMode,
@@ -33,6 +35,7 @@ export {
 export type {
   AnnounceMode,
   PanelDisplay,
+  PanelEntry,
   PluginSettingsInterface,
   PluginSyncSettings,
   SearchViewMode,
@@ -287,6 +290,86 @@ export class PluginSettings {
   /** 归一化：手改 localStorage 产生的非法值一律回退 "card"（单点归一化，同 searchViewMode） */
   public static normalizeAnnounceMode(raw: unknown): AnnounceMode {
     return normalizeAnnounceMode(raw);
+  }
+
+  /** 「点歌台入口」各档的文案（设置行的值位与选择框共用一份）。 */
+  public static parsePanelEntry(entry: PanelEntry): string {
+    return entry === "pillSwipeClose"
+      ? "胶囊 + 双指下滑只收起"
+      : entry === "pill"
+        ? "只用胶囊"
+        : entry === "swipe"
+          ? "只用双指下滑"
+          : "胶囊 + 双指下滑";
+  }
+
+  private static panelEntryListeners = new Set<(entry: PanelEntry) => void>();
+
+  /**
+   * 写入「点歌台入口」：写盘成功才生效并通知订阅方（胶囊与双指下滑立即按新档位），
+   * 失败时提示并返回 null，调用方保持原值。
+   */
+  public static savePanelEntry(raw: unknown): PanelEntry | null {
+    const ps = PluginSettings.getPluginSetting();
+    ps.panelEntry = normalizePanelEntry(raw);
+    if (!writeJson(PLUGIN_SETTINGS_KEY, ps)) {
+      ShowMessage.show("设置保存失败，请重试");
+      return null;
+    }
+    for (const listener of PluginSettings.panelEntryListeners)
+      listener(ps.panelEntry);
+    return ps.panelEntry;
+  }
+
+  /** 订阅「点歌台入口」的变化，返回退订函数。 */
+  public static onPanelEntryChange(
+    listener: (entry: PanelEntry) => void,
+  ): () => void {
+    PluginSettings.panelEntryListeners.add(listener);
+    return () => {
+      PluginSettings.panelEntryListeners.delete(listener);
+    };
+  }
+
+  /** 「点歌台入口」四选一选择框（宿站单选）；选中后回报新文案，写盘失败不回报。 */
+  public static setPanelEntry(
+    changeActionTitleAction?: (actionTitle?: string) => void,
+  ) {
+    const set = (_t: HTMLElement, s: string) => {
+      const saved = PluginSettings.savePanelEntry(s);
+      if (saved !== null)
+        changeActionTitleAction?.(PluginSettings.parsePanelEntry(saved));
+    };
+
+    const iconClass: Record<PanelEntry, string> = {
+      pillSwipe: "panelEntryPillSwipeIcon",
+      pillSwipeClose: "panelEntryPillSwipeCloseIcon",
+      pill: "panelEntryPillIcon",
+      swipe: "panelEntrySwipeIcon",
+    };
+    const entries: PanelEntry[] = [
+      "pillSwipe",
+      "pillSwipeClose",
+      "pill",
+      "swipe",
+    ];
+    const selectOption: (string | number)[][] = entries.map((entry) => [
+      entry,
+      PluginSettings.parsePanelEntry(entry),
+      `<div class="${iconClass[entry]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
+    ]);
+
+    IIROSEUtils.buildSelect2(
+      null,
+      selectOption,
+      set,
+      false,
+      true,
+      null,
+      false,
+      null,
+      () => {},
+    );
   }
 
   private static panelDisplayListeners = new Set<

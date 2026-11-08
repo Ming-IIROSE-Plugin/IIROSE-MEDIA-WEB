@@ -559,6 +559,10 @@
 .announceCardIcon::before,
 .announceSilentIcon::before,
 .announceSummaryIcon::before,
+.panelEntryPillSwipeIcon::before,
+.panelEntryPillSwipeCloseIcon::before,
+.panelEntryPillIcon::before,
+.panelEntrySwipeIcon::before,
 .imwModeMusic::before,
 .imwModeVideo::before,
 .imwModeRadio::before,
@@ -579,6 +583,24 @@
 
 .announceSummaryIcon::before {
   content: "\F0CB8"; /* playlist-music */
+}
+
+/* 「点歌台入口」四档选择框图标（码点对 @mdi/font 7.3.67 核实；
+   只用早于 F0CB8 的码点：宿站的 md 字体版本不明，更新的字形可能没有） */
+.panelEntryPillSwipeIcon::before {
+  content: "\F0AC0"; /* gesture-swipe-vertical：能开也能收 */
+}
+
+.panelEntryPillSwipeCloseIcon::before {
+  content: "\F0792"; /* arrow-collapse-down */
+}
+
+.panelEntryPillIcon::before {
+  content: "\F0402"; /* pill */
+}
+
+.panelEntrySwipeIcon::before {
+  content: "\F073D"; /* gesture-swipe-down */
 }
 
 /* 「插件启动默认页面」选择框图标（宿站弹窗；码点同上，自包含不借宿站 mdi-* 类） */

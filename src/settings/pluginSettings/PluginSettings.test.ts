@@ -503,3 +503,104 @@ describe("主面板显示方式", () => {
     expect(listener).toHaveBeenCalledOnce();
   });
 });
+
+describe("点歌台入口", () => {
+  const KEY = "imwPluginSetting";
+  const stored = () => JSON.parse(localStorage.getItem(KEY)!).panelEntry;
+  let setCb: ((t: HTMLElement, s: string) => void) | undefined;
+  let options: unknown[][] = [];
+
+  beforeEach(() => {
+    localStorage.clear();
+    setCb = undefined;
+    (window as unknown as Record<string, unknown>).Utils = {
+      buildSelect2: (
+        _i: unknown,
+        a: unknown[][],
+        s: (t: HTMLElement, v: string) => void,
+      ) => {
+        options = a;
+        setCb = s;
+      },
+    };
+  });
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).Utils;
+    delete (window as unknown as Record<string, unknown>)._alert;
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("没有存档、旧存档、不认识的值都按「胶囊 + 双指下滑」", () => {
+    expect(PluginSettings.getPluginSetting().panelEntry).toBe("pillSwipe");
+    localStorage.setItem(KEY, JSON.stringify({ panelDisplay: "window" }));
+    expect(PluginSettings.getPluginSetting().panelEntry).toBe("pillSwipe");
+    for (const raw of ["abc", 3, null, "PILL"]) {
+      localStorage.setItem(KEY, JSON.stringify({ panelEntry: raw }));
+      expect(PluginSettings.getPluginSetting().panelEntry).toBe("pillSwipe");
+    }
+  });
+
+  it("启动合并默认值：旧存档补上默认档，已选的不被覆盖", () => {
+    // 启动初始化会碰宿站 Utils：这一条不需要选择框
+    delete (window as unknown as Record<string, unknown>).Utils;
+    localStorage.setItem(KEY, JSON.stringify({ defaultPage: 0 }));
+    LocalStorageUtils.Init();
+    expect(stored()).toBe("pillSwipe");
+    PluginSettings.savePanelEntry("swipe");
+    LocalStorageUtils.Init();
+    expect(stored()).toBe("swipe");
+  });
+
+  it("选择框四个选项按顺序、文案与图标位；选中后落盘、回报文案、通知订阅方", () => {
+    const report = vi.fn();
+    const listener = vi.fn();
+    const off = PluginSettings.onPanelEntryChange(listener);
+    PluginSettings.setPanelEntry(report);
+    expect(options.map((option) => option[0])).toEqual([
+      "pillSwipe",
+      "pillSwipeClose",
+      "pill",
+      "swipe",
+    ]);
+    expect(options.map((option) => option[1])).toEqual([
+      "胶囊 + 双指下滑",
+      "胶囊 + 双指下滑只收起",
+      "只用胶囊",
+      "只用双指下滑",
+    ]);
+    for (const option of options) expect(String(option[2])).toContain("<div");
+
+    setCb!(document.createElement("div"), "pill");
+    expect(stored()).toBe("pill");
+    expect(PluginSettings.getPluginSetting().panelEntry).toBe("pill");
+    expect(report).toHaveBeenCalledWith("只用胶囊");
+    expect(listener).toHaveBeenCalledWith("pill");
+
+    off();
+    setCb!(document.createElement("div"), "swipe");
+    expect(listener).toHaveBeenCalledOnce();
+    expect(report).toHaveBeenLastCalledWith("只用双指下滑");
+  });
+
+  it("写盘失败：提示、不回报、不通知，读到的仍是原值", () => {
+    PluginSettings.savePanelEntry("pill");
+    const alerts: string[] = [];
+    (window as unknown as { _alert: (m: string) => void })._alert = (m) =>
+      alerts.push(m);
+    const report = vi.fn();
+    const listener = vi.fn();
+    const off = PluginSettings.onPanelEntryChange(listener);
+    PluginSettings.setPanelEntry(report);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    setCb!(document.createElement("div"), "swipe");
+    expect(alerts).toEqual(["设置保存失败，请重试"]);
+    expect(report).not.toHaveBeenCalled();
+    expect(listener).not.toHaveBeenCalled();
+    off();
+    vi.restoreAllMocks();
+    expect(PluginSettings.getPluginSetting().panelEntry).toBe("pill");
+  });
+});

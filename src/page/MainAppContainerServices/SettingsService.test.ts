@@ -103,6 +103,7 @@ describe("设置范围的分组标题", () => {
       "announceMode",
       "proxyAtInput",
       "panelDisplay",
+      "panelEntry",
     ]);
     const syncKeys = groups[1].items.map((item) => item.key);
     expect(syncKeys).toEqual([
@@ -161,6 +162,43 @@ describe("代理蔷薇@输入开关", () => {
     expect(report).toHaveBeenCalledWith(undefined, false);
     const stored = JSON.parse(localStorage.getItem("imwPluginSetting")!);
     expect(stored.chatBox.isProxyAtInput).toBe(false);
+  });
+});
+
+describe("点歌台入口行", () => {
+  afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).Utils;
+    localStorage.clear();
+  });
+
+  it("默认显示「胶囊 + 双指下滑」；选「只用胶囊」后落盘，行的值位换成新文案", async () => {
+    localStorage.clear();
+    let setCb: ((t: HTMLElement, s: string) => void) | undefined;
+    (window as unknown as Record<string, unknown>).Utils = {
+      buildSelect2: (
+        _i: unknown,
+        _a: unknown,
+        s: (t: HTMLElement, v: string) => void,
+      ) => {
+        setCb = s;
+      },
+    };
+    const { groups } = await showPlugin();
+    const row = rowOf(groups, "panelEntry");
+    expect(row).toMatchObject({
+      title: "点歌台入口",
+      kind: "value",
+      actionTitle: "胶囊 + 双指下滑",
+    });
+    const report = vi.fn();
+    row.action?.(report);
+    setCb!(document.createElement("div"), "pill");
+    expect(report).toHaveBeenCalledWith("只用胶囊");
+    expect(
+      JSON.parse(localStorage.getItem("imwPluginSetting")!).panelEntry,
+    ).toBe("pill");
+    const again = await showPlugin();
+    expect(rowOf(again.groups, "panelEntry").actionTitle).toBe("只用胶囊");
   });
 });
 

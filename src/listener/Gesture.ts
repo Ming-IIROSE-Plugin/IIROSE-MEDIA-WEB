@@ -1,3 +1,7 @@
+import { loadPluginSetting } from "../settings/pluginSettings/loadSettings";
+import { panelEntryAllowsSwipe } from "../settings/pluginSettings/normalize";
+import { isPanelOpen } from "./panelPresence";
+
 export class Gesture {
   static startY: number = 0;
   // 重命名为通用的回调
@@ -45,6 +49,10 @@ export class Gesture {
 
   public static handleTouchStart = (event: TouchEvent) => {
     if (event.touches.length === 2) {
+      // 「点歌台入口」的档位：只用胶囊时不响应，只收起时面板关着不响应。
+      // 不放行就不挂 touchmove，宿站的双指操作完全不受影响。
+      const { panelEntry } = loadPluginSetting();
+      if (!panelEntryAllowsSwipe(panelEntry, isPanelOpen())) return;
       this.startY = event.touches[0].clientY;
       window.addEventListener("touchmove", this.handleTouchMove);
     }
