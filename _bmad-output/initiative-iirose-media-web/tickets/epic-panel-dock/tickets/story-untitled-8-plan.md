@@ -3,7 +3,7 @@ title: '面板从胶囊长出来'
 type: 'feature'
 ticket: '8'
 created: '2026-11-07'
-status: 'built'
+status: done
 baseline_revision: '376c53a9de7f29e0793d00e00a41dc5bf53685a3'
 route: 'full'
 route_source: 'auto'

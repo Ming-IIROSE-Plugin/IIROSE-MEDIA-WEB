@@ -3,7 +3,7 @@ title: '胶囊和粘连画成同一条轮廓'
 type: 'refactor'
 ticket: '7'
 created: '2026-11-07'
-status: 'built'
+status: done
 baseline_revision: '6a921462bc74b99d86109d7ea04b1884a74f5337'
 route: 'full'
 route_source: 'auto'

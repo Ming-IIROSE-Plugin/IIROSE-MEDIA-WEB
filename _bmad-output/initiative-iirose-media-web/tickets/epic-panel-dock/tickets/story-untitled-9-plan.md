@@ -3,7 +3,7 @@ title: '点歌台入口：胶囊和双指下滑可在设置里选'
 type: 'feature'
 ticket: '9'
 created: '2026-11-08'
-status: 'built'
+status: done
 baseline_revision: 'c65f6d35d24312709da404ac6ecb829e7ebf167e'
 route: 'full'
 route_source: 'auto'
