@@ -1,5 +1,5 @@
 ---
-ticket: story-search-view-toggle
+story: story-search-view-toggle
 date: 2026-10-10
 verdict: accepted-with-open-items
 criteria: declared

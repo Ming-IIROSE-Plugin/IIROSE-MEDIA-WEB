@@ -1,5 +1,5 @@
 ---
-ticket: story-sidebar-media-progress
+story: story-sidebar-media-progress
 date: '2026-10-21'
 verdict: accepted
 criteria: profiled

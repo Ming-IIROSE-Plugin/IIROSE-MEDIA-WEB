@@ -2,7 +2,7 @@
 
 ## IIROSE-MEDIA-WEB 自动部署
 
-仓库 `Ming-IIROSE-Plugin/IIROSE-MEDIA-WEB` 的 **Build and deploy** workflow 在所有分支的 push（不含标签）和手动 `workflow_dispatch` 时部署；面向 `main` 的 PR 只运行构建和离线测试。构建统一使用 Node.js 22、`npm ci` 和 `npm run build`，构建或测试失败不会进入部署。
+仓库 `Ming-IIROSE-Plugin/IIROSE-MEDIA-WEB` 的 **Build and deploy** workflow 在任何分支 push 时都跑构建和离线测试，但只有 push 到 `main` 和手动 `workflow_dispatch` 才部署；面向 `main` 的 PR 只构建和测试。构建统一使用 Node.js 22、`npm ci`、`npm run build` 和 `npm test`，构建或测试失败不会进入部署。前端 bundle（`deploy-bundle`）和收藏云同步（`deploy-sync`）是两个独立的部署任务，同时开跑、各自失败。
 
 目标固定为广州 `ap-guangzhou` 地域的 `IIROSE-MEDIA-WEB` 函数，默认命名空间是 `default`；如需覆盖，在仓库 Settings → Secrets and variables → Actions → Variables 配置 `SCF_NAMESPACE`。函数必须已存在，流程不会创建函数。
 
@@ -24,19 +24,11 @@ python3 scripts/deploy_function_package.py --name Cors-Anywhere --region ap-guan
 
 两台都要各跑一次（`--region ap-hongkong`）。`scripts/deploy_function_app.py` 是「只替换包内 `app.js`、保留其余文件」的旧入口，现在没有使用者了——留着是为了将来某个函数必须保留 `node_modules` 时还能只换入口。
 
-#### 代码包只保留实际用到的文件
+#### 代码包只放实际用到的文件
 
-历史包里有 8.2 MB 的 `node_modules`（express / jade / morgan / cookie-parser），而 `app.js` 只用 `node:http` / `node:https` / `node:url`，一个都不需要。现在用整包重建替换：
+`cloud/cors-anywhere/` 只有 `app.js` + `scf_bootstrap`（可执行位保留）+ 最小 `package.json`；`app.js` 只用 `node:http` / `node:https` / `node:url`，不要再往包里放 `node_modules`（以前带着 8.2 MB 无用依赖，冷启动明显更慢）。打包时时间戳固定，同样的源码打出同样的字节（`verify_package` 会逐文件比对回读结果）。
 
-```bash
-python3 scripts/deploy_function_package.py --name Cors-Anywhere --region ap-guangzhou --dir cloud/cors-anywhere
-```
-
-`cloud/cors-anywhere/` 只有 `app.js` + `scf_bootstrap`（可执行位保留）+ 最小 `package.json`，包从 1.9 MB 降到 **3.3 KB**。打包时时间戳固定，同样的源码打出同样的字节（`verify_package` 会逐文件比对回读结果）。
-
-实测冷启动首次请求 0.29 s（原 1.9 MB 包为 0.34–0.78 s），热态 0.16–0.27 s。
-
-已修的三处：不再设置 `rejectUnauthorized: false`（上游证书必须校验）；上游 `set-cookie` 只放在 `X-Proxy-Set-Cookie` 里、不再原样透传（否则会往代理域名种 cookie）；上游请求加了 20 秒超时。
+代理的三条约束：上游证书必须校验（不设 `rejectUnauthorized: false`）；上游 `set-cookie` 只放在 `X-Proxy-Set-Cookie` 里、不原样透传（否则会往代理域名种 cookie）；上游请求 20 秒超时。
 
 #### 已知风控现象（未登录时）
 
@@ -61,11 +53,9 @@ B 站 `x/web-interface/view`（点播取详情）在**未登录 + 浏览器 UA**
 
 有一个必须知道的坑：**SCF 的函数 URL 网关会把请求头 `Accept-Encoding` 改写成 `identity`**（实测：客户端发 `gzip, br`，函数收到 `identity`）。因此不要按 `Accept-Encoding` 协商——协商永远不命中，会一直发明文。当前实现默认发 gzip（浏览器与油猴 `@require` 都必然支持），需要明文诊断时用 `/bundle.js?plain=1`。
 
-效果：线上单次下载从 432,847 字节降到 128,739 字节；`gzip -dc` 解压后与 `dist/bundle.js` 逐字节一致。
-
 更新只针对 **`$LATEST`**，`Publish=FALSE`，不改变 Handler、环境变量、触发器或别名。已发布版本和指向这些版本的别名不会自动切换；如果线上入口绑定的是已发布版本，需要另行发布或调整绑定才能提供新 bundle。同一目标的部署 job 共用 concurrency group，`cancel-in-progress: false`，不会由新 push 取消正在运行的部署。GitHub concurrency 只保留一个 pending job，密集 push 可能替换较早的待执行部署，且不保证执行顺序。
 
-在仓库 Actions → **Build and deploy** 查看 `build` / `deploy` 结果；只有更新状态就绪且下载校验通过后才会输出成功。首次真实部署需先将 workflow 推送到仓库，云凭据无需也不应导出到本机。更新失败时在腾讯云控制台检查函数状态；脚本不自动回滚。
+在仓库 Actions → **Build and deploy** 查看 `build` / `deploy` 结果；只有更新状态就绪且下载校验通过后才会输出成功。云凭据无需也不应导出到本机。更新失败时在腾讯云控制台检查函数状态；脚本不自动回滚。
 
 部署期间请避免同时在腾讯云控制台或其他流水线更新同一函数：GitHub 的并发控制只约束此仓库的部署任务，读取并替换代码包不是跨系统的原子操作。
 
@@ -81,7 +71,7 @@ python3 -B -m unittest discover -s scripts -p 'test_*.py' -v
 
 ## IIROSE-MEDIA-SYNC 自动部署
 
-同一 workflow 的 `deploy` job 在 `IIROSE-MEDIA-WEB` 之后执行 `python scripts/deploy_sync.py`，幂等地创建或更新收藏云同步后端。插件侧的同步客户端（`src/sync/`）已经就绪：两级密钥（随机 DEK + 口令派生的 KEK）在本机完成加解密，请求直连该函数 URL，入口在设置面板的「插件设置 → 云端同步」（默认关闭，需用户主动启用并设置同步口令；启用后：插件激活时拉取一次、打开面板/切回标签页/窗口获得焦点时按 60 秒冷却即时拉取、面板打开期间每 5 分钟兜底拉取）。
+同一 workflow 的 `deploy-sync` 任务（与 `deploy-bundle` 互不依赖）执行 `python scripts/deploy_sync.py`，幂等地创建或更新收藏云同步后端。插件侧的同步客户端（`src/sync/`）已经就绪：两级密钥（随机 DEK + 口令派生的 KEK）在本机完成加解密，请求直连该函数 URL，入口在设置面板的「插件设置 → 云端同步」（默认关闭，需用户主动启用并设置同步口令；启用后：插件激活时拉取一次、打开面板/切回标签页/窗口获得焦点时按 60 秒冷却即时拉取、面板打开期间每 5 分钟兜底拉取）。
 
 ### 前置条件
 

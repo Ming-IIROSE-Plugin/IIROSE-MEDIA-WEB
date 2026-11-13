@@ -1,5 +1,5 @@
 ---
-ticket: story-request-announce-modes
+story: story-request-announce-modes
 date: 2026-10-20
 verdict: accepted-with-open-items
 criteria: declared

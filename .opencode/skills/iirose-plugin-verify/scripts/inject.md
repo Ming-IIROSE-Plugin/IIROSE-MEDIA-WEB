@@ -2,7 +2,7 @@
 
 ## 为什么不能直接内联 evaluate
 
-- bundle 约 340KB（2026-10），塞不进 `browser_evaluate` 的 function 参数
+- bundle 约 470KB（2026-11），塞不进 `browser_evaluate` 的 function 参数
 - Code Mode 沙箱无 `require`/文件系统访问，读不了 dist/bundle.js
 - 站点是 https，注入 `http://localhost` 的 `<script src>` 会被混合内容策略拦
 - `frame.evaluate(code)` 直接执行代码不经过 script 标签，天然绕过 CSP
@@ -32,7 +32,7 @@ await tools.playwright.browser_run_code_unsafe({ filename: ".inject-bundle.js" }
 
 ## 方法二：独立 node Playwright 脚本（没有 Playwright MCP 时）
 
-Claude Code 的浏览器工具（如 paseo `browser_evaluate`）只能内联传函数，340KB 的 bundle 塞不进去，也不能按 frame 执行。改用 Bash 跑本机全局 Playwright：
+Claude Code 的浏览器工具（如 paseo `browser_evaluate`）只能内联传函数，几百 KB 的 bundle 塞不进去，也不能按 frame 执行。改用 Bash 跑本机全局 Playwright：
 
 - 模块：全局装在 `/usr/local/lib/node_modules/playwright`（1.64.x），运行时加 `NODE_PATH=/usr/local/lib/node_modules`
 - 浏览器：全局 Playwright 期望 `chromium_headless_shell-1248`，本机缓存只有 opencode MCP 用的 `chromium-1247`——**显式指定** `executablePath: '/root/.cache/ms-playwright/chromium-1247/chrome-linux64/chrome'`（已实测能打开 iirose.com）；或 `playwright install chromium` 补齐版本

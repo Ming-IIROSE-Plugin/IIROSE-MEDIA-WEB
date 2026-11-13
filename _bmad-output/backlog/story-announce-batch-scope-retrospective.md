@@ -1,5 +1,5 @@
 ---
-ticket: story-announce-batch-scope
+story: story-announce-batch-scope
 spec: spec-announce-batch-scope
 date: 2026-11-04
 verdict: accepted

@@ -7,7 +7,6 @@
 1. **输入泄露与误发送**：在输入框内输入 `@` 媒体链接后按回车，若未被及时拦截，容易作为普通聊天消息误发或在私聊中泄露链接。
 2. **多集/歌单交互缺失**：面对网易云歌单/专辑及 B 站多分 P 视频，原有逻辑要么只播放单曲，要么缺乏直观的选集管理。
 3. **选集长列表体验差**：当歌单或分 P 数量庞大时（如 50~100 首曲目），原生多选弹窗将「确定」按钮置于列表最底部，用户必须滑动到底端才能完成点播；且曲目仅展示纯文字或默认图标，辨识度低。
-4. **弹窗流转闪退**：选集多选点击「确定」后，无法顺利弹出「正序播放 / 乱序播放」的二次选择框。
 
 本设计旨在打造一个**零侵入、防泄露、强交互、平滑流转**的媒体输入拦截与选集点播体系。
 
@@ -31,7 +30,7 @@ flowchart TD
     Route -- 直链嗅探 --> DirectProbe[8 秒超时嗅探: 音频/视频/非媒体]
 
     DirectProbe -- 超时 --> ShowTimeout[提示探测超时]
-    DirectProbe -- 是媒体 --> DirectPlay[构造 MediaCard 发送媒体包]
+    DirectProbe -- 是媒体 --> DirectPlay[构造媒体卡片并发送点播报文]
     DirectProbe -- 非媒体 --> NativePass[回填并放行至原生聊天]
 
     NetEaseSelect -- 选集 --> EpisodePicker
@@ -87,16 +86,10 @@ flowchart TD
 - **单项 / 多项**：1 项走 `Announce.runSingleAnnounce`（卡片不被并行批量抑制吞掉），≥2 项走 `Announce.runBatchAnnounce`（count = 所选数，逐项 `showBatchItemError` 后跳过）。
 - **状态**：打开即显示骨架行、底栏禁用；取不到时「加载失败」+「重试」；0 条时按单位给出空文案（分集 / 曲目），只能关闭。
 
-### 3.4 宿站弹窗流转防闪退（历史问题，选集已不适用）
+### 3.4 选集面板的行与封面
 
-- **宿站的流转隐患**：宿站点选择器项时先同步执行业务回调，紧随其后 `fadeOut(250)` 并 `empty()` 容器；若在回调内同步唤起下一个 `buildSelect2`，新弹窗会被随后的淡出清空销毁。
-- **现在的做法**：选集完全走插件自有面板（§3.3），不再有「多选弹窗 → 二次排序确认框」的跨弹窗流转，因此不需要任何 `setTimeout(..., 300)` 补丁；`IIROSEUtils.buildSelect2` 已退化为纯透传，只剩取值类单选在用：设置 / 关于的选项弹窗，以及网易云歌单·专辑的一级菜单（正序 / 乱序 / 选集点播——收藏里的整单点播只靠它）。
-- **回归防线**：`src/` 内不再有 `buildSelect2(…, true, …)` 多选调用与跨弹窗 `setTimeout(300)`；选集面板的 `Esc` / 返回键由层级栈调度，也不依赖宿站淡出时序。
-
-### 3.5 选集面板的封面与降级（宿站图标槽已退场）
-
-- 选集面板的行不再渲染宿站 100×100 图标槽或内联 `<img>` HTML（旧 `IIROSEUtils.generatePicHtml` 已删除）：行内是集名 / 曲名 + 副行 + 等宽时长，颜色与字号一律取 `floating-panel/tokens.ts` 的成对令牌。
-- 结果区自己的封面仍按既有约定处理：`http://` → `https://` 升级（避免 HTTPS 站点加载 HTTP 资源的 Mixed Content 拦截），并挂 `onerror` 平滑回退到自包含矢量图标（`Cover` 组件，`thumb` 底 + `DeskIcon`）。
+- 选集面板的行是集名 / 曲名 + 副行 + 等宽时长，没有封面图，颜色与字号一律取 `floating-panel/tokens.ts` 的成对令牌。
+- 结果区的封面：`http://` → `https://` 升级（避免 HTTPS 站点加载 HTTP 资源的 Mixed Content 拦截），并挂 `onerror` 平滑回退到自包含矢量图标（`Cover` 组件，`thumb` 底 + `DeskIcon`）。
 - 封面裁切填满容器、跟随容器圆角，不留黑边。
 
 ---
@@ -123,36 +116,19 @@ flowchart TD
 
 ---
 
-## 6. 跨平台媒体收藏系统架构设计 (`FavoritesStorageService` & `oldItems` 现场快照)
+## 6. 跨平台媒体收藏
 
-### 6.1 总体架构与数据持久化
+### 6.1 存储
 
-- **存储介质**：基于浏览器原生 IndexedDB（数据库名 `IIROSE_MEDIA_DB`，版本 1，对象仓库 `favorites`），容量上限达数百兆，摆脱 localStorage 5MB 限制与序列化开销。
-- **复合主键设计**：采用 `platform:type:rawId`（例如 `netease:song:12345`、`bilibili:video:BV1xx`），彻底杜绝跨平台 ID 冲突。
-- **数据结构与索引**：
-  - 保存标准化 `PlatformData`，剥离不可序列化的函数与 Promise，封面在写入前统一完成 HTTPS 升级；
-  - 支持多维索引：`platform`、`type`、`platform_type`、`createdAt`，查询结果按入库时间严格倒序排列。
-- **零延迟同步判定**：
-  - 服务初始化时将全量收藏 ID 载入内存 `Set<string>`，渲染卡片与列表行时 `isFavorited()` 为纳秒级同步判断；
-  - 若处于无痕模式或 IndexedDB 被禁用，自动平滑回退至内存 `Map`，界面不崩溃。
+- **存储介质**：浏览器 IndexedDB（数据库 `IIROSE_MEDIA_DB`，当前版本 3，对象仓库 `favorites`），入口 `src/storage/favorites/`（`database.ts` 管打开与升级，`FavoritesStorageService` 管增删查）。
+- **主键**：逻辑主键 `platform:type:rawId`（例如 `netease:song:12345`、`bilibili:video:BV1xx`），存库时再加账号前缀 `<uid>|<逻辑主键>`，同一浏览器换账号互不串。uid 无效时写入的旧记录不带前缀，第一次出现有效 uid 时一次性归给它。
+- **删除是墓碑**：取消收藏写 `deletedAt` 而不是直接删，供云同步合并；列表与「已收藏」判定都跳过墓碑。
+- **索引**：`platform`、`type`、`platform_type`、`createdAt`、`deletedAt`、`ownerUid`；查询结果按收藏时间倒序。
+- **同步判定**：启动时把当前账号的收藏主键载入内存 `Set`，渲染时「是否已收藏」是同步判断；IndexedDB 不可用（无痕、被禁用）时退回内存 `Map`，界面照常。
+- **云同步**（可选，默认关）：`src/sync/` 在本机加解密（口令派生 KEK 包裹随机 DEK，AES-GCM），后端只存密文；部署见 `docs/deployment/tencent-cloud-functions.md`。
 
-### 6.2 顶栏布局与模式流转机制
+### 6.2 界面
 
-- **Row 2 工具栏排布约定**：
-  - 严格保持标准顺序：`[卡片/列表] [⭐收藏模式] [🔍 搜索] [xx/xx] [上一页] [下一页]`；
-  - `⭐收藏模式` 为点亮/点暗双态切换按钮：
-    - 点亮状态（已藏）：明黄实心星（`#fbc02d`）+ 深色背景，标签为「已藏」，搜索框转为本地即时过滤；
-    - 点暗状态（全网）：白色空心星 + 浅透背景，标签为「全网」，恢复远程搜索。
-- **无侵扰静默操作**：
-  - 收藏与取消收藏取消所有弹窗弱提示（Toast），提供最平滑沉浸的指尖交互；
-  - 卡片视图右上角配备 36×36px 磨砂圆钮；列表视图右侧采用温和低饱和度的圆角卡片块（`rounded-xl`）。
-
-### 6.3 复用 `oldItems` 规范的全网现场无损保护
-
-- **现场保存 (`discoveryOldItems`)**：
-  - 从全网切入收藏时，复用既有的 `OldItems` 接口标准，完整封存当前 `mediaData`、`allMediaData`、`currentPage`、`totalPage`、`PlatformIndex`、`SubNavBarIndex`、`searchKeyword` 以及点播回调；
-  - 若在选集模式（多集/分 P）中点亮收藏，优先取外层父级列表的 `oldItems` 作为全网现场。
-- **子组件副作用阻断与还原**：
-  - **`PlatformSelector` 阻断**：在模式切换时拦截 `prevProps.platform !== this.props.platform`，严禁触发 `switchPlatform(0)`，防止已还原的 `currentPage` 和 `allMediaData` 被篡改覆盖为 `1`；
-  - **`MediaContainerSubNavBar` 置顶拦截**：将模式切换检测置于生命周期最前端并立即 `return`，阻断 `searchKeyword` 比对误触发的重搜索；
-  - **无损秒级恢复**：切回全网时对齐 `switchToOutFromMultiPage` 机制，页码（例如 `2/29`）与卡片数据原地完整再现，支持任意多次反复切换而绝不触发多余网络请求。
+- **入口**：结果区每一行 / 每张卡上的收藏星 `FavoriteStar`（空心 / 实心，点击乐观更新、失败回滚，不弹提示）；左侧竖栏（手机为底部标签栏）的「收藏」是一个独立模式。
+- **收藏模式的过滤**：来源 3 档（全部 / 网易云 / B 站）× 范围 4 档（全部 / 单曲 / 歌单与专辑 / 视频）；搜索框在收藏模式下是输入即过滤，只读本地，不发网络请求。
+- **现场保留**：六种模式各自保留关键词、范围与页码，切模式先快照现场再恢复，所以在音乐搜索第 2 页切到收藏再切回来，仍是原来的结果和页码，不重新请求。

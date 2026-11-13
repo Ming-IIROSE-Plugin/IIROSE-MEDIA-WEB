@@ -7,7 +7,7 @@
 
 ## Policy
 
-- 包管理只用 npm（`package-lock.json` 为准）；`yarn.lock` 已废弃，不要更新它。
+- 包管理只用 npm（`package-lock.json` 为准）。
 - 提交直接进 main，不开分支。
 - 完成并验证（测试、构建通过）的改动提交后**自动推送**到 `origin main`，不必再问维护者；推送会触发 CI 部署到线上。
 - 运行时验证需要 iirose.com 测试账号：凭据存放于本机 `.secrets/`（已 git-ignore，绝不入库）；该目录不存在时向维护者索取。凭据绝不写进代码、文档或提交。
@@ -27,15 +27,15 @@
 - 平台层要弹选集面板时用 `src/platforms/episodePickerPort.ts` 的 `openEpisodePicker`，不要 import `page/components/episode-picker`；视图层在模块加载时用 `setEpisodePickerOpener` 注册实现。
 - 云函数侧：前端入口 `cloud/cors-anywhere/app.js`（CORS 转发，含 412 重试）与 `cloud/bundle/app.js`（gzip 响应）都随仓库维护，分别用 `scripts/deploy_function_package.py` / `scripts/deploy_scf.py` 部署；文档见 `docs/deployment/tencent-cloud-functions.md`。
 - 浮窗（播放进度、收藏随机）共用 `src/page/components/floating-panel/` 的样式常量与无状态组件（外框、头部、按钮、拖动手柄、事件隔离）；改两窗外观时改这里，不要在单个浮窗里另写一套。
-- 外观令牌唯一来源是 `src/page/components/floating-panel/tokens.ts`（DESIGN.md frontmatter 的落地）：颜色导出**浅深成对的完整 Tailwind 类串**（如 `deskSheet = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]"`），另有字号/圆角/间距、`deskFocusRing`（2px ink 外圈 + 2px 间隔）与内联 SVG 图标 `DeskIcon`。组件只拼令牌，**不得裸写颜色 / `rgba(` / `themed*` / `accentVar`**；需要新颜色先加令牌。`themed*` 与 `accentVar` 已全部退役（设置卡也已改用令牌），不要再引入。
-- 结果区组件键（`src/page/components/media-card-container/`）：曲目表 `TracklistRow` / `TracklistHeader`（桌面七列、手机五列：封面 / 标题 / 时长 / 收藏星 / 点播；手机没有操作条；歌单/专辑内页前加勾选列，桌面 8 / 手机 6，列模板 `selectableTrackColumns`）· 多选 `SelectBox` / `SelectionBar` · 音乐网格 `MusicTile` · 视频卡 `VideoTile`（时长胶囊 / 直播徽章）· 专辑歌单行 `CollectionRow` · 内页头 `CollectionHeader` + 顺序菜单 `OrderMenu` · 收藏星 `FavoriteStar` · 状态 `StateMessage` / `Skeletons` · 容器 `ResultsArea`（Promise 状态机 + 形态派生），共用 `Cover`（https 升级 + onerror 回退）与纯函数 `mediaFormat.ts`。新增结果形态改这些文件，不要回到 `MediaCard`（已删除）。
+- 外观令牌唯一来源是 `src/page/components/floating-panel/tokens.ts`（DESIGN.md frontmatter 的落地）：颜色导出**浅深成对的完整 Tailwind 类串**（如 `deskSheet = "bg-[#FBFAF7] imw-dark:bg-[#1C1A18]"`），另有字号/圆角/间距、`deskFocusRing`（2px ink 外圈 + 2px 间隔）与内联 SVG 图标 `DeskIcon`。组件只拼令牌，**不得裸写颜色 / `rgba(` / `themed*` / `accentVar`**；需要新颜色先加令牌。
+- 结果区组件键（`src/page/components/media-card-container/`）：曲目表 `TracklistRow` / `TracklistHeader`（桌面七列、手机五列：封面 / 标题 / 时长 / 收藏星 / 点播，收藏星和点播钮各 40px；手机没有操作条，网格卡首点只显示「点播」胶囊、再点才点播；歌单/专辑内页前加勾选列，桌面 8 / 手机 6，列模板 `selectableTrackColumns`）· 多选 `SelectBox` / `SelectionBar` · 音乐网格 `MusicTile` · 视频卡 `VideoTile`（时长胶囊 / 直播徽章）· 专辑歌单行 `CollectionRow` · 内页头 `CollectionHeader` + 顺序菜单 `OrderMenu` · 收藏星 `FavoriteStar` · 状态 `StateMessage` / `Skeletons` · 容器 `ResultsArea`（Promise 状态机 + 形态派生），共用 `Cover`（https 升级 + onerror 回退）与纯函数 `mediaFormat.ts`。新增结果形态改这些文件。
 - **加载骨架和结果平齐**（`media-card-container/Skeletons.tsx`）：骨架行共用真行的外框 `rowBox` 和列模板（内页可勾选时同样多出勾选列，电台只有台标、台名、点播列），骨架卡照搬 `MusicTile` / `VideoTile` 的文字区结构（视频标题按两行留位）；每行文字里写一个透明汉字撑行盒，色条压在中间，不要换成定高色条（中文落在后备字体上，行盒高度不同，网格第二排会错几像素）。卡片副行 `typeVideoMeta` 的行高写死成像素（桌面 17 / 手机 15）：不写的话 UP 主名全是英文时那一排矮 3px，写成倍数的话音乐卡副行里 12px 的时长会把行撑高。表头和「最近点播」在结果区进场动画块外面，加载中也在；骨架换成结果只淡入（`imwFadeIn`），不再上移 8px。改行、卡或骨架后跑 `node scripts/verify/skeleton.mjs`（桌面与手机，音乐 / 视频的列表与网格，逐格量位置）。
 - 专辑/歌单的「全部播放」走 `NetEasePlatform.playCollectionAll`（内页头 → 插件自有 `OrderMenu`），**不经宿站 `buildSelect2`**，因而不需要跨弹窗 `setTimeout(300)`。
 - 展示与判定纯逻辑：`nowPlaying.ts`（房间正在放的 1s 只读轮询与退订）、`roomSupport.ts`（房间是否支持点播的唯一出口，灰化与提示都问它）、`mediaFormat.ts`（列表 / 卡片形态派生，不碰 DOM）。
 - **内页头通用于三类内页**：专辑 / 歌单（`innerCollection`，带曲目数与「全部播放」）与多 P / 多集（只有 `innerPageSource`，只有返回 + 名称 + 分页，`CollectionHeader` 的 `onPlayAll` 不传）。手机没有键盘，返回钮是多 P 内页唯一的出口；`‹ 返回` / `Esc` / 宿站返回键都走 `switchToOutFromMultiPage`。
 - **点播历史**：`src/history/RequestHistory.ts`（`imwRequestHistory`，按房间记录、节流写盘、默认页只迁移一次）；音乐模式未搜索的首屏列「最近点播」（`RecentService`）。
 - **收藏模式的过滤面**：来源 3 档（全部 / 网易云 / B 站）× 范围 4 档（全部 / 单曲 / 歌单与专辑 / 视频，`FavoriteRange`，歌单与专辑合并查两类记录）；输入即过滤走 `filterLive`（不发网络请求，内页开着时先回外层）。`FavoritesService.restored` 缓存记录到 `PlatformData` 的还原结果（键 `账号|主键@更新时间`，超 500 条清空），过滤只读本地、不重复探测分 P。
-- **主面板窗口模式**（`panelDisplay: "full" | "window"`，默认全屏）：`src/page/components/panel-window/`（`geometry` 纯函数、`PanelWindowPlacement` 管存档 `imwPanelWindowRect` / 视口监听 / 手势并命令式写容器 `style`、`PanelWindowChrome` 标题栏与八个抓取区）；开合与窗口态在 `src/listener/panelPresence.ts`（输入模块和层级栈共用，含 `isHostTextTarget`）。实际是否按窗口显示 = 设置开启 且 视口 >768px 且放得下「800×520 + 两侧 12px」，否则自动全屏，选择和存档都不改。手势结束才写盘，视口变化只改显示；拖动不重渲染 `MainApp`。body 拦截只在全屏态（`applyHostCover`），窗口态由容器上的 `IMCActiveEventHandler` 隔离。全屏和窗口共用一套开合：从胶囊展开、缩回胶囊，全屏原地盖住页面，不滑动，也不再推走宿站聊天区（`hidemainHolder` 已删除）。页头的关闭钮在窗口态用容器状态类隐藏。
+- **主面板窗口模式**（`panelDisplay: "full" | "window"`，默认全屏）：`src/page/components/panel-window/`（`geometry` 纯函数、`PanelWindowPlacement` 管存档 `imwPanelWindowRect` / 视口监听 / 手势并命令式写容器 `style`、`PanelWindowChrome` 标题栏与八个抓取区）；开合与窗口态在 `src/listener/panelPresence.ts`（输入模块和层级栈共用，含 `isHostTextTarget`）。实际是否按窗口显示 = 设置开启 且 视口 >768px 且放得下「800×520 + 两侧 12px」，否则自动全屏，选择和存档都不改。手势结束才写盘，视口变化只改显示；拖动不重渲染 `MainApp`。body 拦截只在全屏态（`applyHostCover`），窗口态由容器上的 `IMCActiveEventHandler` 隔离。全屏和窗口共用一套开合：从胶囊展开、缩回胶囊，全屏原地盖住页面，不滑动，也不推走宿站聊天区。页头的最小化钮在窗口态用容器状态类隐藏（窗口态只留标题栏那个）。
 - **常驻胶囊**（全屏、窗口、手机都有）：`panel-window/PanelDock.tsx`（body 独立根 `#imw-panel-dock-root`、z 90009，事件 `stopHostGestures`，500ms 轮询加视口事件跟随 `#moveinputDisplay`；定位纯函数在 `dockPlacement.ts`，量取与存档在 `dockMeasure.ts`）。只要面板没开着就显示（`!mainAppDisplay`，刷新后也在；设置「点歌台入口」选了「只用双指下滑」时不显示，见下面「点歌台入口」）；点它走 `ShowHideMainApp`，所以首次点击才初始化 `MainApp`。面板上没有 X，只有最小化钮（窗口在标题栏、全屏在页头）；任何方式收起都回到胶囊。胶囊默认在输入框左上方，缺输入框时底部居中；可拖动（存档 `imwPanelDockPosition`，松手才写盘），底缘不能越过输入框顶边，输入框移动或视口变化只改显示。松手时离可停靠范围的边缘不到 24px 就吸附并存 `edge`（角落按左右算；下边是输入框上方那条线）。
   - **胶囊和粘连是同一条 SVG 轮廓**（`[data-imw-dock-shape]`）：`dockLiquid.ts` 的纯函数 `dockShape` 按「边、位置、展开程度」算出轮廓和内容摆放，`dockPainter.ts` 用一个 rAF 循环驱动展开、落定、尖头三个动画，把两者同帧写进 DOM；DOM 上的胶囊是透明的，只放文字和图标。不要给它加底色、边框色或 `box-shadow`，也不要再用 CSS 管形状和收起（`app.css` 里已经没有胶囊规则）：之前胶囊和粘连是两个形状，靠 CSS 和 TS 各写一遍对齐，反复露出方角和凹陷。断开后的两个尖头单独一条路径（`[data-imw-dock-tips]`）：它们和胶囊重叠，放进同一条路径的话，绕向相反的地方会被抠出一个洞。投影统一放在外层 `filter: drop-shadow`。
   - 数据只单向流动：几何算出尺寸写给 DOM，不从 DOM 量回胶囊的宽度。尺寸、内边距、字号、图标大小和圆角都由 `dockMeasure.ts` 的 `dockMetrics` 和 `dockShape` 给，写成内联样式，胶囊和按钮上不要加 `h-9`、`px-3`、`gap-2`、`text-[13px]`、`size-5`、`rounded-*` 这类工具类（Tailwind 带 `!important`，会压过内联样式；`h-full`、`w-full` 没问题）。靠边那一侧的圆角是直的，否则靠墙的角点不到。范围一律用 `dockSize`（按展开宽度）算：胶囊被拉长或收起时 `offsetWidth` 会变，按它算范围会跟着抖。`left/top` 始终是展开时的左上角，存档也是它，收起和落定只是 `translate`。
@@ -49,7 +49,6 @@
 - **内页多选**：选中按绝对位置记，跨页、跨模式保留；离开内页 / 新搜索 / 换来源 / 换范围时清空，点播只在真正 `"sent"` 后才清。`playSelection` → `guardedRequest(..., ':selected')` → `NetEasePlatform.playSongIds`（与选集面板共用）；`SelectionBar` 原位替换 `RoomDeck`，不新增浮层层级。
 - **点播反馈统一走 `src/playback/RequestGuard.ts` 的 `guardedRequest`**：所有手动点播入口（行、卡、收藏、电台、整张播放选定顺序后）都包它——同一条目进行中再点无效，按钮「点播中」转圈到第一条 `&1` 点播报文发出（`Socket.observe` 里的 `noteMediaSent`）即恢复，**没有冷却、没有「已点播」态**；平台函数要把发送过程的 Promise 返回出来（返回 `void` 的入口按「弹菜单 / 选集」放行，不显示点播中）。成功确认是面板内 `DeskToast`，失败仍走宿站 `ShowMessage`。新增点播入口记得接守卫，别直接调平台函数。
 - **批量点播进度**：整张正序/乱序与选集多选用 `src/playback/BatchProgress.ts` 的 `startBatch` 拿句柄，`finalODSONG(ids, batch)` 逐首 `step()`、每首发送前查 `batch.cancelled`；句柄带 `signal`，`stopBatch` 永久 abort（卡片收起后仍有效）。`neteaseRequest` 第 5 参 `signal`：外部中止静默返回 null，不切节点、不提示。`sendSongs` 每 100 首取一段详情边取边发，逐段 / 逐首查停止；段失败即停并校正总数；返回实际发出数，summary 档已发总结且实际数 < N 时 `runBatchAnnounce` 补发一条校正（「已取消，未提交曲目」/「已停止，实际提交 X / N 项」）。浮窗 `BatchProgressStack` 挂 body 独立根 `#imw-batch-progress-root`（z 90008），关面板仍在。
-- **没有手机操作条**（已取消）：手机曲目行直接放 40px 收藏星 + 40px 点播钮，网格卡首点显示「点播」胶囊再点点播；面板内浮层层级只有 展开的底部条 / 顺序菜单 / 来源菜单（互斥）> 内页 > 主面板，见 `overlayLayers.ts`。
 - **底部条**：`src/page/components/room-deck/`（`RoomDeck` 桌面三栏 / 手机迷你条 / 展开层、`DeckProgress`、`ModeToggle`、`useDeck`），DOM 钩子 `data-imw-deck="room|mini|sheet"` 与 `data-imw-deck-requester`。桌面左右栏 280 / 260px，底部条自身宽度 <816px（容器查询，全屏时等于视口 <900px，窗口变窄时也生效）收窄到 190 / 210px，给中栏进度轨留宽度。宿站没有歌手字段，点播者行只写「某某 点播」/「由你点播」，不要写成「歌手 · 某某」。
 - 主面板配色跟随宿站主题：`.IIROSE_MEDIA_CONTAINER` 打开时写 `data-imw-theme="light|dark"`，深色样式用 Tailwind 自定义变体 `imw-dark:`（注册在 `src/app.css`）；点歌台是「纸/墨/蔷薇红」——`paper` 主区、`rail` 竖栏、`sheet` 抬起面，蔷薇红表示「点播」「房间正在放」「勾选与主按钮 / 分段选中」三类强调（其余只用墨色层级），平台品牌色只做 7px 来源圆点，从不整片铺底。宿站侧栏的进度入口与播放开关行（`src/app.css` 的 `--imw-entry-*`）同用一套蔷薇红。
 - `src/app.css` 只放 Tailwind 无法表达的东西：@keyframes、mdi 图标 `::before` content（反斜杠不能进 class 名）、JS 切换的状态类（`ShowIIROSE_MEDIA_CONTAINER`）、宿站元素选择器、动效基线（base 层默认过渡与 `--imw-fast/base/slow` 档位；按下反馈用 `floating-panel` 的 `deskPress`）；其余样式一律写进组件的 Tailwind 类，**不要新增 SCSS**。
@@ -57,7 +56,7 @@
 ## Running and verifying
 
 - `npm run dev` 是 `vite build --watch`，不是开发服务器——本插件没有可独立运行的应用。
-- 运行时验证流程：构建 → 浏览器打开 iirose.com 加载 bundle → 每次改完刷新页面检查；桌面 alt+S、移动端双指下滑呼出 UI。
+- 运行时验证流程：构建 → 浏览器打开 iirose.com 加载 bundle → 每次改完刷新页面检查；点胶囊、桌面 Alt+S 或手机双指下滑呼出 UI。常用回归已写成脚本：`scripts/verify/` 下的 `dock.mjs`、`grow.mjs`、`entry.mjs`、`skeleton.mjs`、`results-area-acceptance.mjs`（先 `npm run build`，用已登录的持久化 profile，同时只能跑一个）。
 - 调试在热推列表随机选房间；部分房间不支持艾特音乐，这是房间差异不是插件 bug。
 
 ## Conventions that differ from defaults
@@ -78,14 +77,13 @@
 - 腾讯云 SCF 的函数 URL 网关会把请求头 `Accept-Encoding` 改写成 `identity`：按它协商压缩永远不命中，前端入口只能默认发 gzip（明文诊断用 `/bundle.js?plain=1`）。
 - B 站按 UA 分流且两个接口偏好相反：`x/web-interface/view` 用浏览器 UA 会 412、用 `curl/*` 正常；`wbi/search/type` 反过来。不要统一改 UA，代理只在真的吃到 412 时用 `curl/8.14.1` 重放一次（`cloud/cors-anywhere/app.js`）。
 - 云函数代码包只放实际用到的文件：`Cors-Anywhere` 历史上带着 8.2 MB 无用 `node_modules`（express/jade 等），清掉后包从 1.9 MB 降到 3.3 KB、冷启动明显变快。
-- `vite.config.ts` 的库入口现在指向真实文件 `src/main.ts`（此前误写为 `src/main.js`，构建靠扩展名解析才没炸，2026-11-02 修正）；入口只有一个落点，不要再按旧笔记找第二处。
 - 网易云新增/修改端点必须走 `SendFetch.neteaseRequest`（节点切换、5s 超时、失败提示的唯一入口）；照 B 站写法自己拼 `${this.cors}` 会叠成双层代理前缀，并把失败退化成静默空列表。风控码（`-462/-460/460`）、HTTP 433 与超时各自归类，重试过程静默、全节点失败才提示一次；批量端点（逐曲歌词）失败按同因 10 秒窗口去重，否则一次点播会刷出上百条提示。
 - 首次注入会弹插件自己的用户协议（宿站 `#syncAlertHolder`），挡住一切交互——先点它的「确定」。
 - 宿站输入框（`#syncPromptHolder` 等）是 jQuery 体系：合成 DOM 事件无效，自动化必须用真实键盘事件（Playwright `type()`/`press()`）。
 - 宿站弹窗关闭后残留全屏遮罩（`#syncHolderOutside` 不自清理、`#syncHolder` 常显），会拦截真实鼠标点击——自动化点击页内元素前先移除/隐藏它们。
 - 宿站 `messages.html` iframe 存在 1.13~1.19 倍视口缩放：物理宽度 390px 对应 iframe 465px，412px+ 对应 470px~512px；移动端响应式断点必须使用 `max-[768px]`，禁止单一依赖 `max-[490px]`（否则大屏手机会回退桌面布局并导致文字折行）。
-- 宿站 `buildSelect2` 弹窗流转与 fadeOut 冲突：确定点击后宿站**先同步执行业务回调，紧随其后立即触发 `fadeOut(speed250, () => selectHolderBox.empty())`**，若在回调里同步唤起下一个弹窗会被后续 `fadeOut` 清空——跨弹窗流转必须包 `setTimeout(..., 300)`。插件现在只在网易云一级菜单（`buildSelect`）与设置 / 关于的取值类单选里用它；宿站原生多选会丢失点选顺序，**不要再回到「接管 `buildSelect2` 实现有序多选」的老做法**（见下一条：多选已由 `episode-picker` 承担）。
-- **选集不再走 `buildSelect2`**（story 5 已落地）：选集是插件自有面板 `episode-picker`（`src/page/components/episode-picker/`：有序多选、序号徽章、正序/乱序、`点播所选`），入口 `openEpisodePicker`（body 独立根 `#imw-episode-picker-root`、`z-[90010]`、层栈 `episode` 层）。调用点：`BilibiliPlatform.selectEpisodes`、`AllVideosPlatform.selectEpisodes`、`NetEasePlatform.selectEpisodes`（`MLOD`/`AOD` 的 `select===2` 委托它）。`buildBiliSelect`、`buildOrderConfirmSelect`（B 站与网易云各一份）与 `IIROSEUtils.buildSelect2` 里的有序多选接管（`selectedQueue` / 序号徽章 / 吸底确定钮）**已删除**——`buildSelect2` 现在是纯透传，只服务设置 / 关于的取值类单选**与网易云 `buildSelect` 的一级菜单（正序 / 乱序 / 选集点播，`NetEasePlatform.buildSelect` → `IIROSEUtils.buildSelect2`，单选）**，不要再往里加多选补丁，也不要新增跨弹窗 `setTimeout(300)`。
+- 宿站 `buildSelect2` 弹窗流转与 fadeOut 冲突：确定点击后宿站**先同步执行业务回调，紧随其后立即触发 `fadeOut(speed250, () => selectHolderBox.empty())`**，若在回调里同步唤起下一个弹窗会被后续 `fadeOut` 清空——跨弹窗流转必须包 `setTimeout(..., 300)`。`IIROSEUtils.buildSelect2` 是纯透传，只服务取值类单选：设置 / 关于的选项，以及网易云 `buildSelect` 的一级菜单（正序 / 乱序 / 选集点播）。宿站原生多选会丢失点选顺序，**不要往里加多选补丁**。
+- **选集是插件自有面板**（`src/page/components/episode-picker/`：有序多选、序号徽章、正序/乱序、`点播所选`），入口 `openEpisodePicker`（body 独立根 `#imw-episode-picker-root`、`z-[90010]`、层栈 `episode` 层）。调用点：`BilibiliPlatform.selectEpisodes`、`AllVideosPlatform.selectEpisodes`、`NetEasePlatform.selectEpisodes`（`MLOD`/`AOD` 的 `select===2` 委托它）。不经 `buildSelect2`，也不需要跨弹窗 `setTimeout(300)`。
 - 输入框 `@` 链接拦截防泄露：拦截必须在 `moveinputDo` 最前端**同步清空输入框并中断原生发送**，再进入异步 URL 重定向与直链嗅探；不可在异步期间保留输入内容，否则用户连按回车或异常放行会导致链接以私聊或公聊文字误发。
 - 混合内容安全与封面 HTTPS 升级：宿站运行在 HTTPS 上下文，第三方 API（如网易云）返回的封面常为 `http://` 形式，会触发浏览器 Mixed Content 拦截导致图片破损；渲染封面必须先做 `src.replace(/^http:\/\//, 'https://')` 安全升级，并挂载 `onerror` 平滑回退到自包含矢量图标。
 - 插件**不带 Tailwind preflight**：`border-solid` 加单边 `border-b` 会让其余三边落到浏览器默认 3px（曾画出灰框）。边框基线由 `app.css` base 层补（`border: 0 solid currentcolor`），新增独立根节点（浮窗、面板）要把它的 id 一并加进那条选择器与 `box-sizing` 规则。
@@ -97,8 +95,8 @@
 <!-- /bmad:context -->
 
 - **宿站侧栏打开时给 `body` 加 `translateX(275px)`（`Probe.functionHolderAnimate`）**：`body` 里的 `fixed` 全部跟着平移，屏幕边缘不再裁得到贴边收起的胶囊，所以胶囊的层自带 `overflow-hidden`；从 `getBoundingClientRect` 读宿站元素来算胶囊位置时要减去 `body` 的偏移。
-- **面板停稳时不能带 `transform`**（`scale` 也必须是 `none`，写 `1` 同样会改变 `fixed` 的基准；缩放只在开合动画期间存在；`transform: none` 和 `scale: none` 不能写在同一条规则，lightningcss 会合并成 `transform: scale(1)`）：`OrderMenu` 的坐标和菜单的 `fixed inset-0` 遮罩都靠「`fixed` 以视口为基准」，带上就会菜单错位、点窗口外收不起来。容器也不设 `overflow: hidden`（抓取区伸在窗口外），圆角裁切放在标题栏和 `#IIROSE_MEDIA` 上；抓取区 `z-20` 必须低于菜单遮罩 `z-30`。判断面板开合看 `ShowIIROSE_MEDIA_CONTAINER` 类，打开时的计算 `transform` 是 `none`，不是 skill 里写的单位矩阵。
-- **`viewportMetrics` 量的是宿站缩放，元素自身的 `scale` 要除掉**：开合动画现在只裁不缩，容器不再带 `scale`，但这层处理保留着：以前收起的窗口带 `scale: 0.2`，不除的话视口被算大 5 倍，放不下也判成窗口。另外 `offsetWidth` 是取整的，别拿小元素量（胶囊约 113px，1.15 倍下差 4px），要量就用宽的参照物。
+- **面板停稳时不能带 `transform`**（`scale`、`translate` 也必须是 `none`，写 `scale: 1` 同样会改变 `fixed` 的基准；开合动画期间的 `clip-path` / `translate` 停稳后清掉，见 `panel-window/adr-panel-rests-without-transform.md`；`transform: none` 和 `scale: none` 不能写在同一条规则，lightningcss 会合并成 `transform: scale(1)`）：`OrderMenu` 的坐标和菜单的 `fixed inset-0` 遮罩都靠「`fixed` 以视口为基准」，带上就会菜单错位、点窗口外收不起来。容器也不设 `overflow: hidden`（抓取区伸在窗口外），圆角裁切放在标题栏和 `#IIROSE_MEDIA` 上；抓取区 `z-20` 必须低于菜单遮罩 `z-30`。判断面板开合看 `ShowIIROSE_MEDIA_CONTAINER` 类。
+- **`viewportMetrics` 量的是宿站缩放，元素自身的 `scale` 要除掉**：开合只裁不缩，容器平时不带 `scale`，但这层保护留着，带缩放时不除会把视口算大、放不下也判成窗口。另外 `offsetWidth` 是取整的，别拿小元素量（胶囊约 113px，1.15 倍下差 4px），要量就用宽的参照物。
 - **窗口模式下焦点可能在宿站输入框**：新增面板级键盘处理要先问 `isHostTextTarget(event.target)`，别抢聊天框的按键；聊天框 `@词` 在面板已开时只搜索不切换开合（`isPanelOpen`）。
 
 ## 自动播放与真机联调（2026-10-25 实测补充）
@@ -106,7 +104,6 @@
 - **聊天指令的渲染顺序**：宿站把 `cut` 渲染成 `cut铭铭280  人工智能`——**内容在前、昵称在中、标签在后**。判定「本人发了 cut」要取**昵称之前的正文**去比较，按「文本以 cut 结尾」匹配永远不命中。
 - **cut 结束后的状态**：`isShareMediaPlaying()` 变 false、`shareMediaCurrentTime` 变 `-1`、点播者字段仍可能是本人。自动重播必须**在可用性刷新之前**处理，否则「暂无播放内容」会先把已点亮的模式熄灭，重播分支永远走不到。
 - **播放需要真实用户手势**：合成 `click()` 不满足自动播放策略，宿站不会起播。自动化必须用 Playwright 的真实点击（坐标点击也可），或在同一 document 内先做一次真实点击再发报文。
-- **`browser_reload` 可能没真正重载**：本会话出现过重复注入返回 `already`、却以为已刷新，导致一直测试旧 bundle。改 bundle 后用 `page.reload({ waitUntil: "load" })`，并断言 `.IIROSE_MEDIA_CONTAINER` 不存在再注入。
 - **聊天输入框在大厅和房间公告页是隐藏的**：`#mainHolder` 与 `#msgholderDisplay` 为 `display:none`，`#moveinput` 尺寸为 0。这不是自动化的限制：进房后点左上角返回键关掉「房间公告」（坐标约 20,20），聊天区就会显示，输入框可以直接真实点击和键入，不必再强制改 `display`（强制显示时布局和真实房间不同）。
 - **本地 HTTP 注入会被 CSP 拦**：`fetch("http://127.0.0.1:.../bundle.js")` 在 messages.html 里报 `Failed to fetch`。可行方式仍是把 bundle 源码内嵌进 Playwright 代码文件，在 `messages.html` frame 里 `new Function(src)()` 执行。
 - **房间的媒体能力不同**：`window.mediaShareRoom` 为 false 的房间（如「空间站」）发点播报文不起播；「练歌房」这类视频分享房可播，且对普通账号（`identity=0`/`rank=4`）开放。
@@ -115,7 +112,7 @@
 
 ## 提交纪律
 
-- **格式化不得与功能改动混提**：全仓 prettier 归一已于 2026-10-20 完成（`style: normalize formatting across src with prettier`），此后不再出现「功能 diff 混入整文件重排」污染审查面（spec-request-announce-modes 复盘 F13：406 行格式化噪声曾两度稀释审查）。需要重排/格式化时单独提交，前缀 `style:`。
+- **格式化不得与功能改动混提**：整文件重排会淹没审查面。需要重排/格式化时单独提交，前缀 `style:`。
 - prettier 用默认配置（无 `.prettierrc`）；提交前可疑文件先 `prettier --check`，别顺手 `--write` 未触达的文件。
 - **用户可见文案必须端到端断言**：群消息、宿站提示这类文案，只在链路两端各测一半（上游断言返回值、下游手工喂值）会让文案错误被测试钉成期望值——`spec-collection-inner-batch` 复盘的校正文案误报即由此漏网（`Announce.test.ts` 喂 `sent` 数字、`sendSongs` 只断言返回值）。凡新增/修改文案，测试里要走完从数据到文案的那一段。
 
@@ -123,5 +120,5 @@
 
 - **defer 一项能力必须同轮改契约**：把某条能力推迟、降级或标为非目标时，必须在同一轮内同步改写 `_bmad-output/initiative-iirose-media-web/` 下 epic（`tickets/epic-*/`）、`backlog/` 里的 story 及其 companion（例如 `sync-protocol.md`），写清「未实现 / 非目标 / 计划轮次」。只在代码或 deferred-work 里记一句，会让下一轮复盘把「文档已承诺、代码未实现」重新判成缺陷（见 `epic-favorites-cloud-sync` 第 2 轮复盘 R2-2/R2-8）。
 - **审查结论汇总前先对 HEAD 复核**：审查层读的是历史 diff，而工作区可能已在其后走了几十个提交。`spec-media-desk-redesign` 复盘里有 5 条审查意见在 HEAD 上已不成立（模块被删、函数不再存在、实现已换源）。逐条到 HEAD 核验「这段代码是否还在、这条路径是否仍可达」，再决定修或不修；未复核的条目不得进修复清单。
-- **新特性先建票再做**：`epic-panel-dock` 的十几个提交是对话里直接做完的，没有 plan、没有票、没有独立审查，事后才补树；原 plan 在 v7 迁移里丢了，各票的范围只能按提交主题推定。动 `panel-window/` 这类较大的新特性，先用 `bmad-agent-po` 建票、用 `bmad-build` 做，`baseline_revision` 才有意义。
+- **新特性先建票再做**：先用 `bmad-agent-po` 建票、用 `bmad-build` 做，`baseline_revision` 才有意义；对话里直接做完再事后补票，范围只能按提交主题推定（`epic-panel-dock` 的教训）。
 - **设计 / 重构型 epic 收尾后观察两日再判「稳定」**：`spec-media-desk-redesign` 的 8 个 story 全绿之后，同一批文件又被 31 个提交继续修补两天才真正收敛。这类 epic 的最后一篇 story 不能只看测试全绿，复盘时把 epic 结束后的提交单列成一个视图（post-epic 收尾），据此判断是否还有同类缺陷在冒。

@@ -1,5 +1,5 @@
 ---
-ticket: story-auto-playback-no-card
+story: story-auto-playback-no-card
 date: 2026-11-01
 verdict: accepted-with-open-items
 criteria: declared

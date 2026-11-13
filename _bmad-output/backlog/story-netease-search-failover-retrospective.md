@@ -1,5 +1,5 @@
 ---
-ticket: story-netease-search-failover
+story: story-netease-search-failover
 date: 2026-10-20
 verdict: accepted-with-open-items
 criteria: profiled
