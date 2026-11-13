@@ -12,7 +12,8 @@
 //   列表：表头加载中也在且位置不变，每一行外框一致，第一行逐格左右边一致（文字格在行里垂直居中，只比左右）。
 //   音乐网格：每张卡的外框和封面一致。
 //   视频网格：标题最多两行，骨架按两行留位；封面左右边、第一排封面顶边一致，
-//     标题折成两行的那一排行高要和骨架一样（全是一行标题的那排矮一行，只打印）。
+//     标题折成两行的那一排行高要和骨架一样（全是一行标题的那排矮一行，只打印）；
+//     UP 主一行换成纯英文也要和骨架一样高（行高写死，不跟后备字体走）。
 //
 // 前置：测试账号已在持久化 profile 里登录并能进房（凭据在 .secrets/，不进脚本）。
 
@@ -129,12 +130,23 @@ async function run(viewport, label) {
           })),
           tiles: [...document.querySelectorAll(tileSel)].map((tile) => {
             const title = tile.children[1];
+            // 最后一行（视频卡的 UP 主）：另量一份纯英文的复制品，看行高跟不跟字体走
+            const meta = tile.lastElementChild;
+            const latin = meta.cloneNode(false);
+            latin.textContent = "Abc";
+            meta.after(latin);
+            const metaHeights = [
+              meta.getBoundingClientRect().height,
+              latin.getBoundingClientRect().height,
+            ];
+            latin.remove();
             const lineHeight = title
               ? parseFloat(getComputedStyle(title).lineHeight)
               : 0;
             return {
               box: box(tile),
               cover: box(tile.firstElementChild),
+              metaHeights,
               titleLines:
                 title && lineHeight
                   ? Math.round(
@@ -251,6 +263,15 @@ async function run(viewport, label) {
 
     const checkVideoTiles = (name, { skeleton, real }) => {
       const n = Math.min(skeleton.tiles.length, real.tiles.length);
+      // UP 主一行：名字全是英文时行盒不能比骨架（汉字撑）矮，否则那一排矮几像素
+      // （行高没写死时 11px 下中文 15px、英文 12px；只有搜到英文名才露出来）
+      const metaSkeleton = skeleton.tiles[0]?.metaHeights[0] ?? 0;
+      const metaLatin = real.tiles[0]?.metaHeights[1] ?? 0;
+      check(
+        `${name}：UP 主一行全英文也和骨架一样高`,
+        n > 0 && Math.abs(metaLatin - metaSkeleton) <= 0.5,
+        `骨架 ${round(metaSkeleton)}px，英文 ${round(metaLatin)}px`,
+      );
       let sideWorst = 0;
       for (let i = 0; i < n; i++) {
         const s = skeleton.tiles[i].cover;

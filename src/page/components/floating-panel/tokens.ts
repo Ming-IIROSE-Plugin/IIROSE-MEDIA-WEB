@@ -230,8 +230,12 @@ export const typeRowMeta = `${fontSans} text-[12.5px]`;
 export const typeRowMetaSource = `${fontSans} text-[13px]`;
 /** 视频卡标题（桌面 14 / 手机 13，最多两行）。 */
 export const typeVideoTitle = `${fontSans} text-[14px] font-medium leading-[1.45] max-[768px]:text-[13px]`;
-/** 视频卡副行（桌面 12 / 手机 11）。 */
-export const typeVideoMeta = `${fontSans} text-[12px] max-[768px]:text-[11px]`;
+/**
+ * 视频卡 / 音乐卡副行（桌面 12 / 手机 11）。行高写死成像素（等于原来含中文时的行盒）：
+ * 不写的话行盒跟着字体走，UP 主名全是英文时比含中文矮 3px，那一排就比骨架（汉字撑行）矮。
+ * 不用倍数：音乐卡副行里夹着 12px 的时长，倍数会按它自己的字号算出更高的行盒。
+ */
+export const typeVideoMeta = `${fontSans} text-[12px] leading-[17px] max-[768px]:text-[11px] max-[768px]:leading-[15px]`;
 
 /** 等宽小字但无字距（键位提示 kbd，DESIGN.md mono-caption 注）。 */
 export const typeKeyHint = `${fontMono} text-[11px] tabular-nums`;
