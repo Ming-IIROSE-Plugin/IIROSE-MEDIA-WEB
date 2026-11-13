@@ -16,7 +16,12 @@
 //      各截一张：0.5 那张的字和图标要明显比 0 那张清楚（胶囊压在面板的底色上面）。
 //      开合只有 100ms，淡出只占一两帧，帧与帧之间没有「半途」可冻，所以查的是层级，
 //      不是某一帧的透明度；参照也不能用静止时的胶囊（背后是深色的宿站，交接时是浅色底）。
-//   7. 双击胶囊：第二下被吞掉，面板照常打开，没有落到宿站
+//   7. 双击胶囊：第一下之后把动画冻在交接中途再点第二下（开合只有 100ms，按墙钟隔几十毫秒点，
+//      第二下会落在动画结束之后，测不到吞点击的那层）；第二下要落在盖住形状的底色上被吞掉，
+//      宿站和面板内容都收不到点击，面板照常打开
+//   8. 「点歌台入口」选「只用双指下滑」（没有胶囊）：收起最后一帧、打开第一帧都是胶囊本该在处的
+//      中心点（宽高 0），全程没有胶囊；中心点取同一位置、同一尺寸下有胶囊那一轮量到的收起的胶囊
+// 设置里的「点歌台入口」每次 boot 都写死成默认档，结束时还原：不吃 profile 里残留的档位。
 // 另外打印每段动画里形状在动的那些帧的最长一帧（形状停着等的帧不算），以及面板打开后静止时最长的一帧。
 // 帧间隔只打印、不判：这台机器没有显卡，全靠软件渲染，CPU 被别的任务占满时连静止的面板都会掉帧，
 // 量出来的数反映的是机器，不是动画。桌面目标是每帧 ≤ 34ms，要在真机上看。
@@ -58,7 +63,7 @@ const page = ctx.pages()[0] ?? (await ctx.newPage());
 let frame;
 
 /** 进房、按要求写好存档和设置、只注入一次 bundle。 */
-async function boot({ dock, display }) {
+async function boot({ dock, display, entry = "pillSwipe" }) {
   await page.goto("https://iirose.com/", { waitUntil: "load" });
   frame = undefined;
   for (let i = 0; i < 30 && !frame; i++) {
@@ -71,13 +76,14 @@ async function boot({ dock, display }) {
   await page.mouse.click(20, 20);
   await page.waitForTimeout(1500);
   await frame.evaluate(
-    ([positionKey, settingsKey, dock, display]) => {
+    ([positionKey, settingsKey, dock, display, entry]) => {
       localStorage.setItem(positionKey, JSON.stringify(dock));
       const settings = JSON.parse(localStorage.getItem(settingsKey) ?? "{}");
       settings.panelDisplay = display;
+      settings.panelEntry = entry;
       localStorage.setItem(settingsKey, JSON.stringify(settings));
     },
-    [POSITION_KEY, SETTINGS_KEY, dock, display],
+    [POSITION_KEY, SETTINGS_KEY, dock, display, entry],
   );
   const already = await frame.evaluate(
     () => document.querySelectorAll(".IIROSE_MEDIA_CONTAINER").length,
@@ -361,7 +367,10 @@ async function handoverOnTop(minimizeLabel) {
   );
 }
 
-/** 双击胶囊：第二下落在正在长的形状上被吞掉，面板照常打开，宿站收不到点击。 */
+/**
+ * 双击胶囊：第一下之后冻在交接中途再点第二下，第二下落在正在长的形状上被吞掉，面板照常打开。
+ * 用捕获阶段记下每一下点到了谁：底色吞掉点击时会停止冒泡，冒泡阶段看不到。
+ */
 async function doubleClick(minimizeLabel) {
   await page.mouse.move(700, 450);
   await page.waitForTimeout(300);
@@ -373,27 +382,58 @@ async function doubleClick(minimizeLabel) {
   await page.mouse.move(center.x, center.y);
   await page.waitForTimeout(500);
   await frame.evaluate(() => {
-    window.__imwHostClicks = [];
+    window.__imwClicks = [];
+    document.addEventListener(
+      "click",
+      (event) => {
+        const target = event.target;
+        const where = target.closest?.("[data-imw-grow]")
+          ? "veil"
+          : target.closest?.("#IIROSE_MEDIA_CONTAINER")
+            ? "panel"
+            : target.closest?.("#imw-panel-dock-root")
+              ? "dock"
+              : `host ${target.tagName}#${target.id}`;
+        window.__imwClicks.push(where);
+      },
+      true,
+    );
+    // 冒泡到 document 的点底色的点击：没被吞掉，宿站自己的监听会收到
+    window.__imwLeaked = 0;
     document.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!target.closest?.("#IIROSE_MEDIA_CONTAINER, #imw-panel-dock-root"))
-        window.__imwHostClicks.push(`${target.tagName}#${target.id}`);
+      if (event.target.closest?.("[data-imw-grow]")) window.__imwLeaked++;
     });
   });
+  await freezeWhen("open");
   await page.mouse.click(center.x, center.y);
-  await page.waitForTimeout(90);
+  await page.waitForTimeout(400);
+  const midway = await frame.evaluate(() => ({
+    veil: !!document.querySelector('[data-imw-grow="veil"]'),
+    opacity:
+      document.getElementById("imw-panel-dock-root")?.firstElementChild?.style
+        .opacity ?? null,
+  }));
   await page.mouse.click(center.x, center.y);
+  await page.waitForTimeout(100);
+  await releaseFrames();
   await page.waitForTimeout(800);
   const result = await frame.evaluate(() => ({
     open: document
       .getElementById("IIROSE_MEDIA_CONTAINER")
       .classList.contains("ShowIIROSE_MEDIA_CONTAINER"),
-    host: window.__imwHostClicks,
+    clicks: window.__imwClicks,
+    leaked: window.__imwLeaked,
   }));
+  const second = result.clicks[1];
   check(
-    "双击胶囊：第二下被吞掉，面板照常打开，没落到宿站",
-    result.open && result.host.length === 0,
-    JSON.stringify(result),
+    "双击胶囊：第二下（冻在交接中途）落在底色上被吞掉，面板照常打开，宿站和面板内容都没收到",
+    midway.veil &&
+      inHandover(midway.opacity) &&
+      result.open &&
+      second === "veil" &&
+      result.leaked === 0 &&
+      result.clicks.every((where) => where === "dock" || where === "veil"),
+    `第二下时底色在 ${midway.veil}、胶囊透明度 ${midway.opacity}；${JSON.stringify(result)}`,
   );
   const minimize = await rectOf(`[aria-label="${minimizeLabel}"]`);
   const button = await toPage(
@@ -401,6 +441,78 @@ async function doubleClick(minimizeLabel) {
     (minimize.top + minimize.bottom) / 2,
   );
   await page.mouse.click(button.x, button.y);
+  await page.waitForTimeout(800);
+}
+
+/** Alt+S：宿站输入模块在 iframe 的 document 上听 keydown。 */
+const altS = () =>
+  frame.evaluate(() =>
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "s", altKey: true, bubbles: true }),
+    ),
+  );
+
+/**
+ * 「只用双指下滑」：面板开着时把档位改成没有胶囊，收起缩回胶囊本该在处的中心点；
+ * 再打开从那个点长出来。`tucked` 是同一位置、同一尺寸下有胶囊那一轮量到的收起的胶囊。
+ */
+async function swipeOnlyRound(label, tucked) {
+  const centre = {
+    x: (tucked.left + tucked.right) / 2,
+    y: (tucked.top + tucked.bottom) / 2,
+  };
+  const point = {
+    left: centre.x,
+    right: centre.x,
+    top: centre.y,
+    bottom: centre.y,
+  };
+  await altS();
+  await page.waitForTimeout(800);
+  await frame.evaluate((key) => {
+    const settings = JSON.parse(localStorage.getItem(key) ?? "{}");
+    settings.panelEntry = "swipe";
+    localStorage.setItem(key, JSON.stringify(settings));
+  }, SETTINGS_KEY);
+
+  await startSampling();
+  await altS();
+  await page.waitForTimeout(800);
+  const closing = await stopSampling();
+  const last = closing.filter((s) => s.visible).at(-1);
+  check(
+    `${label}：只用双指下滑，收起最后一帧缩到胶囊本该在处的中心点，全程没有胶囊`,
+    !!last &&
+      gap(last.visible, point) <= 1 &&
+      closing.every((s) => s.dock === null) &&
+      !(await rectOf(PILL)),
+    `中心 (${centre.x.toFixed(1)}, ${centre.y.toFixed(1)})，最后一帧 ${fmt(last?.visible)}，帧里出现胶囊 ${closing.filter((s) => s.dock !== null).length} 次`,
+  );
+
+  await startSampling();
+  await altS();
+  await page.waitForTimeout(800);
+  const opening = await stopSampling();
+  const first = opening.find((s) => s.visible);
+  const opened = await restState();
+  check(
+    `${label}：只用双指下滑，打开第一帧从那个中心点长出，停稳后没有裁切`,
+    !!first &&
+      gap(first.visible, point) <= 1 &&
+      opening.every((s) => s.dock === null) &&
+      opened.clipPath === "none" &&
+      opened.visibility === "visible" &&
+      opened.followers === 0,
+    `第一帧 ${fmt(first?.visible)}，停稳 ${JSON.stringify(opened)}`,
+  );
+
+  // 还原默认档，收起：胶囊重新挂上
+  await frame.evaluate((key) => {
+    const settings = JSON.parse(localStorage.getItem(key) ?? "{}");
+    settings.panelEntry = "pillSwipe";
+    localStorage.setItem(key, JSON.stringify(settings));
+  }, SETTINGS_KEY);
+  await altS();
   await page.waitForTimeout(800);
 }
 
@@ -498,6 +610,7 @@ async function roundTrip(label, edge, minimizeLabel) {
   console.log(
     `      帧间隔（只供参考）：打开最长 ${open.text}，收起最长 ${close.text}，静止最长 ${idle.toFixed(1)}ms`,
   );
+  return end;
 }
 
 /** 面板打开后静止时最长的一帧：这台机器此刻本身有多卡。 */
@@ -525,7 +638,12 @@ try {
   // ── 全屏：贴右边、贴上边 ─────────────────────────────────
   await boot({ dock: { x: 0, y: 400, edge: "right" }, display: "full" });
   await roundTrip("全屏贴右边（首次打开）", "right", "最小化点歌台");
-  await roundTrip("全屏贴右边（再次打开）", "right", "最小化点歌台");
+  const fullTucked = await roundTrip(
+    "全屏贴右边（再次打开）",
+    "right",
+    "最小化点歌台",
+  );
+  await swipeOnlyRound("全屏贴右边", fullTucked);
   await handoverOnTop("最小化点歌台");
   await doubleClick("最小化点歌台");
   await frame.evaluate(
@@ -574,13 +692,19 @@ try {
   );
   await page.setViewportSize({ width: 390, height: 800 });
   await page.waitForTimeout(1500);
-  await roundTrip("手机贴右边", "right", "最小化点歌台");
+  const phoneTucked = await roundTrip("手机贴右边", "right", "最小化点歌台");
+  await swipeOnlyRound("手机贴右边", phoneTucked);
   await page.setViewportSize({ width: 1400, height: 900 });
 
   // ── 窗口模式：胶囊在窗口外 ───────────────────────────────
   await boot({ dock: { x: 0, y: 400, edge: "right" }, display: "window" });
   await roundTrip("窗口贴右边（首次打开）", "right", "最小化窗口");
-  await roundTrip("窗口贴右边（再次打开）", "right", "最小化窗口");
+  const windowTucked = await roundTrip(
+    "窗口贴右边（再次打开）",
+    "right",
+    "最小化窗口",
+  );
+  await swipeOnlyRound("窗口贴右边", windowTucked);
 } catch (error) {
   check("脚本运行", false, String(error).slice(0, 300));
 } finally {
@@ -590,6 +714,7 @@ try {
         localStorage.removeItem(positionKey);
         const settings = JSON.parse(localStorage.getItem(settingsKey) ?? "{}");
         settings.panelDisplay = "full";
+        settings.panelEntry = "pillSwipe";
         localStorage.setItem(settingsKey, JSON.stringify(settings));
       },
       [POSITION_KEY, SETTINGS_KEY],

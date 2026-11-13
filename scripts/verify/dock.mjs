@@ -34,6 +34,12 @@ const EXE =
 const PROFILE =
   process.env.IIROSE_PROFILE || "/root/.cache/iirose-verify-profile";
 const POSITION_KEY = "imwPanelDockPosition";
+/** 在 messages.html 里执行：把插件设置的「点歌台入口」写成 `entry`。 */
+const setEntry = (entry) => {
+  const settings = JSON.parse(localStorage.getItem("imwPluginSetting") ?? "{}");
+  settings.panelEntry = entry;
+  localStorage.setItem("imwPluginSetting", JSON.stringify(settings));
+};
 const PILL = "[data-imw-panel-dock]";
 
 const results = [];
@@ -68,6 +74,8 @@ try {
       [POSITION_KEY, value],
     );
   await store({ x: 0, y: 400, edge: "right" });
+  // 「点歌台入口」写死成默认档（有胶囊）：不吃 profile 里残留的档位
+  await frame.evaluate(setEntry, "pillSwipe");
 
   const already = await frame.evaluate(
     () => document.querySelectorAll(".IIROSE_MEDIA_CONTAINER").length,
@@ -435,6 +443,7 @@ try {
 } finally {
   try {
     await frame?.evaluate((key) => localStorage.removeItem(key), POSITION_KEY);
+    await frame?.evaluate(setEntry, "pillSwipe");
   } catch {
     // 页面已关闭
   }

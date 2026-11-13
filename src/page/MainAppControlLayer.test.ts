@@ -838,7 +838,16 @@ describe("窗口模式", () => {
         await toggle();
         expect(isOpen()).toBe(false);
         expect(root()).toBeNull();
-        await frames(GROW_CLOSE_MS + 100);
+        const clips: string[] = [];
+        for (let t = 0; t < GROW_CLOSE_MS + 100; t += 16) {
+          await frames(16);
+          if (panel().style.clipPath) clips.push(panel().style.clipPath);
+        }
+        // 清掉之前画出来的最后一帧就是那个中心点，不是胶囊的形状
+        expect(clips.length).toBeGreaterThan(1);
+        expect(clips.at(-1)).toBe(
+          "inset(319px 17px 581px 1583px round 0px 0px 0px 0px)",
+        );
         expect(root()).toBeNull();
         expect(panel().getAttribute("style") ?? "").toBe("");
         expect(followers()).toHaveLength(0);
