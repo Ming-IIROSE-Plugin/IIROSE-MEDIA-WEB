@@ -41,7 +41,8 @@ status: in-progress
 
 - 窗口、全屏、手机三种形态的开合都从胶囊出发、回到胶囊，面板上没有 X。
 - 胶囊可拖动、记住位置、不能进输入框；吸附、收起、展开、粘连与断开在真站实测通过。
-- `npm test`（1520 个用例）与 `npm run build` 通过，`scripts/verify/dock.mjs` 在真站 6 项全过。
+- `npm test` 与 `npm run build` 通过；真站 `scripts/verify/dock.mjs`、`grow.mjs`、`entry.mjs` 全过（2026-11-13 第二轮复盘时：1597 个用例，`dock.mjs` 19 项，`entry.mjs` 17 项）。
+- 「点歌台入口」四档（R6）切换不刷新即生效、刷新后保持。
 - 已推送到 `origin main` 并部署（CI 成功）。
 
 ## Boundaries
@@ -50,21 +51,21 @@ status: in-progress
 - Touch point: 宿站 `#moveinputDisplay`（输入框外层）与侧栏 `translateX(275px)` — 只读位置，不改 DOM；owner: 宿站。
 - Touch point: `src/media-progress/viewport.ts` — 为排除元素自身 `scale` 做了一处改动；owner: epic-media-desk-redesign。
 - Must not change: 面板内容布局与 `AGENTS.md` 的外壳尺寸约定。
-- 未做：真机触屏验证（只有 CDP 模拟）；窗口键盘移动 / 缩放；手机端宿站侧栏开合的单独验证。
+- 未做：窗口键盘移动 / 缩放。（真机触屏与手机端宿站侧栏已由维护者在真机上验证，见复盘第一轮 V1。）
 
 ## References
 
 - parent — _bmad-output/initiative-iirose-media-web/initiative-iirose-media-web.md
 - code — src/page/components/panel-window/、src/page/MainAppControlLayer.tsx、src/app.css（窗口态与胶囊）
 - guide — AGENTS.md「主面板窗口模式」「常驻胶囊」两条
-- verify — scripts/verify/dock.mjs
+- verify — scripts/verify/dock.mjs、scripts/verify/grow.mjs、scripts/verify/entry.mjs
 
 ## Notes
 
 - Decision: 2026-11-06 事后登记。实现已全部完成并上线，六张票都以 `done` 登记，plan 的 `baseline_revision` 取各票首个提交的父提交，范围按提交主题划分，彼此相邻处有重叠。
 - Decision: 2026-11-06 维护者指定切成：窗口模式、最小化、常驻胶囊、吸附、蜂蜜拉丝，外加审查收口一张。
 - Open question: 原 plan（`plan-main-panel-window-mode`、`plan-panel-window-minimize`）在 v7 迁移时丢失，内容只能从提交说明与 AGENTS.md 还原。
-- Open question: 本 epic 未做过 `bmad-review` 之外的独立审查；2026-11-06 的一轮审查结果记在「审查收口」票里。
+- Open question（已解决）: 第一轮只做过一次独立审查（记在「审查收口」票里）；12.7–12.9 各做过一轮独立快速审查，2026-11-13 第二轮复盘又做了一次跨票的三镜头审查。
 - Decision: 2026-11-07 贴边的胶囊反复露出接缝和方角（上边收起时的方块、右边上下沿约 1px 的凹陷），根因是胶囊和粘连是两个要靠 CSS 和 TS 各写一遍才对齐的形状。维护者在原型上比较后选定「一笔画」（同一条轮廓），新增票 7；要求不变，只换实现。
 - Decision: 2026-11-07 下边不做粘连。`#moveinputDisplay` 占满整条底栏（灰框只是其中会随打字变长的 `#moveinputBubble`），贴输入栏顶边会悬空，贴屏幕底又要进入输入区；维护者决定不做。
 - Decision: 2026-11-07 维护者想让面板「像是从胶囊长出来」。在试玩页（真站截图，胶囊用插件同一个形状函数）比较了现在、A 撑开、B 放大、C 顺边拉出、D 回弹，选定 A，新增票 8；做好先不推送，等维护者确认再上线。
