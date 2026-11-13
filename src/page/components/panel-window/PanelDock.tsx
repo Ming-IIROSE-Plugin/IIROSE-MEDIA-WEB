@@ -341,7 +341,8 @@ export interface PanelDockHandle {
 
 /** 挂到 body。`handover` 挂上时是藏着的，等 `reveal(1)`。 */
 export function mountPanelDock(props: PanelDockProps): PanelDockHandle {
-  releasePanelDock();
+  // 只卸旧的根，不清内存兜底：每次收起都会重新挂胶囊，清了的话存储写不进去时拖完的位置收起一次就丢
+  unmountDockRoots();
   const root = document.createElement("div");
   root.id = PANEL_DOCK_ROOT_ID;
   document.body.appendChild(root);
@@ -368,8 +369,13 @@ export function mountPanelDock(props: PanelDockProps): PanelDockHandle {
   return handle;
 }
 
+/** 页面卸载（换 bundle、重新注入）时调用：连内存兜底一起清。 */
 export function releasePanelDock(): void {
   forgetUnsavedDock();
+  unmountDockRoots();
+}
+
+function unmountDockRoots(): void {
   for (const node of document.querySelectorAll(`#${PANEL_DOCK_ROOT_ID}`)) {
     // 先卸载：停掉跟随用的定时器和视口监听
     render(null, node);

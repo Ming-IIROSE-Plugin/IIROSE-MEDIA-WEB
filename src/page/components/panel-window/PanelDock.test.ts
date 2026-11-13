@@ -301,6 +301,42 @@ describe("拖动", () => {
     }
   });
 
+  it("存储写不进去：打开再收起（胶囊重新挂上）后拖完的位置还在", () => {
+    addInput(input);
+    const first = mount();
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    try {
+      dragBy(100, -200);
+      first.unmount();
+      mount();
+      expect(position()).toEqual({ x: 412, y: 594 });
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
+  it("页面卸载时内存兜底一起清掉", () => {
+    addInput(input);
+    mount();
+    const setItem = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new Error("denied");
+      });
+    try {
+      dragBy(100, -200);
+      releasePanelDock();
+      mount();
+      expect(position()).not.toEqual({ x: 412, y: 594 });
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
   it("拖拽被取消、没有随后的点击：之后的键盘激活仍能打开", () => {
     vi.useFakeTimers();
     addInput(input);
