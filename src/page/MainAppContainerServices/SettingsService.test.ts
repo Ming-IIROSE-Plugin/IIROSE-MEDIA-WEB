@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsService } from "./SettingsService";
 import { AboutService } from "./AboutService";
 import { IIROSEUtils } from "../../iirose_func/IIROSEUtils";
@@ -166,8 +166,16 @@ describe("代理蔷薇@输入开关", () => {
 });
 
 describe("点歌台入口行", () => {
+  // jsdom 没有 `maxTouchPoints`：这组按手机（有触屏）说四档
+  beforeEach(() =>
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: 5,
+      configurable: true,
+    }),
+  );
   afterEach(() => {
     delete (window as unknown as Record<string, unknown>).Utils;
+    delete (navigator as unknown as Record<string, unknown>).maxTouchPoints;
     localStorage.clear();
   });
 

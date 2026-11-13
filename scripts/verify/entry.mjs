@@ -11,6 +11,11 @@
 //   3. 选「只用胶囊」：开、关都没反应；Alt+S 收起后胶囊在，点胶囊打开
 //   4. 选「只用双指下滑」：收起后没有胶囊；双指下滑能开能关
 //   5. 刷新后档位保持
+// 然后换成桌面 1600×900、没有触屏（另开一次浏览器）：
+//   6. 选择框只有「显示胶囊」「隐藏胶囊（Alt+S / @词 打开）」两项
+//   7. 选「隐藏胶囊」：胶囊卸下；Alt+S 收起后没有胶囊，再按能打开
+//   8. 选「显示胶囊」：原来隐藏的回到默认档，收起后胶囊在
+// 桌面一开始存成「只用胶囊」：有胶囊的档在电脑上都说成「显示胶囊」。
 // 档位都从面板里的设置页选（经宿站选择框），不刷新就要生效；结束时还原默认档。
 //
 // 前置：测试账号已在持久化 profile 里登录并能进房（凭据在 .secrets/，不进脚本）。
@@ -40,18 +45,27 @@ const check = (name, ok, detail = "") => {
 };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const ctx = await chromium.launchPersistentContext(PROFILE, {
-  headless: true,
-  executablePath: EXE,
+let ctx, page, cdp, frame;
+/** 持久化 profile 同时只能开一个浏览器：换设备前先关上一个。 */
+async function launch(device) {
+  await ctx?.close();
+  ctx = await chromium.launchPersistentContext(PROFILE, {
+    headless: true,
+    executablePath: EXE,
+    deviceScaleFactor: 1,
+    locale: "zh-CN",
+    ...device,
+  });
+  page = ctx.pages()[0] ?? (await ctx.newPage());
+  cdp = await ctx.newCDPSession(page);
+  frame = undefined;
+}
+const PHONE = {
   viewport: { width: 390, height: 844 },
   hasTouch: true,
   isMobile: true,
-  deviceScaleFactor: 1,
-  locale: "zh-CN",
-});
-const page = ctx.pages()[0] ?? (await ctx.newPage());
-const cdp = await ctx.newCDPSession(page);
-let frame;
+};
+const DESKTOP = { viewport: { width: 1600, height: 900 } };
 
 /** 进房、按要求写好档位（`null` 不动存档）、只注入一次 bundle。 */
 async function boot(entry) {
@@ -145,8 +159,8 @@ const altS = async () => {
   await sleep(700);
 };
 
-/** 打开面板（开着就不动）→ 设置 → 插件设置 → 点歌台入口 → 选一项；返回设置行的文字。 */
-async function choose(label) {
+/** 打开面板（开着就不动）→ 设置 → 插件设置 → 点歌台入口，返回这一行。 */
+async function openEntryRow() {
   if (!(await isOpen())) await altS();
   await frame
     .locator(".IIROSE_MEDIA_CONTAINER button:visible", { hasText: "设置" })
@@ -168,19 +182,28 @@ async function choose(label) {
   await row.scrollIntoViewIfNeeded();
   await row.click();
   await sleep(900);
-  // 宿站选择框不在插件容器里：只认文字完全相等的那一项
-  await frame
+  return row;
+}
+
+/** 宿站选择框里文字完全相等的那一项（选择框不在插件容器里）。 */
+const option = (label) =>
+  frame
     .locator(":is(div,span):visible", {
-      hasText: new RegExp(`^${label.replace(/[+]/g, "\\+")}$`),
+      hasText: new RegExp(`^${label.replace(/[+()]/g, "\\$&")}$`),
     })
     .filter({ hasNot: frame.locator(".IIROSE_MEDIA_CONTAINER") })
-    .last()
-    .click();
+    .last();
+
+/** 选一项；返回设置行的文字。 */
+async function choose(label) {
+  const row = await openEntryRow();
+  await option(label).click();
   await sleep(900);
   return row.textContent();
 }
 
 try {
+  await launch(PHONE);
   // 1. 默认
   await boot("pillSwipe");
   check("默认：胶囊在", await hasPill());
@@ -246,6 +269,58 @@ try {
   );
   await swipe();
   check("刷新后双指下滑打开", await isOpen());
+
+  // 6–8. 桌面、没有触屏
+  await frame.evaluate(writeEntry, [SETTINGS_KEY, "pillSwipe"]);
+  await launch(DESKTOP);
+  await boot("pill");
+  check(
+    "桌面：没有触屏",
+    !(await page.evaluate(() => navigator.maxTouchPoints)),
+  );
+  const HIDE = "隐藏胶囊（Alt+S / @词 打开）";
+  let row = await openEntryRow();
+  const shown = {};
+  for (const label of [
+    "显示胶囊",
+    HIDE,
+    "胶囊 + 双指下滑",
+    "胶囊 + 双指下滑只收起",
+    "只用胶囊",
+    "只用双指下滑",
+  ])
+    shown[label] = await option(label).count();
+  check(
+    "桌面：设置行说「显示胶囊」，选择框只有两项",
+    /显示胶囊/.test(await row.textContent()) &&
+      shown["显示胶囊"] === 1 &&
+      shown[HIDE] === 1 &&
+      Object.values(shown).reduce((a, b) => a + b) === 2,
+    JSON.stringify(shown),
+  );
+  await option(HIDE).click();
+  await sleep(900);
+  text = await row.textContent();
+  check(
+    "桌面：选「隐藏胶囊」后行文案和存档",
+    text.includes(HIDE) && (await stored()) === "swipe",
+    `${text} / ${await stored()}`,
+  );
+  await altS();
+  check(
+    "桌面隐藏胶囊：Alt+S 收起，没有胶囊",
+    !(await isOpen()) && !(await hasPill()),
+  );
+  await altS();
+  check("桌面隐藏胶囊：Alt+S 打开", await isOpen());
+  text = await choose("显示胶囊");
+  check(
+    "桌面：选「显示胶囊」回到默认档",
+    /显示胶囊/.test(text) && (await stored()) === "pillSwipe",
+    `${text} / ${await stored()}`,
+  );
+  await altS();
+  check("桌面显示胶囊：收起后胶囊在", !(await isOpen()) && (await hasPill()));
 } catch (error) {
   check("脚本运行", false, String(error).slice(0, 300));
 } finally {
@@ -254,7 +329,7 @@ try {
   } catch {
     // 页面已关闭
   }
-  await ctx.close();
+  await ctx?.close();
 }
 console.log(`${results.filter(Boolean).length} / ${results.length} 通过`);
 process.exit(results.every(Boolean) ? 0 : 1);

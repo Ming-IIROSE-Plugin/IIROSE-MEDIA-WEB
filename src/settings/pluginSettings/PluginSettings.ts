@@ -18,6 +18,8 @@ import {
   normalizeFavoritesPageSize,
   normalizePanelEntry,
   normalizeSyncSettings,
+  panelEntryShowsPill,
+  PANEL_ENTRIES,
   type AnnounceMode,
   type PanelDisplay,
   type PanelEntry,
@@ -25,6 +27,7 @@ import {
   type PluginSyncSettings,
   type SearchViewMode,
 } from "./normalize";
+import { hasTouchScreen } from "./touchScreen";
 
 export {
   DEFAULT_SYNC_SERVER_URL,
@@ -292,8 +295,16 @@ export class PluginSettings {
     return normalizeAnnounceMode(raw);
   }
 
-  /** 「点歌台入口」各档的文案（设置行的值位与选择框共用一份）。 */
-  public static parsePanelEntry(entry: PanelEntry): string {
+  /**
+   * 「点歌台入口」各档的文案（设置行的值位与选择框共用一份）。
+   * 没有触屏时双指下滑用不了、有胶囊的三档效果一样，只说「显示 / 隐藏胶囊」。
+   */
+  public static parsePanelEntry(
+    entry: PanelEntry,
+    touch = hasTouchScreen(),
+  ): string {
+    if (!touch)
+      return entry === "swipe" ? "隐藏胶囊（Alt+S / @词 打开）" : "显示胶囊";
     return entry === "pillSwipeClose"
       ? "胶囊 + 双指下滑只收起"
       : entry === "pill"
@@ -331,7 +342,7 @@ export class PluginSettings {
     };
   }
 
-  /** 「点歌台入口」四选一选择框（宿站单选）；选中后回报新文案，写盘失败不回报。 */
+  /** 「点歌台入口」选择框（宿站单选：有触屏四选一，没有触屏两选一）；选中后回报新文案，写盘失败不回报。 */
   public static setPanelEntry(
     changeActionTitleAction?: (actionTitle?: string) => void,
   ) {
@@ -347,16 +358,23 @@ export class PluginSettings {
       pill: "panelEntryPillIcon",
       swipe: "panelEntrySwipeIcon",
     };
-    const entries: PanelEntry[] = [
-      "pillSwipe",
-      "pillSwipeClose",
-      "pill",
-      "swipe",
-    ];
-    const selectOption: (string | number)[][] = entries.map((entry) => [
+    const touch = hasTouchScreen();
+    const current = PluginSettings.getPluginSetting().panelEntry;
+    // 没有触屏：只给「显示胶囊」和「隐藏胶囊」。显示胶囊保留已选的有胶囊档
+    // （手机上才有区别，不在电脑上悄悄改掉），原来隐藏的就回到默认档。
+    const entries: [PanelEntry, string][] = touch
+      ? PANEL_ENTRIES.map((entry) => [entry, iconClass[entry]])
+      : [
+          [
+            panelEntryShowsPill(current) ? current : "pillSwipe",
+            iconClass.pill,
+          ],
+          ["swipe", "panelEntryHideIcon"],
+        ];
+    const selectOption: (string | number)[][] = entries.map(([entry, icon]) => [
       entry,
-      PluginSettings.parsePanelEntry(entry),
-      `<div class="${iconClass[entry]}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
+      PluginSettings.parsePanelEntry(entry, touch),
+      `<div class="${icon}" style="font-family:md;font-size:28px;text-align:center;line-height:100px;height:100px;width:100px;position:absolute;top:0;opacity:.7;left:0;"></div>`,
     ]);
 
     IIROSEUtils.buildSelect2(

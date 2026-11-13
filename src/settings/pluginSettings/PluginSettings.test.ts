@@ -504,6 +504,17 @@ describe("主面板显示方式", () => {
   });
 });
 
+/** 设成有 / 没有触屏（jsdom 没有 `maxTouchPoints`，默认算没有）。 */
+const setTouchPoints = (n: number | undefined) => {
+  if (n === undefined)
+    delete (navigator as unknown as Record<string, unknown>).maxTouchPoints;
+  else
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      value: n,
+      configurable: true,
+    });
+};
+
 describe("点歌台入口", () => {
   const KEY = "imwPluginSetting";
   const stored = () => JSON.parse(localStorage.getItem(KEY)!).panelEntry;
@@ -512,6 +523,7 @@ describe("点歌台入口", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    setTouchPoints(5);
     setCb = undefined;
     (window as unknown as Record<string, unknown>).Utils = {
       buildSelect2: (
@@ -529,6 +541,7 @@ describe("点歌台入口", () => {
     delete (window as unknown as Record<string, unknown>)._alert;
     vi.restoreAllMocks();
     localStorage.clear();
+    setTouchPoints(undefined);
   });
 
   it("没有存档、旧存档、不认识的值都按「胶囊 + 双指下滑」", () => {
@@ -602,5 +615,67 @@ describe("点歌台入口", () => {
     off();
     vi.restoreAllMocks();
     expect(PluginSettings.getPluginSetting().panelEntry).toBe("pill");
+  });
+
+  describe("没有触屏", () => {
+    beforeEach(() => setTouchPoints(0));
+    const open = () => PluginSettings.setPanelEntry(vi.fn());
+    const values = () => options.map((option) => option[0]);
+    const labels = () => options.map((option) => option[1]);
+
+    it("文案只说显示 / 隐藏胶囊", () => {
+      for (const entry of ["pillSwipe", "pillSwipeClose", "pill"] as const)
+        expect(PluginSettings.parsePanelEntry(entry)).toBe("显示胶囊");
+      expect(PluginSettings.parsePanelEntry("swipe")).toBe(
+        "隐藏胶囊（Alt+S / @词 打开）",
+      );
+    });
+
+    it("选择框只有两项；「显示胶囊」保留已选的有胶囊档", () => {
+      for (const entry of ["pillSwipe", "pillSwipeClose", "pill"] as const) {
+        PluginSettings.savePanelEntry(entry);
+        open();
+        expect(values()).toEqual([entry, "swipe"]);
+        expect(labels()).toEqual(["显示胶囊", "隐藏胶囊（Alt+S / @词 打开）"]);
+        for (const option of options)
+          expect(String(option[2])).toContain("<div");
+      }
+    });
+
+    it("原来隐藏的，选「显示胶囊」回到默认档并通知订阅方", () => {
+      PluginSettings.savePanelEntry("swipe");
+      const report = vi.fn();
+      const listener = vi.fn();
+      const off = PluginSettings.onPanelEntryChange(listener);
+      PluginSettings.setPanelEntry(report);
+      expect(values()).toEqual(["pillSwipe", "swipe"]);
+      setCb!(document.createElement("div"), String(options[0][0]));
+      expect(stored()).toBe("pillSwipe");
+      expect(report).toHaveBeenCalledWith("显示胶囊");
+      expect(listener).toHaveBeenCalledWith("pillSwipe");
+      off();
+    });
+
+    it("选「隐藏胶囊」存成只用双指下滑", () => {
+      PluginSettings.savePanelEntry("pill");
+      const report = vi.fn();
+      PluginSettings.setPanelEntry(report);
+      setCb!(document.createElement("div"), String(options[1][0]));
+      expect(stored()).toBe("swipe");
+      expect(report).toHaveBeenCalledWith("隐藏胶囊（Alt+S / @词 打开）");
+    });
+
+    it("粗指针（没报触点数）也算有触屏", () => {
+      const original = window.matchMedia;
+      window.matchMedia = ((query: string) => ({
+        matches: query === "(any-pointer: coarse)",
+      })) as unknown as typeof window.matchMedia;
+      try {
+        open();
+        expect(values()).toHaveLength(4);
+      } finally {
+        window.matchMedia = original;
+      }
+    });
   });
 });

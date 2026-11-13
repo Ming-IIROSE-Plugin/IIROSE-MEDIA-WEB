@@ -563,6 +563,7 @@
 .panelEntryPillSwipeCloseIcon::before,
 .panelEntryPillIcon::before,
 .panelEntrySwipeIcon::before,
+.panelEntryHideIcon::before,
 .imwModeMusic::before,
 .imwModeVideo::before,
 .imwModeRadio::before,
@@ -601,6 +602,11 @@
 
 .panelEntrySwipeIcon::before {
   content: "\F073D"; /* gesture-swipe-down */
+}
+
+/* 没有触屏时的「隐藏胶囊」 */
+.panelEntryHideIcon::before {
+  content: "\F0209"; /* eye-off */
 }
 
 /* 「插件启动默认页面」选择框图标（宿站弹窗；码点同上，自包含不借宿站 mdi-* 类） */
