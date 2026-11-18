@@ -204,6 +204,77 @@ export const sendBiliMedia = async (
   console.log(`[VOD] 播放指令已下发: ${mediaData.name}`);
 };
 
+const canLoadHls = async (url: string): Promise<boolean> => {
+  // Some live CDNs return 404 for HEAD even though the playlist plays.
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(4000),
+    });
+    return (
+      response.ok && (await response.text()).trimStart().startsWith("#EXTM3U")
+    );
+  } catch {
+    return false;
+  }
+};
+
+const resolveLiveStream = async (roomId: number, quality: number) => {
+  const info = await BiliBiliLiveApi.getLiveRoomPlayInfo(
+    roomId,
+    "0,1",
+    "0,1,2",
+    "0",
+    quality,
+  );
+  const room = info?.code === 0 ? info.data : null;
+  if (
+    room?.is_hidden ||
+    room?.is_locked ||
+    (room?.encrypted && !room.pwd_verified)
+  ) {
+    throw new Error("B站直播间当前不可播放");
+  }
+  if (room?.live_status === 0) throw new Error("B站直播间尚未开播");
+
+  const streams = room?.playurl_info?.playurl?.stream ?? [];
+  for (const protocol of ["http_stream", "http_hls"]) {
+    for (const stream of streams.filter(
+      (item) => item.protocol_name === protocol,
+    )) {
+      for (const format of stream.format) {
+        for (const codec of format.codec.filter(
+          (item) => item.codec_name === "avc",
+        )) {
+          if (!codec.base_url || !codec.url_info?.length) continue;
+          const urls = codec.url_info.map(
+            ({ host, extra }) => `${host}${codec.base_url}${extra}`,
+          );
+          const probe =
+            protocol === "http_hls" ? canLoadHls : SendFetch.tryGetWhithXhr;
+          const reachable = await Promise.all(urls.map(probe));
+          const url = urls.find((_, index) => reachable[index]);
+          if (url) return { url, qn: codec.current_qn };
+        }
+      }
+    }
+  }
+
+  const legacy = await BiliBiliLiveApi.getLiveStream(
+    room?.room_id || roomId,
+    "web",
+    quality,
+  );
+  if (legacy?.code === 0) {
+    for (const item of legacy.data?.durl ?? []) {
+      if (await SendFetch.tryGetWhithXhr(item.url)) {
+        return { url: item.url, qn: legacy.data.current_qn };
+      }
+    }
+  }
+  throw new Error("获取直播流失败");
+};
+
 export const streamLive = async (
   baseHex: string,
   platformData: PlatformData,
@@ -211,56 +282,32 @@ export const streamLive = async (
   const bvSetting = new BiliBiliSettings().getBilibiliVideoSettings();
   try {
     if (!platformData.bilibiliLive) throw new Error("没有 bilibiliLive 数据");
-    const res = await BiliBiliLiveApi.getLiveStream(
+    const { url, qn } = await resolveLiveStream(
       platformData.bilibiliLive.roomid,
-      "web",
       bvSetting.streamqn,
     );
+    const mediaData: MediaData = {
+      type: "video",
+      name: platformData.title,
+      singer: platformData.author,
+      cover: await platformData.coverImg,
+      link: platformData.websiteUrl,
+      url,
+      duration: bvSetting.streamSeconds,
+      bitRate: qn,
+      color: baseHex,
+      origin: "bilibililive",
+    };
+    const media = new Media();
+    const mediacard = media.mediaCard(mediaData);
+    const mediaEvent = media.mediaEvent(mediaData);
 
-    if (res && res.code === 0 && res.data && res.data.durl) {
-      let videoUrl = ``;
-
-      const durl = res.data.durl;
-
-      let testResult = false;
-
-      for (const item of durl) {
-        const res = await SendFetch.tryGetWhithXhr(item.url);
-        if (res) {
-          videoUrl = item.url;
-          testResult = true;
-          break;
-        }
-      }
-
-      if (!testResult) throw new Error("获取直播流失败");
-
-      const br = res.data.current_qn;
-
-      const mediaData: MediaData = {
-        type: "video",
-        name: platformData.title,
-        singer: platformData.author,
-        cover: await platformData.coverImg,
-        link: platformData.websiteUrl,
-        url: videoUrl,
-        duration: bvSetting.streamSeconds,
-        bitRate: br,
-        color: baseHex,
-        origin: "bilibililive",
-      };
-      const media = new Media();
-
-      const mediacard = media.mediaCard(mediaData);
-      const mediaEvent = media.mediaEvent(mediaData);
-
-      const socket = new Socket();
-      // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
-      await Announce.runSingleAnnounce(async () => {
-        Announce.sendMediaCard(socket, mediacard);
-        socket.send(mediaEvent);
-      });
-    }
+    const socket = new Socket();
+    // 手动单曲点播：包单曲窗口，卡片不被并行批量抑制吞掉
+    await Announce.runSingleAnnounce(async () => {
+      Announce.sendMediaCard(socket, mediacard);
+      socket.send(mediaEvent);
+    });
   } catch (error) {
     reportFailure(error);
   }

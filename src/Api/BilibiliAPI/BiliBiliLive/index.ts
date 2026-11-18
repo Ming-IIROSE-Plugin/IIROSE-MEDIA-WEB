@@ -115,7 +115,7 @@ export class BiliBiliLiveApi extends SendFetch {
     ptype: number = 8,
     dolby: number = 5,
     panorama: number = 1,
-  ) {
+  ): Promise<LiveRoomPlayInfoDetail | null> {
     const url =
       "https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo";
     const params = new URLSearchParams({
@@ -129,10 +129,19 @@ export class BiliBiliLiveApi extends SendFetch {
       dolby: dolby.toString(),
       panorama: panorama.toString(),
     });
-    const headers = this.returnBilibiliHeaders();
-    const response = await this.sendGet(url, params, headers);
+    const cookie = this.buildCookieString();
+    if (cookie) params.set("cookie", encodeURIComponent(cookie));
+    const response = await this.sendGet(
+      `${this.getBilibiliCors()}${url}`,
+      params,
+      undefined,
+      false,
+      AbortSignal.timeout(8000),
+    );
     if (response && response.ok) {
-      const data: LiveRoomPlayInfoDetail = await response.json();
+      const data: LiveRoomPlayInfoDetail = await response
+        .json()
+        .catch(() => null);
       return data;
     } else {
       return null;
@@ -174,12 +183,13 @@ export class BiliBiliLiveApi extends SendFetch {
       params.set("cookie", encodeURIComponent(cookie));
     }
 
-    const response = await this.sendGet(url, params);
-
-    if (response && response.ok) {
-      return await response.json();
-    }
-
-    return null;
+    const response = await this.sendGet(
+      url,
+      params,
+      undefined,
+      false,
+      AbortSignal.timeout(8000),
+    );
+    return response?.ok ? await response.json().catch(() => null) : null;
   }
 }

@@ -198,7 +198,7 @@ interface LiveRoomPlayInfoDetailData {
         attr_desc: null; // 未知
       }[]; // 清晰度列表
       stream: {
-        protocol: string; // 协议名
+        protocol_name: string; // 协议名
         format: {
           format_name: string; // 格式名
           codec: {
@@ -226,7 +226,7 @@ interface LiveRoomPlayInfoDetailData {
       };
       dolby_qn: null; // 未知
     };
-  };
+  } | null;
   official_type: number; // 未知
   official_room_id: number; // 未知
   risk_with_delay: number; // 未知
