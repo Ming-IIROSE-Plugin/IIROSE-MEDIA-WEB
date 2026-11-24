@@ -63,6 +63,9 @@ function setup(remainingSeconds: number) {
     controlMode: "silent",
     controlNotice: "",
     controlReason: "",
+    mediaRoom: true,
+    mediaLoadingEnabled: true,
+    sleepMode: false,
   });
   const memory = new MediaPayloadMemory(() => ROOM);
   memory.record(PAYLOAD);

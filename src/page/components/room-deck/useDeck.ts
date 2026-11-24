@@ -3,6 +3,7 @@
 // 保持无状态，开关的可用性提示、待命说明与 10 秒同因去重都在这里，与侧栏行同语义。
 import { useEffect, useRef, useState } from "preact/hooks";
 import { ShowMessage } from "../../../iirose_func/ShowMessage";
+import { reportFailure } from "../../../tools/reportFailure";
 import {
   mediaSession,
   subscribeMediaSession,
@@ -21,6 +22,12 @@ import type {
   PlaybackModeState,
 } from "../../../playback/PlaybackMode";
 
+export interface MediaLoadingState {
+  supported: boolean;
+  enabled: boolean;
+  reason: string;
+}
+
 export interface DeckModel {
   media: MediaSnapshot;
   progress: ProgressState;
@@ -31,15 +38,20 @@ export interface DeckModel {
   live: boolean;
   /** 房间无播放：只留标题位与模式开关。 */
   idle: boolean;
+  /** 本机媒体加载开关状态（单源来自 `media`，睡眠态已折算为关闭）。 */
+  mediaLoading: MediaLoadingState;
   /** 读屏状态区文本：待命原因、最后一条会话消息与点击提示并列拼出。 */
   status: string;
   toggle: (kind: PlaybackModeKind, returnFocus?: HTMLElement | null) => void;
+  toggleMediaLoading: () => void;
   progressSession: ProgressSession;
 }
 
 /** 同一原因 10 秒内只提示一次（与 `neteaseRequest` 批量失败同一窗口）。 */
 const NOTICE_INTERVAL = 10_000;
 const FALLBACK_NOTICE = "暂时无法调整播放模式";
+const MEDIA_ROOM_UNSUPPORTED = "当前房间不支持媒体加载";
+const MEDIA_LOADING_FAILED = "切换媒体加载失败，请刷新页面后重试";
 
 /**
  * 订阅会话 → 建一个 `ProgressSession` → 订 `PlaybackMode.state`。
@@ -150,6 +162,20 @@ export function useDeck(): DeckModel | null {
     }
   };
 
+  const toggleMediaLoading = () => {
+    if (!session) return;
+    if (!session.bridge.read().mediaRoom) {
+      message(MEDIA_ROOM_UNSUPPORTED);
+      return;
+    }
+    try {
+      session.bridge.toggleMediaLoading();
+    } catch (error) {
+      setNotice(MEDIA_LOADING_FAILED);
+      reportFailure(error, MEDIA_LOADING_FAILED);
+    }
+  };
+
   // 快照、进度会话都就绪后才出模型：媒体信息只从 `progress` 取。
   if (!session || !progress || !progressSession) return null;
   const playbackState = playback ?? session.playback.state;
@@ -168,8 +194,14 @@ export function useDeck(): DeckModel | null {
     seekable: unavailableReason(progress.media) === "",
     live,
     idle: !progress.media.playing,
+    mediaLoading: {
+      supported: progress.media.mediaRoom,
+      enabled: progress.media.mediaLoadingEnabled,
+      reason: progress.media.mediaRoom ? "" : MEDIA_ROOM_UNSUPPORTED,
+    },
     status,
     toggle,
+    toggleMediaLoading,
     progressSession,
   };
 }

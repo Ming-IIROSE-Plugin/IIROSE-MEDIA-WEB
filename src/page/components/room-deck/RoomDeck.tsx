@@ -81,12 +81,6 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
     return pushOverlayLayer("deck", () => collapse(true));
   }, [expanded]);
 
-  // 房间停播时收起展开层：与「无播放时点主体不展开」对称，别让拦截层继续盖着列表。
-  const idleNow = deck ? !deck.media.playing : false;
-  useEffect(() => {
-    if (idleNow) collapse(false);
-  }, [idleNow]);
-
   if (!deck) return null;
   const { media } = deck;
   const requester = requesterOf(media);
@@ -97,8 +91,7 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
   const cover = idle ? "" : media.cover;
 
   const openDeck = () => {
-    // 房间无播放时点主体不展开。
-    if (expandedRef.current || !media.playing) return;
+    if (expandedRef.current) return;
     // 互斥：顺序菜单、来源菜单先收起
     closePanelTier("deck");
     setOpen(true);

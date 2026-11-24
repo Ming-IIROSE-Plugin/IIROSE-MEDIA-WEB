@@ -477,7 +477,7 @@ components:
     height: 60px
     padding: '0 {spacing.gutter-desktop}'
     gap: 24px
-    columns: '280px 1fr 260px；视口 ≤900px 时左右收窄为 190px / 210px（中栏进度轨至少留出 250px，避免窄桌面视口把拖柄压到 0 宽）'
+    columns: '280px 1fr 260px；底部条宽 <816px（全屏时对应视口 <900px）左右收窄为 190px / 210px（中栏进度轨至少留出 250px，避免窄桌面视口把拖柄压到 0 宽）'
     background: '{colors.sheet}'
     foreground: '{colors.ink}'
     top-rule: '顶边 1px {colors.rule}（用 0 -1px 0 阴影画，不占布局）；无圆角、无外边距，贴住面板底边'
@@ -490,24 +490,25 @@ components:
     progress-thumb: '12px {colors.rose}（深色 {colors.rose-dark}）圆点，外环 3px {colors.deck-thumb-ring}；平时隐藏，轨道悬停 / 键盘聚焦 / 按下时出现（手机常显）；仅可跳转时存在'
     time: '{typography.num-sm}，80% 不透明度'
     progress-hit-area: '可跳转时轨道上下各外扩至 {spacing.touch-min} 高的点击/拖动区'
+    right-controls: '两个 {components.mode-toggle} + 一个纯图标本机媒体加载开关（32×32px、{rounded.md}、中性墨色层级不占蔷薇红：开启态 `note` /「关闭媒体」、关闭态与睡眠态 `noteOff` /「开启媒体」，关闭态用 {colors.hover} 底 + {colors.ink} 图标 + {colors.key-border} 描边；非媒体房 40% 不透明、`aria-disabled="true"`）；底部条宽 <816px 时两个模式开关缩为 32×32 纯图标（文字 `sr-only`），三个按钮无裁切'
     hidden: '设置、关于两页在桌面不显示（手机迷你条照常）'
     note: '与面板同色系的贴底细栏，取代旧版 78px 墨底反相悬浮卡（用户：又粗又大、压迫、挡路）'
   room-deck-live:
     note: '直播/电台流（无总时长）：中栏不画进度轨与拖柄，改为居中的 {components.live-badge}（文字「直播」）+ 等宽已播时长（{typography.num-sm}）；不可跳转'
   room-deck-idle:
-    note: '房间无播放：封面位 {colors.thumb} 底 + 音符图标，标题位「房间暂时安静」，无点播者行、无进度轨；模式开关照常显示'
+    note: '房间无播放：封面位 {colors.thumb} 底 + 音符图标，标题位「房间暂时安静」，无点播者行、无进度轨；模式开关与本机媒体加载开关照常显示'
   mini-deck:
     height: 58px
     padding: '0 16px'
     background: '同 room-deck（{colors.sheet} 底 + 顶边 1px {colors.rule}），贴底、无圆角、无左右外边距'
     cover: '44px，{rounded.sm}'
     title: '{typography.deck-title-mini}'
-    progress-line: '顶边 3px：轨道 {colors.rule}、填充 {colors.rose}（深色 {colors.rose-dark}）；仅显示，不可拖动；直播/电台流时不画'
-    button: '44×44px 纯图标 {components.mode-toggle}，{rounded.lg}'
+    progress-line: '顶边 3px：轨道 {colors.rule}、填充 {colors.rose}（深色 {colors.rose-dark}）；仅显示，不可拖动；直播/电台流与无播放时不画'
+    button: '44×44px 纯图标 {components.mode-toggle}，{rounded.lg}；迷你条不新增本机媒体加载开关，空闲态同样可点主体展开 {components.room-deck-expanded}'
   room-deck-expanded:
-    note: '手机点迷你条主体后展开的完整底部条：从迷你条位置向上展开（压在标签栏之上），全宽、上两角 {rounded.xl}，{colors.sheet} 底 + 顶边 1px {colors.rule}；三行——①封面 50px + {typography.deck-label} 标签（{colors.rose} 圆点 + `Now in room`）+ 标题 + 点播者 + 右上角收起箭头（chev 朝下，点击区 {spacing.touch-min}）②等宽当前时间 · 进度轨（同 room-deck，拖柄常显，点击/拖动区 {spacing.touch-min}）· 等宽总时长 ③两个 {components.mode-toggle-sheet} 各占一半，间距 10px。动效：展开从底部升起（260ms，缓动 cubic-bezier(.2,.8,.2,1)），收起先向下滑出（200ms）再卸载；面板整体关闭时直接卸载；减少动态效果时改为淡入淡出。顶边另加向上柔和投影（deskDeckSheetShadow）与列表分层'
+    note: '手机点迷你条主体后展开的完整底部条（在播与空闲态均可展开，停播不强行收起）：从迷你条位置向上展开（压在标签栏之上），全宽、上两角 {rounded.xl}，{colors.sheet} 底 + 顶边 1px {colors.rule}；在播三行 / 空闲两行——①封面 50px + {typography.deck-label} 标签（{colors.rose} 圆点 + `Now in room`，空闲态隐藏）+ 标题（右留 92px 让出右上角两钮）+ 点播者 + 右上角并排 44×44 本机媒体加载开关（中性墨色层级，`note` / `noteOff`）与收起箭头（chev 朝下，44×44）②在播时为等宽当前时间 · 进度轨（同 room-deck，拖柄常显，点击/拖动区 {spacing.touch-min}）· 等宽总时长（直播为 live-badge + 已播时长），空闲态整行隐藏不占位 ③两个 {components.mode-toggle-sheet} 各占一半，间距 10px。动效：展开从底部升起（260ms，缓动 cubic-bezier(.2,.8,.2,1)），收起先向下滑出（200ms）再卸载；面板整体关闭时直接卸载；减少动态效果时改为淡入淡出。顶边另加向上柔和投影（deskDeckSheetShadow）与列表分层'
   mode-toggle:
-    height: '32px（手机 {spacing.touch-min}；迷你条为 44×44 纯图标）'
+    height: '32px（手机 {spacing.touch-min}；迷你条为 44×44 纯图标；桌面底部条 <816px 时缩为 32×32 纯图标、文字 `sr-only`，悬停提示与无障碍名保持全称）'
     padding: '0 10px'
     gap: 6px
     radius: '{rounded.md}'
@@ -776,7 +777,7 @@ components:
 
 数值一律以 frontmatter `components.*` 为准；本节只写构图与状态关系，括号内为组件键。行为（何时出现、点击后果、互斥）见 EXPERIENCE.md Component Patterns。
 
-所有图标为自包含内联 SVG（设计稿 `<symbol>`：note、film、radio、star、starf、gear、info、search、chev、left、right、play、send、list、grid、repeat、shuffle、close、mark，另补 check、spinner、refresh、sort 等），描边 1.6–1.9，`currentColor` 着色。`mark` 用在竖栏品牌标和常驻胶囊上，画的是 CD 线稿（外圈、中孔、一道反光弧）；设计稿里的花苞在小尺寸下像「♀」，宿站用户名旁边又正好有性别符号，已弃用（维护者 2026-11-07 选定）。
+所有图标为自包含内联 SVG（设计稿 `<symbol>`：note、noteOff、film、radio、star、starf、gear、info、search、chev、left、right、play、send、list、grid、repeat、shuffle、close、mark，另补 check、spinner、refresh、sort 等），描边 1.6–1.9，`currentColor` 着色。`mark` 用在竖栏品牌标和常驻胶囊上，画的是 CD 线稿（外圈、中孔、一道反光弧）；设计稿里的花苞在小尺寸下像「♀」，宿站用户名旁边又正好有性别符号，已弃用（维护者 2026-11-07 选定）。
 
 **动效（`motion`）**：三档时长 fast 120ms / base 200ms / slow 280ms，统一缓动 `cubic-bezier(0.2, 0.8, 0.2, 1)`；默认只过渡颜色、透明度、阴影与缩放，宽高位置不过渡。小控件按下缩到 96%；范围标签共用一条下划线滑动；结果区换页 / 换范围 / 换视图 / 新结果到达时从下方 8px 淡入；收藏星只在用户点亮时弹跳；下拉菜单落下、手机抽屉升起。减少动态效果时去掉缩放与位移。
 
@@ -802,8 +803,8 @@ components:
 - **收藏星（`favorite-star`）**：空心星 ink3；已收藏为实心 star-on。只在用户亲手点亮时弹跳一下。桌面与手机都显示：行内 32px（手机 40px），卡内紧凑 32px（点击区 44px）；视频卡的星在缩略图右上角。
 - **视频卡（`video-tile` / `duration-pill` / `video-tile-hover` / `video-tile-revealed`）**：无卡片框。16:9 缩略图右下角等宽时长胶囊；下方两行标题、一行 UP 主。悬停或被选中/聚焦时覆遮罩与居中「▶ 点播到房间」胶囊。MV 同此组件；直播卡把时长胶囊换成 `live-badge`。→ 参考：[frame-2.png](imports/mock-v1/frame-2.png)（桌面深色网格，含悬停态）· [frame-4.png](imports/mock-v1/frame-4.png)（手机 2 列）。
 - **选集面板（`episode-picker`）**：插件自有浮层，sheet 底、细线描边。标题行（「选集」+ 集数 + 关闭）固定，列表行沿用曲目行结构；左列未选为描边方块、选中为蔷薇红实底序号徽章；标题行有「全选」文字钮；吸底底栏放「正序 / 乱序」与「点播所选」。手机为底部抽屉。设计稿未出，按令牌推导。
-- **底部条（`room-deck`，桌面）**：与面板同色的 60px 贴底细栏（sheet 底 + 顶边细线，无圆角无外边距）。三栏——左：40px 封面 + 标题 + 点播者（宿站没有歌手字段，这一行只写「某某 点播」/「由你点播」，不拼「歌手 · 某某」）；中：时间 · 3px 进度轨（拖柄悬停 / 聚焦时才出现）· 总时长；右：两个浅色描边模式开关。左右栏在 ≤900px 视口收窄（190 / 210px），中栏始终留得下进度轨。不显示 `Now in room` 标签。直播/电台流见 `room-deck-live`，空闲见 `room-deck-idle`。设置、关于两页桌面不显示。设计稿 frame-1/2 里的墨底悬浮卡为旧版，以本节与 frontmatter 为准。
-- **迷你条（`mini-deck`，手机）** 与 **展开的底部条（`room-deck-expanded`）**：迷你条贴底、sheet 底，顶边 3px 进度线兼作分隔（仅显示）、封面 + 标题 + 「某某 点播 · 01:38」、右侧两个纯图标模式钮；点主体展开为三行完整底部条（浅色底板，含拖柄常显的进度轨与带文字开关）。设计稿 frame-3/4 的迷你条为旧版悬浮卡；展开态设计稿未出。
+- **底部条（`room-deck`，桌面）**：与面板同色的 60px 贴底细栏（sheet 底 + 顶边细线，无圆角无外边距）。三栏——左：40px 封面 + 标题 + 点播者（宿站没有歌手字段，这一行只写「某某 点播」/「由你点播」，不拼「歌手 · 某某」）；中：时间 · 3px 进度轨（拖柄悬停 / 聚焦时才出现）· 总时长；右：两个浅色描边模式开关 + 纯图标本机媒体加载开关（32×32px，中性墨色层级不占蔷薇红；开启 `note` / 关闭与睡眠 `noteOff`）。左右栏在底部条 `<816px`（全屏时对应视口 <900px）收窄（190 / 210px），此时两个模式开关缩为 32×32 纯图标（文字 `sr-only`），三个按钮完整可见，中栏始终留得下进度轨。不显示 `Now in room` 标签。直播/电台流见 `room-deck-live`，空闲见 `room-deck-idle`。设置、关于两页桌面不显示。设计稿 frame-1/2 里的墨底悬浮卡为旧版，以本节与 frontmatter 为准。
+- **迷你条（`mini-deck`，手机）** 与 **展开的底部条（`room-deck-expanded`）**：迷你条贴底、sheet 底，顶边 3px 进度线兼作分隔（仅显示）、封面 + 标题 + 「某某 点播 · 01:38」、右侧两个纯图标模式钮（不新增媒体开关）；无论在播还是空闲，点主体均可展开底部条（浅色底板，右上角并排 44×44 本机媒体加载开关与收起箭头，标题右留 92px；在播含 `Now in room` 标签与拖柄常显的进度轨，空闲隐藏标签与进度行，底行保留带文字模式开关；停播不强行收起）。设计稿 frame-3/4 的迷你条为旧版悬浮卡；展开态设计稿未出。
 - **模式开关（`mode-toggle` / `mode-toggle-on`）**：常态 rule 描边、ink2 字，悬停淡底；点亮为实心蔷薇红白字。
 - **底部标签栏（`bottom-tab-bar`，手机）**：五等分，图标 + 文字，ink3；选中项蔷薇红 600。→ 参考：[frame-3.png](imports/mock-v1/frame-3.png)。
 - **状态部件（`state-message` / `text-button` / `skeleton-row` / `skeleton-tile`）**：居中 ink2 一行文案，可跟蔷薇红文字钮；骨架为 skeleton 色条/块，静态、无闪光动画。

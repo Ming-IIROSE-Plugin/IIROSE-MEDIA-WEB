@@ -23,17 +23,28 @@ export interface MediaHost {
   shareMedia?: HostFunction;
   socket?: { readyState: number; send?: (command: string) => void };
   mediaShareRoom?: boolean;
+  mediaRoom?: unknown;
   theme?: unknown;
   myself?: unknown;
   rank?: unknown;
   roomnFull?: unknown;
   Info?: { room?: RoomInfo };
-  Probe?: { admin?: { blockPubChat?: unknown } };
+  Probe?: {
+    admin?: { blockPubChat?: unknown };
+    emptyMediaPlayer?: unknown;
+    sleepMode?: unknown;
+  };
+  Objs?: {
+    emptyMediaPlayer?: {
+      switch?: (off: boolean) => unknown;
+    };
+  };
   Utils?: {
     service?: {
       isShareMediaPlaying?: () => boolean;
       seekDemandMedia?: HostFunction;
       moveinputDo?: HostFunction;
+      openMediaLoadingWhenSleep?: HostFunction;
     };
   };
 }
@@ -128,6 +139,11 @@ export class HostMediaBridge {
         : "";
     const rawDuration = finiteTime(this.host.shareMediaDuration);
     const current = finiteTime(this.host.shareMediaCurrentTime);
+    const mediaRoom = Boolean(this.host.mediaRoom);
+    const sleepMode = Boolean(this.host.Probe?.sleepMode);
+    // 睡眠态视作关闭：与宿站左滑音符一致，点开后走宿站退出睡眠确认框。
+    const mediaLoadingEnabled =
+      !sleepMode && !this.host.Probe?.emptyMediaPlayer;
     return {
       instance: this.instance,
       title:
@@ -157,7 +173,41 @@ export class HostMediaBridge {
             ? "媒体管理模式：静默调整播放进度"
             : "",
       controlReason,
+      mediaRoom,
+      mediaLoadingEnabled,
+      sleepMode,
     };
+  }
+
+  /**
+   * 切换宿站本机「媒体加载」双态开关（零聊天 / 零 `cut` / 零 WS）：
+   * - 非媒体房（`!mediaRoom`）直接返回 `false`，不触碰宿站入口；
+   * - 睡眠态必须走宿站原生退出睡眠确认框（不回退到 `switch`）；
+   * - 常规态调 `Objs.emptyMediaPlayer.switch(!Probe.emptyMediaPlayer)`；
+   * - 缺失入口或调用抛错向外抛出，由调用方交 `reportFailure` 提示。
+   */
+  toggleMediaLoading(): boolean {
+    if (!this.host.mediaRoom) return false;
+    if (this.host.Probe?.sleepMode) {
+      const service = this.host.Utils?.service;
+      if (typeof service?.openMediaLoadingWhenSleep !== "function")
+        throw new Error("宿站退出睡眠模式入口不可用，请刷新页面后重试");
+      try {
+        service.openMediaLoadingWhenSleep();
+      } finally {
+        this.poke();
+      }
+      return true;
+    }
+    const player = this.host.Objs?.emptyMediaPlayer;
+    if (typeof player?.switch !== "function")
+      throw new Error("宿站媒体加载开关不可用，请刷新页面后重试");
+    try {
+      player.switch(!this.host.Probe?.emptyMediaPlayer);
+    } finally {
+      this.poke();
+    }
+    return true;
   }
 
   subscribe(listener: (snapshot: MediaSnapshot) => void): () => void {

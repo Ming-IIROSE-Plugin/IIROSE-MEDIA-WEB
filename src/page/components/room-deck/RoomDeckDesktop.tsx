@@ -11,7 +11,7 @@ import {
   typeDeckTitle,
 } from "../floating-panel/tokens";
 import { DeckProgress } from "./DeckProgress";
-import { DeckToggles, LiveRow } from "./deckParts";
+import { DeckToggles, LiveRow, MediaLoadingToggle } from "./deckParts";
 
 export interface RoomDeckDesktopProps {
   deck: DeckModel;
@@ -87,7 +87,14 @@ export function RoomDeckDesktop({
           <DeckToggles
             playback={playback}
             compact={false}
+            narrowIconOnly
             onToggle={deck.toggle}
+          />
+          <MediaLoadingToggle
+            supported={deck.mediaLoading.supported}
+            enabled={deck.mediaLoading.enabled}
+            reason={deck.mediaLoading.reason}
+            onToggle={deck.toggleMediaLoading}
           />
         </div>
 

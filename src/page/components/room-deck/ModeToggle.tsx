@@ -35,6 +35,8 @@ export interface ModeToggleProps {
   compact?: boolean;
   /** 手机展开底部条的形态：无描边的柔和胶囊，开启为蔷薇红淡底（描边方框在浅色底板上太硬）。 */
   sheet?: boolean;
+  /** 桌面窄容器（底部条 <816px）时文字退为 sr-only、按钮缩为 32×32 纯图标。 */
+  narrowIconOnly?: boolean;
   onToggle: (kind: PlaybackModeKind, element: HTMLButtonElement) => void;
 }
 
@@ -46,6 +48,7 @@ export function ModeToggle({
   hint,
   compact = false,
   sheet = false,
+  narrowIconOnly = false,
   onToggle,
 }: ModeToggleProps) {
   if (sheet) {
@@ -64,9 +67,10 @@ export function ModeToggle({
       </button>
     );
   }
+  const narrow = !compact && narrowIconOnly;
   const base = compact
     ? `flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border border-solid bg-transparent p-0 ${roundedLg}`
-    : `flex h-8 shrink-0 cursor-pointer items-center gap-1.5 border border-solid bg-transparent px-2.5 max-[768px]:h-11 ${roundedMd} ${typeButtonSm}`;
+    : `flex h-8 shrink-0 cursor-pointer items-center gap-1.5 border border-solid bg-transparent px-2.5 max-[768px]:h-11 ${narrow ? "@max-[816px]:w-8 @max-[816px]:justify-center @max-[816px]:gap-0 @max-[816px]:px-0" : ""} ${roundedMd} ${typeButtonSm}`;
   const tone = active
     ? `border-transparent ${deskRoseSolid} ${deskOnRose}`
     : `${deskDeckToggleBorder} ${deskInk2} ${deskPressTone}`;
@@ -83,7 +87,13 @@ export function ModeToggle({
       onClick={(event) => onToggle(kind, event.currentTarget)}
     >
       <DeskIcon name={ICONS[kind]} size={compact ? 20 : 17} />
-      {compact ? null : <span className="whitespace-nowrap">{label}</span>}
+      {compact ? null : (
+        <span
+          className={`whitespace-nowrap ${narrow ? "@max-[816px]:sr-only" : ""}`}
+        >
+          {label}
+        </span>
+      )}
     </button>
   );
 }

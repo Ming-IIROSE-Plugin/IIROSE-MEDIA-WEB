@@ -828,3 +828,179 @@ describe("快照中的点播归属与房间标识", () => {
     }
   });
 });
+
+describe("本机媒体加载开关与睡眠模式", () => {
+  it("read() 同步 mediaRoom、mediaLoadingEnabled 与 sleepMode（睡眠态视作关闭）", () => {
+    const { host, bridge, session } = fixture();
+    try {
+      // 未置 mediaRoom 时保守视作 false
+      expect(bridge.read()).toMatchObject({
+        mediaRoom: false,
+        mediaLoadingEnabled: true,
+        sleepMode: false,
+      });
+
+      host.mediaRoom = true;
+      host.Probe = { emptyMediaPlayer: false, sleepMode: false };
+      expect(bridge.read()).toMatchObject({
+        mediaRoom: true,
+        mediaLoadingEnabled: true,
+        sleepMode: false,
+      });
+
+      host.Probe.emptyMediaPlayer = true;
+      expect(bridge.read()).toMatchObject({
+        mediaRoom: true,
+        mediaLoadingEnabled: false,
+        sleepMode: false,
+      });
+
+      // 睡眠态即使 emptyMediaPlayer 为 false 也视作关闭
+      host.Probe.emptyMediaPlayer = false;
+      host.Probe.sleepMode = true;
+      expect(bridge.read()).toMatchObject({
+        mediaRoom: true,
+        mediaLoadingEnabled: false,
+        sleepMode: true,
+      });
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("媒体房常规态：调 Objs.emptyMediaPlayer.switch(!Probe.emptyMediaPlayer) 并立即 poke 同步，零 WS / 零聊天", () => {
+    const { host, bridge, session } = fixture();
+    const publicSend = vi.spyOn(Socket.prototype, "sendMessage");
+    const moveinputDo = vi.fn();
+    host.Utils!.service!.moveinputDo = moveinputDo;
+    host.mediaRoom = true;
+    host.Probe = { emptyMediaPlayer: false, sleepMode: false };
+    const player = {
+      switch: vi.fn(function (this: unknown, off: boolean) {
+        expect(this).toBe(player);
+        host.Probe!.emptyMediaPlayer = off;
+      }),
+    };
+    host.Objs = { emptyMediaPlayer: player };
+    const updates: boolean[] = [];
+    const off = bridge.subscribe((snap) =>
+      updates.push(snap.mediaLoadingEnabled),
+    );
+    updates.length = 0;
+
+    try {
+      expect(bridge.toggleMediaLoading()).toBe(true);
+      expect(player.switch).toHaveBeenCalledExactlyOnceWith(true);
+      expect(bridge.read().mediaLoadingEnabled).toBe(false);
+      // 房间实际播放状态不变
+      expect(bridge.read().playing).toBe(true);
+      expect(updates).toEqual([false]);
+
+      expect(bridge.toggleMediaLoading()).toBe(true);
+      expect(player.switch).toHaveBeenLastCalledWith(false);
+      expect(bridge.read().mediaLoadingEnabled).toBe(true);
+      expect(updates).toEqual([false, true]);
+
+      expect(host.socket!.send).not.toHaveBeenCalled();
+      expect(publicSend).not.toHaveBeenCalled();
+      expect(moveinputDo).not.toHaveBeenCalled();
+    } finally {
+      off();
+      session.dispose();
+    }
+  });
+
+  it("外部经宿站侧栏/左滑音符/Ctrl+M 切换后，现有轮询在 ≤1s 内同步快照", () => {
+    vi.useFakeTimers();
+    const { host, bridge, session } = fixture();
+    session.dispose();
+    host.mediaRoom = true;
+    host.Probe = { emptyMediaPlayer: false, sleepMode: false };
+    const seen: boolean[] = [];
+    const off = bridge.subscribe((snap) => seen.push(snap.mediaLoadingEnabled));
+    try {
+      expect(seen).toEqual([true]);
+      host.Probe.emptyMediaPlayer = true;
+      vi.advanceTimersByTime(1000);
+      expect(seen[seen.length - 1]).toBe(false);
+
+      host.Probe.emptyMediaPlayer = false;
+      vi.advanceTimersByTime(1000);
+      expect(seen[seen.length - 1]).toBe(true);
+    } finally {
+      off();
+    }
+  });
+
+  it("非媒体房（mediaRoom: false）不调用任何宿站入口并返回 false", () => {
+    const { host, bridge, session } = fixture();
+    host.mediaRoom = false;
+    host.Probe = { emptyMediaPlayer: false, sleepMode: false };
+    const switchFn = vi.fn();
+    const sleepFn = vi.fn();
+    host.Objs = { emptyMediaPlayer: { switch: switchFn } };
+    host.Utils!.service!.openMediaLoadingWhenSleep = sleepFn;
+    try {
+      expect(bridge.toggleMediaLoading()).toBe(false);
+      expect(switchFn).not.toHaveBeenCalled();
+      expect(sleepFn).not.toHaveBeenCalled();
+      expect(host.socket!.send).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("睡眠模式：必须调 Utils.service.openMediaLoadingWhenSleep()，缺失或抛错不回退到 switch", () => {
+    const { host, bridge, session } = fixture();
+    host.mediaRoom = true;
+    host.Probe = { emptyMediaPlayer: true, sleepMode: true };
+    const switchFn = vi.fn();
+    host.Objs = { emptyMediaPlayer: { switch: switchFn } };
+    const service = host.Utils!.service!;
+    const openSleep = vi.fn(function (this: unknown) {
+      expect(this).toBe(service);
+    });
+    service.openMediaLoadingWhenSleep = openSleep;
+    try {
+      expect(bridge.toggleMediaLoading()).toBe(true);
+      expect(openSleep).toHaveBeenCalledOnce();
+      expect(switchFn).not.toHaveBeenCalled();
+
+      // 睡眠入口缺失：抛错且绝不绕过确认框去调 switch
+      delete service.openMediaLoadingWhenSleep;
+      expect(() => bridge.toggleMediaLoading()).toThrow(/睡眠/);
+      expect(switchFn).not.toHaveBeenCalled();
+
+      // 睡眠入口抛错：向外抛出且绝不回退 switch 或发 WS
+      service.openMediaLoadingWhenSleep = vi.fn(() => {
+        throw new Error("sleep dialog failed");
+      });
+      expect(() => bridge.toggleMediaLoading()).toThrow("sleep dialog failed");
+      expect(switchFn).not.toHaveBeenCalled();
+      expect(host.socket!.send).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("常规态宿站入口缺失或调用抛错时向外抛出，零 WS", () => {
+    const { host, bridge, session } = fixture();
+    host.mediaRoom = true;
+    host.Probe = { emptyMediaPlayer: false, sleepMode: false };
+    try {
+      expect(() => bridge.toggleMediaLoading()).toThrow(/媒体加载开关不可用/);
+
+      host.Objs = {
+        emptyMediaPlayer: {
+          switch: vi.fn(() => {
+            throw new Error("host boom");
+          }),
+        },
+      };
+      expect(() => bridge.toggleMediaLoading()).toThrow("host boom");
+      expect(host.socket!.send).not.toHaveBeenCalled();
+    } finally {
+      session.dispose();
+    }
+  });
+});

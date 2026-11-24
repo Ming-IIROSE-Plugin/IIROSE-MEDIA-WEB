@@ -243,6 +243,8 @@ function deckSession() {
       return () => {};
     },
     send: () => true,
+    toggleMediaLoading: () => true,
+    poke: () => {},
     controlUnavailable: false,
     controlUnavailableMessage: "",
   };

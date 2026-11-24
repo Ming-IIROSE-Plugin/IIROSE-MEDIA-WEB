@@ -19,7 +19,13 @@ import {
   typeDeckTitleMini,
 } from "../floating-panel/tokens";
 import { DeckProgress } from "./DeckProgress";
-import { DeckLabel, DeckToggles, LiveRow, percentOf } from "./deckParts";
+import {
+  DeckLabel,
+  DeckToggles,
+  LiveRow,
+  MediaLoadingToggle,
+  percentOf,
+} from "./deckParts";
 import type { DeckModel } from "./useDeck";
 
 export interface MiniDeckProps {
@@ -85,11 +91,9 @@ export function MiniDeck({
         <button
           ref={miniButton}
           type="button"
-          // 房间无播放时点主体不展开：去掉 popup 语义，别承诺一个打不开的对话层。
-          {...(idle
-            ? {}
-            : { "aria-haspopup": "dialog", "aria-expanded": expanded })}
-          aria-label={idle ? "房间暂时安静" : `${title}，展开房间播放条`}
+          aria-haspopup="dialog"
+          aria-expanded={expanded}
+          aria-label={`${title}，展开房间播放条`}
           className={`flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-[11px] border-0 bg-transparent p-0 text-left text-inherit ${deskFocusRingOnDeck}`}
           onClick={onOpen}
         >
@@ -147,17 +151,19 @@ export function MiniDeck({
             className={`absolute inset-x-0 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing} ${deskDeckSheetShadow} ${closing ? "animate-[imwSheetSink_200ms_var(--imw-ease)_forwards] motion-reduce:animate-[imwSheetFadeOut_160ms_ease-out_forwards]" : "animate-[imwSheetRise_260ms_var(--imw-ease)] motion-reduce:animate-[imwSheetFade_160ms_ease-out]"}`}
             {...stopHostGestures}
           >
-            <div className="flex items-start gap-3">
+            <div
+              className={`flex gap-3 ${idle ? "items-center" : "items-start"}`}
+            >
               <Cover
                 src={cover}
                 icon="note"
                 className="h-[50px] w-[50px]"
                 rounded={roundedSm}
               />
-              <div className="min-w-0 flex-1 pr-11">
-                <DeckLabel />
+              <div className="min-w-0 flex-1 pr-[92px]">
+                {idle ? null : <DeckLabel />}
                 <div
-                  className={`mt-[3px] truncate ${typeDeckTitle}`}
+                  className={`${idle ? "" : "mt-[3px]"} truncate ${typeDeckTitle}`}
                   title={title}
                 >
                   {title}
@@ -171,29 +177,40 @@ export function MiniDeck({
                   </div>
                 )}
               </div>
-              <button
-                ref={closeButton}
-                type="button"
-                aria-label="收起"
-                title="收起"
-                className={`absolute top-1 right-1 flex h-11 w-11 cursor-pointer items-center justify-center border-0 bg-transparent p-0 ${deskDeckText} ${deskFocusRingOnDeck}`}
-                onClick={() => onCollapse(true)}
-              >
-                <DeskIcon name="chev" size={20} />
-              </button>
+              <div className="absolute top-1 right-1 flex items-center gap-1">
+                <MediaLoadingToggle
+                  supported={deck.mediaLoading.supported}
+                  enabled={deck.mediaLoading.enabled}
+                  reason={deck.mediaLoading.reason}
+                  sheet
+                  onToggle={deck.toggleMediaLoading}
+                />
+                <button
+                  ref={closeButton}
+                  type="button"
+                  aria-label="收起"
+                  title="收起"
+                  className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 ${deskDeckText} ${deskFocusRingOnDeck}`}
+                  onClick={() => onCollapse(true)}
+                >
+                  <DeskIcon name="chev" size={20} />
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center">
-              {idle ? null : live ? (
-                <LiveRow media={media} />
-              ) : (
-                <DeckProgress
-                  state={progress}
-                  session={deck.progressSession}
-                  seekable={seekable}
-                />
-              )}
-            </div>
+            {idle ? null : (
+              <div className="flex items-center">
+                {live ? (
+                  <LiveRow media={media} />
+                ) : (
+                  <DeckProgress
+                    state={progress}
+                    session={deck.progressSession}
+                    seekable={seekable}
+                  />
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2.5">
               <DeckToggles

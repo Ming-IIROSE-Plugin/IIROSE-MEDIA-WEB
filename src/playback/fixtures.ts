@@ -20,6 +20,9 @@ export function snapshot(patch: Partial<MediaSnapshot> = {}): MediaSnapshot {
     controlMode: "silent",
     controlNotice: "",
     controlReason: "",
+    mediaRoom: true,
+    mediaLoadingEnabled: true,
+    sleepMode: false,
     ...patch,
   };
 }

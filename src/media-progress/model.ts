@@ -23,6 +23,12 @@ export interface MediaSnapshot {
   controlMode: MediaControlMode;
   controlNotice: string;
   controlReason: string;
+  // 当前房间是否支持媒体加载（`window.mediaRoom`，非媒体房如大厅为 false）。
+  mediaRoom: boolean;
+  // 本机媒体加载是否开启（非睡眠态且 `!Probe.emptyMediaPlayer`；睡眠态视作关闭）。
+  mediaLoadingEnabled: boolean;
+  // 宿站睡眠模式（`Probe.sleepMode`）。
+  sleepMode: boolean;
 }
 
 // 归属判定：两侧去除首尾空白后严格相等；非字符串、空白或不等都不是本人。

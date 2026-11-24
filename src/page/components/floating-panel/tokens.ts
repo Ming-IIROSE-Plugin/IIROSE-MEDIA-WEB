@@ -294,6 +294,7 @@ export const deskFocusRingOnDeck =
 // 自包含内联 SVG（currentColor）：DESIGN.md `symbol` 的原始路径，不借用宿站 `mdi-*`。
 export type DeskIconName =
   | "note"
+  | "noteOff"
   | "film"
   | "radio"
   | "star"
@@ -340,6 +341,7 @@ export type DeskIconName =
  */
 export const DESK_ICON_NAMES: readonly DeskIconName[] = [
   "note",
+  "noteOff",
   "film",
   "radio",
   "star",
@@ -388,6 +390,8 @@ export function isDeskIconName(name: string): name is DeskIconName {
 
 const ICON_INNER: Record<DeskIconName, string> = {
   note: '<path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="16.5" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/>',
+  noteOff:
+    '<path d="M9 18v-6.8M9 6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M16.5 13.5A2.5 2.5 0 0 1 19 16M14 16A2.5 2.5 0 0 0 16.5 18.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M4 3.5L20.5 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
   film: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/>',
   radio:
     '<circle cx="12" cy="13" r="2" fill="currentColor"/><path d="M7.8 8.8a6 6 0 0 0 0 8.4M16.2 8.8a6 6 0 0 1 0 8.4M5 6a10 10 0 0 0 0 14M19 6a10 10 0 0 1 0 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',

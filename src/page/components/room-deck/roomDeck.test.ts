@@ -25,6 +25,8 @@ class FakeBridge {
   sent: string[] = [];
   controlUnavailable = false;
   controlUnavailableMessage = "宿站进度控制不可用";
+  mediaLoadingToggles = 0;
+  toggleMediaLoadingHandler?: () => boolean;
   private listeners = new Set<(media: MediaSnapshot) => void>();
 
   constructor(media: MediaSnapshot) {
@@ -52,6 +54,19 @@ class FakeBridge {
       return false;
     this.sent.push(command);
     return true;
+  }
+
+  toggleMediaLoading(): boolean {
+    this.mediaLoadingToggles++;
+    if (this.toggleMediaLoadingHandler) return this.toggleMediaLoadingHandler();
+    if (!this.current.mediaRoom) return false;
+    if (this.current.sleepMode) return true;
+    this.emit({ mediaLoadingEnabled: !this.current.mediaLoadingEnabled });
+    return true;
+  }
+
+  poke() {
+    for (const listener of [...this.listeners]) listener(this.read());
   }
 
   emit(patch: Partial<MediaSnapshot>) {
@@ -97,6 +112,8 @@ const toggleIn = (
   name: "room" | "mini" | "expanded",
   kind: "loop" | "shuffle",
 ) => deck(name)?.querySelector<HTMLButtonElement>(`[data-imw-mode="${kind}"]`);
+const mediaToggleIn = (name: "room" | "mini" | "expanded") =>
+  deck(name)?.querySelector<HTMLButtonElement>("[data-imw-media-loading]");
 const miniBody = () => deck("mini")!.querySelector("button")!;
 
 /** 走完展开层的收起动画（滑出后才卸载）。 */
@@ -340,7 +357,7 @@ describe("桌面三栏（room-deck）", () => {
     expect(deck("mini")!.textContent).not.toContain("1:30");
   });
 
-  it("房间无播放：只剩标题位与开关，无点播者行与轨道", () => {
+  it("房间无播放：保留标题位、模式开关与媒体加载开关；手机空闲亦可展开且不画标签与进度行", () => {
     const { session } = harness({ playing: false, owner: "小飞鱼" });
     provideMediaSession(session);
     mount();
@@ -352,14 +369,32 @@ describe("桌面三栏（room-deck）", () => {
     expect(root.querySelector('[role="slider"]')).toBeNull();
     expect(toggleIn("room", "loop")).not.toBeNull();
     expect(toggleIn("room", "shuffle")).not.toBeNull();
-    // 无播放时不承诺能展开对话框
-    expect(miniBody().getAttribute("aria-haspopup")).toBeNull();
-    expect(miniBody().getAttribute("aria-expanded")).toBeNull();
-    // 点迷你条主体不展开
+    expect(mediaToggleIn("room")).not.toBeNull();
+    // 迷你条本身不新增媒体加载开关
+    expect(mediaToggleIn("mini")).toBeNull();
+    // 空闲态同样可展开底部条
+    expect(miniBody().getAttribute("aria-haspopup")).toBe("dialog");
+    expect(miniBody().getAttribute("aria-expanded")).toBe("false");
+    expect(miniBody().getAttribute("aria-label")).toBe(
+      "房间暂时安静，展开房间播放条",
+    );
+
     act(() => {
       miniBody().click();
     });
-    expect(deck("expanded")).toBeNull();
+    const expanded = deck("expanded")!;
+    expect(expanded).not.toBeNull();
+    expect(expanded.getAttribute("aria-label")).toBe("房间暂时安静");
+    expect(expanded.textContent).toContain("房间暂时安静");
+    expect(expanded.textContent).not.toContain("Now in room");
+    expect(expanded.querySelector("[data-imw-deck-track]")).toBeNull();
+    expect(expanded.querySelector('[role="slider"]')).toBeNull();
+    // 空闲态只渲染头部行与底行模式开关（不留空进度行占位）
+    const rows = Array.from(expanded.children).filter(
+      (el) => el.getAttribute("role") !== "status",
+    );
+    expect(rows).toHaveLength(2);
+    expect(mediaToggleIn("expanded")).not.toBeNull();
   });
 
   it("宿站没有点播者昵称时不渲染点播者行", () => {
@@ -604,7 +639,7 @@ describe("迷你条与展开的底部条", () => {
     expect(deck("expanded")).toBeNull();
   });
 
-  it("房间停播时自动收起展开层（与「无播放时点主体不展开」对称）", () => {
+  it("房间停播时不强行收起展开层，切为空闲视图并保持可操作", () => {
     const { session, bridge } = harness();
     provideMediaSession(session);
     mount();
@@ -612,13 +647,18 @@ describe("迷你条与展开的底部条", () => {
       miniBody().click();
     });
     expect(deck("expanded")).not.toBeNull();
+    expect(deck("expanded")!.textContent).toContain("Now in room");
 
     act(() => {
       bridge.emit({ playing: false });
     });
     settleCollapse();
-    expect(deck("expanded")).toBeNull();
-    expect(host.querySelector("[data-imw-deck-backdrop]")).toBeNull();
+    const expanded = deck("expanded")!;
+    expect(expanded).not.toBeNull();
+    expect(expanded.textContent).toContain("房间暂时安静");
+    expect(expanded.textContent).not.toContain("Now in room");
+    expect(expanded.querySelector("[data-imw-deck-track]")).toBeNull();
+    expect(mediaToggleIn("expanded")).not.toBeNull();
   });
 
   it("展开层的点播者行与桌面同用一套钩子", () => {
@@ -1017,6 +1057,220 @@ describe("可访问性与触控目标", () => {
     expect(
       host.querySelector("#imw-desk-mini-deck")!.getAttribute("class"),
     ).toContain("max-[768px]:block");
+  });
+});
+
+describe("本机媒体加载开关与窄窗适配", () => {
+  it("桌面与手机展开层双向切换，采用中性墨色、不叠 aria-pressed、不影响循环/随机与播放态", () => {
+    const { session, bridge, playback } = harness({
+      owner: "铭铭",
+      ownMedia: true,
+      playing: true,
+      mediaRoom: true,
+      mediaLoadingEnabled: true,
+      sleepMode: false,
+    });
+    provideMediaSession(session);
+    mount();
+
+    // 先点亮单曲循环：切换媒体加载绝不能熄灭它
+    act(() => {
+      toggleIn("room", "loop")!.click();
+    });
+    expect(playback.mode).toBe("loop");
+
+    const desktopToggle = () => mediaToggleIn("room")!;
+    expect(desktopToggle().getAttribute("data-imw-media-loading")).toBe("on");
+    expect(desktopToggle().getAttribute("aria-label")).toBe("关闭媒体");
+    expect(desktopToggle().getAttribute("title")).toBe("关闭媒体");
+    expect(desktopToggle().getAttribute("aria-disabled")).toBe("false");
+    expect(desktopToggle().hasAttribute("aria-pressed")).toBe(false);
+    const onIcon = desktopToggle().querySelector("svg")!.innerHTML;
+
+    // 迷你条本身不新增开关；展开层右上角有 44×44 开关，标题区留 pr-[92px]
+    expect(mediaToggleIn("mini")).toBeNull();
+    act(() => {
+      miniBody().click();
+    });
+    const sheetToggle = () => mediaToggleIn("expanded")!;
+    expect(sheetToggle().getAttribute("class")).toContain("h-11");
+    expect(sheetToggle().getAttribute("class")).toContain("w-11");
+    expect(deck("expanded")!.querySelector(".pr-\\[92px\\]")).not.toBeNull();
+    // 顺序：展开层右上角媒体开关位于收起箭头左边
+    const topButtons = Array.from(
+      sheetToggle().parentElement!.querySelectorAll("button"),
+    );
+    expect(topButtons[0]).toBe(sheetToggle());
+    expect(topButtons[1].getAttribute("aria-label")).toBe("收起");
+
+    // 点击桌面开关关闭媒体加载
+    act(() => {
+      desktopToggle().click();
+    });
+    expect(bridge.mediaLoadingToggles).toBe(1);
+    expect(bridge.sent).toEqual([]);
+    expect(desktopToggle().getAttribute("data-imw-media-loading")).toBe("off");
+    expect(desktopToggle().getAttribute("aria-label")).toBe("开启媒体");
+    expect(desktopToggle().getAttribute("title")).toBe("开启媒体");
+    expect(sheetToggle().getAttribute("data-imw-media-loading")).toBe("off");
+    expect(sheetToggle().getAttribute("aria-label")).toBe("开启媒体");
+    // 关闭态切为 noteOff 图标（与 note 不同），使用中性墨色且不含蔷薇红
+    const offIcon = desktopToggle().querySelector("svg")!.innerHTML;
+    expect(offIcon).not.toBe(onIcon);
+    expect(desktopToggle().getAttribute("class")).not.toMatch(
+      /B42F3E|E3606C|BA4F59/i,
+    );
+    expect(sheetToggle().getAttribute("class")).not.toMatch(
+      /B42F3E|E3606C|BA4F59/i,
+    );
+    // 单曲循环保持点亮、房间播放态保持在播
+    expect(playback.mode).toBe("loop");
+    expect(deck("room")!.textContent).toContain("测试曲目");
+    expect(deck("room")!.textContent).not.toContain("房间暂时安静");
+
+    // 外部（侧栏 / 左滑 / Ctrl+M）重新开启后两处立即同步
+    act(() => {
+      bridge.emit({ mediaLoadingEnabled: true });
+    });
+    expect(desktopToggle().getAttribute("data-imw-media-loading")).toBe("on");
+    expect(sheetToggle().getAttribute("data-imw-media-loading")).toBe("on");
+  });
+
+  it("非媒体房（mediaRoom: false）灰化可聚焦，点击提示原因并 10s 去重且不调宿站", () => {
+    const { session, bridge } = harness({
+      mediaRoom: false,
+      mediaLoadingEnabled: true,
+    });
+    provideMediaSession(session);
+    mount();
+
+    const button = () => mediaToggleIn("room")!;
+    expect(button().hasAttribute("disabled")).toBe(false);
+    expect(button().getAttribute("aria-disabled")).toBe("true");
+    expect(button().getAttribute("title")).toBe("当前房间不支持媒体加载");
+    expect(button().getAttribute("class")).toContain("opacity-40");
+
+    act(() => {
+      button().click();
+      button().click();
+    });
+    expect(bridge.mediaLoadingToggles).toBe(0);
+    expect(alert).toHaveBeenCalledExactlyOnceWith("当前房间不支持媒体加载");
+
+    const now = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(now + 10_001);
+    try {
+      act(() => {
+        button().click();
+      });
+      expect(alert).toHaveBeenCalledTimes(2);
+    } finally {
+      spy.mockRestore();
+    }
+
+    // 进入媒体房后自动恢复可用
+    act(() => {
+      bridge.emit({ mediaRoom: true });
+    });
+    expect(button().getAttribute("aria-disabled")).toBe("false");
+    expect(button().getAttribute("title")).toBe("关闭媒体");
+  });
+
+  it("睡眠模式呈关闭态「开启媒体」，点击委托桥接走宿站确认流", () => {
+    const { session, bridge } = harness({
+      mediaRoom: true,
+      sleepMode: true,
+      mediaLoadingEnabled: false,
+    });
+    const sleepTrigger = vi.fn(() => true);
+    bridge.toggleMediaLoadingHandler = sleepTrigger;
+    provideMediaSession(session);
+    mount();
+
+    const button = mediaToggleIn("room")!;
+    expect(button.getAttribute("data-imw-media-loading")).toBe("off");
+    expect(button.getAttribute("aria-label")).toBe("开启媒体");
+    expect(button.getAttribute("title")).toBe("开启媒体");
+
+    act(() => {
+      button.click();
+    });
+    expect(sleepTrigger).toHaveBeenCalledOnce();
+    expect(alert).not.toHaveBeenCalled();
+  });
+
+  it("桥接抛错（宿站入口缺失或调用异常）走 reportFailure 提示一次，不影响其余功能", () => {
+    const { session, bridge, playback } = harness({
+      owner: "铭铭",
+      ownMedia: true,
+      mediaRoom: true,
+      mediaLoadingEnabled: true,
+    });
+    bridge.toggleMediaLoadingHandler = () => {
+      throw new Error("宿站媒体加载开关不可用");
+    };
+    provideMediaSession(session);
+    mount();
+
+    act(() => {
+      mediaToggleIn("room")!.click();
+    });
+    expect(alert).toHaveBeenCalledExactlyOnceWith(
+      "切换媒体加载失败，请刷新页面后重试",
+    );
+    expect(bridge.sent).toEqual([]);
+
+    // 插件其余功能照常
+    act(() => {
+      toggleIn("room", "loop")!.click();
+    });
+    expect(playback.mode).toBe("loop");
+  });
+
+  it("桌面窄窗（@max-[816px]）：两个模式开关文字退为 sr-only 并缩 32×32，保留完整 title", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+
+    for (const [kind, label] of [
+      ["loop", "单曲循环"],
+      ["shuffle", "收藏随机"],
+    ] as const) {
+      const btn = toggleIn("room", kind)!;
+      expect(btn.getAttribute("class")).toContain("@max-[816px]:w-8");
+      expect(btn.getAttribute("class")).toContain("@max-[816px]:px-0");
+      expect(btn.getAttribute("title")).toBe(label);
+      const span = btn.querySelector("span")!;
+      expect(span.textContent).toBe(label);
+      expect(span.getAttribute("class")).toContain("@max-[816px]:sr-only");
+    }
+    expect(mediaToggleIn("room")!.getAttribute("class")).toContain("h-8");
+    expect(mediaToggleIn("room")!.getAttribute("class")).toContain("w-8");
+  });
+
+  it("媒体加载开关拦截 Enter 冒泡，避免被宿站 window.onkeydown preventDefault 吃掉原生激活", () => {
+    const { session } = harness();
+    provideMediaSession(session);
+    mount();
+
+    const hostEnter = vi.fn((event: KeyboardEvent) => {
+      if (event.key === "Enter") event.preventDefault();
+    });
+    window.addEventListener("keydown", hostEnter);
+    try {
+      const event = new KeyboardEvent("keydown", {
+        key: "Enter",
+        bubbles: true,
+        cancelable: true,
+      });
+      act(() => {
+        mediaToggleIn("room")!.dispatchEvent(event);
+      });
+      expect(hostEnter).not.toHaveBeenCalled();
+      expect(event.defaultPrevented).toBe(false);
+    } finally {
+      window.removeEventListener("keydown", hostEnter);
+    }
   });
 });
 

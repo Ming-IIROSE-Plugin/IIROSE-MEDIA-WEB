@@ -7,9 +7,20 @@ import type {
   PlaybackModeState,
 } from "../../../playback/PlaybackMode";
 import {
+  DeskIcon,
+  deskDeckToggleBorder,
+  deskFocusRingOnDeck,
+  deskHover,
+  deskInk,
+  deskInk2,
+  deskKeyBorder,
   deskOnRose,
+  deskPress,
+  deskPressTone,
   deskRoseFill,
   deskRoseSolid,
+  roundedLg,
+  roundedMd,
   roundedXs,
   typeDeckLabel,
   typeMonoNumSm,
@@ -70,11 +81,13 @@ export function DeckToggles({
   playback,
   compact,
   sheet = false,
+  narrowIconOnly = false,
   onToggle,
 }: {
   playback: PlaybackModeState;
   compact: boolean;
   sheet?: boolean;
+  narrowIconOnly?: boolean;
   onToggle: (kind: PlaybackModeKind, element: HTMLButtonElement) => void;
 }) {
   return (
@@ -96,10 +109,61 @@ export function DeckToggles({
             }
             compact={compact}
             sheet={sheet}
+            narrowIconOnly={narrowIconOnly}
             onToggle={onToggle}
           />
         );
       })}
     </>
+  );
+}
+
+export interface MediaLoadingToggleProps {
+  supported: boolean;
+  enabled: boolean;
+  reason: string;
+  /** 手机展开底部条右上角形态（44×44 纯图标）。 */
+  sheet?: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * 本机媒体加载双态开关（中性墨色层级，不占蔷薇红）：
+ * 动作文案随态切换（「关闭媒体」/「开启媒体」），不叠 `aria-pressed` 免读屏冲突。
+ */
+export function MediaLoadingToggle({
+  supported,
+  enabled,
+  reason,
+  sheet = false,
+  onToggle,
+}: MediaLoadingToggleProps) {
+  const action = enabled ? "关闭媒体" : "开启媒体";
+  const hint = supported ? action : reason;
+  const base = sheet
+    ? `flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border border-solid p-0 ${roundedLg}`
+    : `flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center border border-solid p-0 ${roundedMd}`;
+  const tone = enabled
+    ? `bg-transparent ${sheet ? "border-transparent" : deskDeckToggleBorder} ${deskInk2} ${supported ? deskPressTone : ""}`
+    : `${deskHover} ${deskInk} ${deskKeyBorder}`;
+
+  return (
+    <button
+      type="button"
+      data-imw-media-loading={enabled ? "on" : "off"}
+      aria-label={action}
+      aria-disabled={!supported}
+      title={hint}
+      className={`${base} ${tone} ${supported ? deskPress : "opacity-40"} ${deskFocusRingOnDeck}`}
+      onKeyDown={(event) => {
+        // 宿站 `window.onkeydown` 在非输入框聚焦时会对 Enter 调 preventDefault 并截胡按键；
+        // 阻断冒泡即可保留原生按钮 Enter 激活且不触发宿站全局热键。
+        if (event.key === "Enter" && !event.isComposing)
+          event.stopPropagation();
+      }}
+      onClick={onToggle}
+    >
+      <DeskIcon name={enabled ? "note" : "noteOff"} size={sheet ? 20 : 17} />
+    </button>
   );
 }
