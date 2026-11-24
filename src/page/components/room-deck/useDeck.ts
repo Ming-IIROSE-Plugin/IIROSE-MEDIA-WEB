@@ -108,14 +108,24 @@ export function useDeck(): DeckModel | null {
     };
   }, [session]);
 
-  const message = (text: string, dedupe = true) => {
+  useEffect(() => {
+    if (progress?.media.mediaRoom && notice === MEDIA_ROOM_UNSUPPORTED)
+      setNotice("");
+  }, [progress?.media.mediaRoom, notice]);
+
+  const recordNotice = (text: string, dedupe = true): boolean => {
     const now = Date.now();
     // 键是原因文案，随会话增长：写入前先丢弃已过窗口的旧键。
     for (const [reason, at] of notices.current)
       if (now - at >= NOTICE_INTERVAL) notices.current.delete(reason);
-    if (dedupe && notices.current.has(text)) return;
+    if (dedupe && notices.current.has(text)) return false;
     if (dedupe) notices.current.set(text, now);
     setNotice(text);
+    return true;
+  };
+
+  const message = (text: string, dedupe = true) => {
+    if (!recordNotice(text, dedupe)) return;
     ShowMessage.show(text);
   };
 
@@ -164,15 +174,16 @@ export function useDeck(): DeckModel | null {
 
   const toggleMediaLoading = () => {
     if (!session) return;
-    if (!session.bridge.read().mediaRoom) {
-      message(MEDIA_ROOM_UNSUPPORTED);
-      return;
-    }
     try {
-      session.bridge.toggleMediaLoading();
+      if (!session.bridge.toggleMediaLoading()) {
+        message(MEDIA_ROOM_UNSUPPORTED);
+        return;
+      }
+      if (notice === MEDIA_ROOM_UNSUPPORTED || notice === MEDIA_LOADING_FAILED)
+        setNotice("");
     } catch (error) {
-      setNotice(MEDIA_LOADING_FAILED);
-      reportFailure(error, MEDIA_LOADING_FAILED);
+      if (recordNotice(MEDIA_LOADING_FAILED))
+        reportFailure(error, MEDIA_LOADING_FAILED);
     }
   };
 

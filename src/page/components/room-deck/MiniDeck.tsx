@@ -14,6 +14,7 @@ import {
   deskDeckText,
   deskDeckTrack,
   deskFocusRingOnDeck,
+  roundedLg,
   roundedSm,
   typeDeckTitle,
   typeDeckTitleMini,
@@ -42,7 +43,7 @@ export interface MiniDeckProps {
   miniButton: RefObject<HTMLButtonElement>;
   closeButton: RefObject<HTMLButtonElement>;
   onOpen: () => void;
-  onCollapse: (restoreFocus: boolean) => void;
+  onCollapse: (restoreFocus: boolean, animate?: boolean) => void;
 }
 
 export function MiniDeck({
@@ -160,7 +161,7 @@ export function MiniDeck({
                 className="h-[50px] w-[50px]"
                 rounded={roundedSm}
               />
-              <div className="min-w-0 flex-1 pr-[92px]">
+              <div className="min-w-0 flex-1">
                 {idle ? null : <DeckLabel />}
                 <div
                   className={`${idle ? "" : "mt-[3px]"} truncate ${typeDeckTitle}`}
@@ -177,20 +178,28 @@ export function MiniDeck({
                   </div>
                 )}
               </div>
-              <div className="absolute top-1 right-1 flex items-center gap-1">
+              <div
+                className={`-mr-1 flex shrink-0 items-center gap-1 ${idle ? "" : "-mt-1"}`}
+              >
                 <MediaLoadingToggle
                   supported={deck.mediaLoading.supported}
                   enabled={deck.mediaLoading.enabled}
                   reason={deck.mediaLoading.reason}
                   sheet
-                  onToggle={deck.toggleMediaLoading}
+                  onToggle={() => {
+                    // 睡眠态即将唤起宿站原生退出睡眠确认框：先收起展开层，
+                    // 避免 Esc / 宿站返回键先吃掉底层抽屉而留下宿站确认框。
+                    if (deck.mediaLoading.supported && media.sleepMode)
+                      onCollapse(false, false);
+                    deck.toggleMediaLoading();
+                  }}
                 />
                 <button
                   ref={closeButton}
                   type="button"
                   aria-label="收起"
                   title="收起"
-                  className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 ${deskDeckText} ${deskFocusRingOnDeck}`}
+                  className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 ${roundedLg} ${deskDeckText} ${deskFocusRingOnDeck}`}
                   onClick={() => onCollapse(true)}
                 >
                   <DeskIcon name="chev" size={20} />

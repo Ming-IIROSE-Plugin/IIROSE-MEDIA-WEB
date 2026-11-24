@@ -81,6 +81,18 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
     return pushOverlayLayer("deck", () => collapse(true));
   }, [expanded]);
 
+  // 展开层打开期间，若进度滑块因停播/切直播/失权被卸载导致焦点掉到弹窗外，
+  // 立即收回至收起钮，避免键盘 Tab 逃出模态框焦点锁（trapFocusWithin）。
+  const expandedIdle = deck?.idle ?? false;
+  const expandedSeekable = deck?.seekable ?? false;
+  const expandedLive = deck?.live ?? false;
+  useEffect(() => {
+    if (!expanded || closing) return;
+    const sheet = closeButton.current?.closest('[data-imw-deck="expanded"]');
+    if (sheet && !sheet.contains(document.activeElement))
+      closeButton.current?.focus({ preventScroll: true });
+  }, [expanded, closing, expandedIdle, expandedSeekable, expandedLive]);
+
   if (!deck) return null;
   const { media } = deck;
   const requester = requesterOf(media);

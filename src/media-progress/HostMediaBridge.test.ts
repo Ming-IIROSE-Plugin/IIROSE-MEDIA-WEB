@@ -875,12 +875,11 @@ describe("本机媒体加载开关与睡眠模式", () => {
     host.Utils!.service!.moveinputDo = moveinputDo;
     host.mediaRoom = true;
     host.Probe = { emptyMediaPlayer: false, sleepMode: false };
-    const player = {
-      switch: vi.fn(function (this: unknown, off: boolean) {
-        expect(this).toBe(player);
-        host.Probe!.emptyMediaPlayer = off;
-      }),
-    };
+    const switchSpy = vi.fn(function (this: unknown, off: boolean) {
+      expect(this).toBe(player);
+      host.Probe!.emptyMediaPlayer = off;
+    });
+    const player = { switch: switchSpy };
     host.Objs = { emptyMediaPlayer: player };
     const updates: boolean[] = [];
     const off = bridge.subscribe((snap) =>
@@ -890,16 +889,20 @@ describe("本机媒体加载开关与睡眠模式", () => {
 
     try {
       expect(bridge.toggleMediaLoading()).toBe(true);
-      expect(player.switch).toHaveBeenCalledExactlyOnceWith(true);
+      expect(switchSpy).toHaveBeenCalledExactlyOnceWith(true);
       expect(bridge.read().mediaLoadingEnabled).toBe(false);
       // 房间实际播放状态不变
       expect(bridge.read().playing).toBe(true);
       expect(updates).toEqual([false]);
 
       expect(bridge.toggleMediaLoading()).toBe(true);
-      expect(player.switch).toHaveBeenLastCalledWith(false);
+      expect(switchSpy).toHaveBeenLastCalledWith(false);
       expect(bridge.read().mediaLoadingEnabled).toBe(true);
       expect(updates).toEqual([false, true]);
+
+      // 外部直接调用宿站 switch：经 observe 钩子即时同步（不等轮询）
+      player.switch(true);
+      expect(updates).toEqual([false, true, false]);
 
       expect(host.socket!.send).not.toHaveBeenCalled();
       expect(publicSend).not.toHaveBeenCalled();
@@ -910,7 +913,7 @@ describe("本机媒体加载开关与睡眠模式", () => {
     }
   });
 
-  it("外部经宿站侧栏/左滑音符/Ctrl+M 切换后，现有轮询在 ≤1s 内同步快照", () => {
+  it("外部经宿站侧栏/左滑音符/Ctrl+M 切换后，轮询在 ≤1s 内同步快照", () => {
     vi.useFakeTimers();
     const { host, bridge, session } = fixture();
     session.dispose();
@@ -932,7 +935,7 @@ describe("本机媒体加载开关与睡眠模式", () => {
     }
   });
 
-  it("非媒体房（mediaRoom: false）不调用任何宿站入口并返回 false", () => {
+  it("非媒体房（mediaRoom: false，含睡眠态）不调用任何宿站入口并返回 false", () => {
     const { host, bridge, session } = fixture();
     host.mediaRoom = false;
     host.Probe = { emptyMediaPlayer: false, sleepMode: false };
@@ -941,6 +944,9 @@ describe("本机媒体加载开关与睡眠模式", () => {
     host.Objs = { emptyMediaPlayer: { switch: switchFn } };
     host.Utils!.service!.openMediaLoadingWhenSleep = sleepFn;
     try {
+      expect(bridge.toggleMediaLoading()).toBe(false);
+      // 即使处于睡眠态，非媒体房守卫也必须优先拦住 openMediaLoadingWhenSleep
+      host.Probe.sleepMode = true;
       expect(bridge.toggleMediaLoading()).toBe(false);
       expect(switchFn).not.toHaveBeenCalled();
       expect(sleepFn).not.toHaveBeenCalled();
@@ -983,21 +989,37 @@ describe("本机媒体加载开关与睡眠模式", () => {
     }
   });
 
-  it("常规态宿站入口缺失或调用抛错时向外抛出，零 WS", () => {
+  it("常规态宿站入口/探针缺失或调用抛错时向外抛出且不被 poke 异常掩盖，零 WS", () => {
     const { host, bridge, session } = fixture();
     host.mediaRoom = true;
-    host.Probe = { emptyMediaPlayer: false, sleepMode: false };
+    const switchFn = vi.fn();
+    host.Objs = { emptyMediaPlayer: { switch: switchFn } };
     try {
+      // Probe 缺失时直接报错，不盲调 switch(true)
+      expect(() => bridge.toggleMediaLoading()).toThrow(/探针不可用/);
+      expect(switchFn).not.toHaveBeenCalled();
+
+      host.Probe = { emptyMediaPlayer: false, sleepMode: false };
+      delete host.Objs;
       expect(() => bridge.toggleMediaLoading()).toThrow(/媒体加载开关不可用/);
 
-      host.Objs = {
-        emptyMediaPlayer: {
-          switch: vi.fn(() => {
-            throw new Error("host boom");
-          }),
-        },
-      };
-      expect(() => bridge.toggleMediaLoading()).toThrow("host boom");
+      let failListener = false;
+      const off = bridge.subscribe(() => {
+        if (failListener) throw new Error("listener boom");
+      });
+      try {
+        failListener = true;
+        host.Objs = {
+          emptyMediaPlayer: {
+            switch: vi.fn(() => {
+              throw new Error("host boom");
+            }),
+          },
+        };
+        expect(() => bridge.toggleMediaLoading()).toThrow("host boom");
+      } finally {
+        off();
+      }
       expect(host.socket!.send).not.toHaveBeenCalled();
     } finally {
       session.dispose();

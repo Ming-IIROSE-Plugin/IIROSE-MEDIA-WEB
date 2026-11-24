@@ -33,6 +33,7 @@ declare global {
     shareMediaCurrentTime?: unknown;
     shareMediaDuration?: unknown;
     mediaShareRoom?: boolean;
+    mediaRoom?: unknown;
     theme?: unknown;
     rank?: unknown;
     roomnFull?: unknown;
@@ -94,6 +95,7 @@ declare global {
       service: {
         getUserCard: (uid: string, type: number) => void;
         moveinputDo: (e: string, t: undefined) => void;
+        openMediaLoadingWhenSleep?: () => unknown;
       };
       IMW?: {
         backup: {
@@ -114,6 +116,9 @@ declare global {
           userJson: string;
         };
       };
+      emptyMediaPlayer?: {
+        switch?: (off: boolean) => unknown;
+      };
     };
 
     Constant?: {
@@ -125,6 +130,8 @@ declare global {
       gestureMouseEvent: boolean; // 是否在处理手势事件
       getMediaLink: number; // 如果为1则获取媒体链接，经常用于更换背景音乐
       functionHolderAnimate: number;
+      emptyMediaPlayer?: unknown;
+      sleepMode?: unknown;
     };
 
     functionHolder: HostJQuery;

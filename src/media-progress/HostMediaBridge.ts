@@ -188,26 +188,40 @@ export class HostMediaBridge {
    */
   toggleMediaLoading(): boolean {
     if (!this.host.mediaRoom) return false;
-    if (this.host.Probe?.sleepMode) {
+    const probe = this.host.Probe;
+    if (!probe || typeof probe !== "object")
+      throw new Error("宿站媒体状态探针不可用，请刷新页面后重试");
+    if (probe.sleepMode) {
       const service = this.host.Utils?.service;
       if (typeof service?.openMediaLoadingWhenSleep !== "function")
         throw new Error("宿站退出睡眠模式入口不可用，请刷新页面后重试");
       try {
         service.openMediaLoadingWhenSleep();
       } finally {
-        this.poke();
+        this.safePoke();
       }
       return true;
     }
     const player = this.host.Objs?.emptyMediaPlayer;
     if (typeof player?.switch !== "function")
       throw new Error("宿站媒体加载开关不可用，请刷新页面后重试");
+    const hooked = this.hooked.get("switch")?.wrapper === player.switch;
+    let succeeded = false;
     try {
-      player.switch(!this.host.Probe?.emptyMediaPlayer);
+      player.switch(!probe.emptyMediaPlayer);
+      succeeded = true;
     } finally {
-      this.poke();
+      if (!hooked || !succeeded) this.safePoke();
     }
     return true;
+  }
+
+  private safePoke(): void {
+    try {
+      this.poke();
+    } catch {
+      /* 不掩盖宿站原始异常 */
+    }
   }
 
   subscribe(listener: (snapshot: MediaSnapshot) => void): () => void {
@@ -249,10 +263,10 @@ export class HostMediaBridge {
       this.stop();
       return;
     }
+    this.installHooks();
     const wanted = this.activeTags.size ? ACTIVE_POLL_MS : IDLE_POLL_MS;
     if (this.timer && this.intervalMs === wanted) return;
     clearInterval(this.timer);
-    this.installHooks();
     this.intervalMs = wanted;
     this.timer = setInterval(() => {
       this.installHooks();
@@ -379,6 +393,11 @@ export class HostMediaBridge {
       this.observe(service, "seekDemandMedia", () => {
         this.seekVersion++;
         this.emit();
+      });
+    const player = this.host.Objs?.emptyMediaPlayer;
+    if (player)
+      this.observe(player, "switch", () => {
+        this.poke();
       });
   }
 

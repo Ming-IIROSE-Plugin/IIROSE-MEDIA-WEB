@@ -70,7 +70,7 @@ export function ModeToggle({
   const narrow = !compact && narrowIconOnly;
   const base = compact
     ? `flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border border-solid bg-transparent p-0 ${roundedLg}`
-    : `flex h-8 shrink-0 cursor-pointer items-center gap-1.5 border border-solid bg-transparent px-2.5 max-[768px]:h-11 ${narrow ? "@max-[816px]:w-8 @max-[816px]:justify-center @max-[816px]:gap-0 @max-[816px]:px-0" : ""} ${roundedMd} ${typeButtonSm}`;
+    : `relative flex h-8 shrink-0 cursor-pointer items-center gap-1.5 border border-solid bg-transparent px-2.5 max-[768px]:h-11 ${narrow ? "@max-[816px]:w-8 @max-[816px]:justify-center @max-[816px]:gap-0 @max-[816px]:px-0" : ""} ${roundedMd} ${typeButtonSm}`;
   const tone = active
     ? `border-transparent ${deskRoseSolid} ${deskOnRose}`
     : `${deskDeckToggleBorder} ${deskInk2} ${deskPressTone}`;

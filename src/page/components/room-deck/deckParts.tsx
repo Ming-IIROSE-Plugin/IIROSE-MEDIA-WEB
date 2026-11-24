@@ -140,9 +140,10 @@ export function MediaLoadingToggle({
 }: MediaLoadingToggleProps) {
   const action = enabled ? "关闭媒体" : "开启媒体";
   const hint = supported ? action : reason;
+  const cursor = supported ? "cursor-pointer" : "cursor-not-allowed";
   const base = sheet
-    ? `flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border border-solid p-0 ${roundedLg}`
-    : `flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center border border-solid p-0 ${roundedMd}`;
+    ? `flex h-11 w-11 shrink-0 ${cursor} items-center justify-center border border-solid p-0 ${roundedLg}`
+    : `flex h-8 w-8 shrink-0 ${cursor} items-center justify-center border border-solid p-0 ${roundedMd}`;
   const tone = enabled
     ? `bg-transparent ${sheet ? "border-transparent" : deskDeckToggleBorder} ${deskInk2} ${supported ? deskPressTone : ""}`
     : `${deskHover} ${deskInk} ${deskKeyBorder}`;
@@ -151,15 +152,23 @@ export function MediaLoadingToggle({
     <button
       type="button"
       data-imw-media-loading={enabled ? "on" : "off"}
-      aria-label={action}
+      aria-label={supported ? action : `${action}，${reason}`}
       aria-disabled={!supported}
       title={hint}
       className={`${base} ${tone} ${supported ? deskPress : "opacity-40"} ${deskFocusRingOnDeck}`}
       onKeyDown={(event) => {
         // 宿站 `window.onkeydown` 在非输入框聚焦时会对 Enter 调 preventDefault 并截胡按键；
-        // 阻断冒泡即可保留原生按钮 Enter 激活且不触发宿站全局热键。
-        if (event.key === "Enter" && !event.isComposing)
+        // 仅阻断无修饰键的非组字 Enter 冒泡，并拦住长按 repeat 防止高频误切或叠弹睡眠确认框。
+        if (
+          event.key === "Enter" &&
+          !event.isComposing &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey
+        ) {
           event.stopPropagation();
+          if (event.repeat) event.preventDefault();
+        }
       }}
       onClick={onToggle}
     >
