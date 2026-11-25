@@ -445,4 +445,203 @@ describe("面板底部条会话接线", () => {
     });
     expect(mediaSession()).toBeNull();
   });
+
+  it("setPanelOpen(true) 立即安全回读快照同步底部条（关闭时不额外 poke，订阅者抛错不阻断打开）", async () => {
+    const win = window as unknown as Record<string, unknown>;
+    win.mediaRoom = true;
+    win.Probe = { emptyMediaPlayer: false, sleepMode: false };
+    (win.Utils as Record<string, unknown>).sync = () => {};
+
+    IMCInit.init(mainContainer());
+    const session = mediaSession()!;
+    const show = Gesture.ShowHideMainApp as unknown as () => Promise<void>;
+    await act(async () => {
+      await show();
+    });
+    const toggle = () =>
+      document.querySelector<HTMLButtonElement>(
+        '[data-imw-deck="room"] [data-imw-media-loading]',
+      )!;
+    expect(toggle().getAttribute("data-imw-media-loading")).toBe("on");
+
+    // 关闭面板期间宿站侧栏切到关闭（不推进轮询时钟）
+    await act(async () => {
+      await show();
+    });
+    (win.Probe as { emptyMediaPlayer: boolean }).emptyMediaPlayer = true;
+
+    const listener = vi.fn();
+    const off = session.bridge.subscribe(listener);
+    listener.mockClear();
+    session.setPanelOpen!(false);
+    expect(listener).not.toHaveBeenCalled();
+
+    // 即使有订阅者抛错，重新打开面板也照常成功且底部条首帧已同步为 off
+    let throwInListener = false;
+    const offFail = session.bridge.subscribe(() => {
+      if (throwInListener) throw new Error("subscriber boom");
+    });
+    try {
+      throwInListener = true;
+      await act(async () => {
+        await show();
+      });
+      expect(
+        document
+          .getElementById("IIROSE_MEDIA_CONTAINER")!
+          .classList.contains("ShowIIROSE_MEDIA_CONTAINER"),
+      ).toBe(true);
+      expect(listener).toHaveBeenCalled();
+      expect(toggle().getAttribute("data-imw-media-loading")).toBe("off");
+    } finally {
+      offFail();
+      off();
+    }
+  });
+
+  it("真实 HostMediaBridge + RoomDeck + 循环/随机端到端集成：文案全链路断言且切换不影响自动播放模式", async () => {
+    const alerts: string[] = [];
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const win = window as unknown as Record<string, unknown>;
+    win._alert = (msg: string) => alerts.push(msg);
+    win.mediaRoom = false;
+    win.Probe = { emptyMediaPlayer: false, sleepMode: false };
+    const player = {
+      switch: vi.fn((off: boolean) => {
+        (win.Probe as { emptyMediaPlayer: boolean }).emptyMediaPlayer = off;
+      }),
+    };
+    win.Objs = { emptyMediaPlayer: player };
+    (win.Utils as Record<string, unknown>).sync = () => {};
+
+    // 预置一条收藏，供随机模式点亮验证
+    localStorage.clear();
+    const favorite = {
+      id: "netease:song:1",
+      platform: "netease",
+      type: "song",
+      title: "甲",
+      coverImg: "https://a/c.jpg",
+      author: "歌手",
+      websiteUrl: "",
+      createdAt: 1,
+      updatedAt: 1,
+      platformData: {
+        title: "甲",
+        coverImg: "https://a/c.jpg",
+        author: "歌手",
+        websiteUrl: "",
+        neteaseMusic: { id: 1, fee: 0 },
+      },
+    } as unknown as FavoriteRecord;
+    const querySpy = vi
+      .spyOn(FavoritesStorageService, "query")
+      .mockResolvedValue([favorite]);
+    saveShufflePlatform("netease");
+
+    try {
+      IMCInit.init(mainContainer());
+      await vi.advanceTimersByTimeAsync(250);
+      const session = mediaSession()!;
+      const show = Gesture.ShowHideMainApp as unknown as () => Promise<void>;
+      await act(async () => {
+        await show();
+      });
+      const toggle = () =>
+        document.querySelector<HTMLButtonElement>(
+          '[data-imw-deck="room"] [data-imw-media-loading]',
+        )!;
+
+      // 1. 非媒体房端到端提示文案
+      act(() => {
+        toggle().click();
+      });
+      expect(alerts).toEqual(["当前房间不支持媒体加载"]);
+
+      // 2. 切回媒体房、缓存播放报文并点亮真实单曲循环
+      win.mediaRoom = true;
+      new Socket().send(payload);
+      vi.advanceTimersByTime(250);
+      act(() => {
+        session.playback.toggle("loop");
+      });
+      expect(session.playback.mode).toBe("loop");
+      const sentBefore = sent.mock.calls.length;
+
+      // 真实 RoomDeck → 真实 HostMediaBridge 开关关闭再开启：零新 WS、循环保持点亮
+      act(() => {
+        toggle().click();
+      });
+      expect(toggle().getAttribute("data-imw-media-loading")).toBe("off");
+      expect(session.playback.mode).toBe("loop");
+      expect(sent.mock.calls.length).toBe(sentBefore);
+
+      act(() => {
+        toggle().click();
+      });
+      expect(toggle().getAttribute("data-imw-media-loading")).toBe("on");
+      expect(session.playback.mode).toBe("loop");
+      expect(sent.mock.calls.length).toBe(sentBefore);
+
+      // 切到真实收藏随机后同样保持点亮、零新 WS
+      act(() => {
+        session.playback.toggle("shuffle");
+      });
+      expect(session.playback.mode).toBe("shuffle");
+      act(() => {
+        toggle().click();
+      });
+      expect(toggle().getAttribute("data-imw-media-loading")).toBe("off");
+      expect(session.playback.mode).toBe("shuffle");
+      expect(sent.mock.calls.length).toBe(sentBefore);
+
+      // 3. 宿站入口缺失与未知异常端到端文案断言
+      delete win.Probe;
+      act(() => {
+        toggle().click();
+      });
+      expect(alerts[alerts.length - 1]).toBe(
+        "宿站媒体状态探针不可用，请刷新页面后重试",
+      );
+
+      win.Probe = { emptyMediaPlayer: false, sleepMode: true };
+      act(() => {
+        toggle().click();
+      });
+      expect(alerts[alerts.length - 1]).toBe(
+        "宿站退出睡眠模式入口不可用，请刷新页面后重试",
+      );
+
+      win.Probe = { emptyMediaPlayer: false, sleepMode: false };
+      delete win.Objs;
+      act(() => {
+        toggle().click();
+      });
+      expect(alerts[alerts.length - 1]).toBe(
+        "宿站媒体加载开关不可用，请刷新页面后重试",
+      );
+
+      win.Objs = {
+        emptyMediaPlayer: {
+          switch: () => {
+            throw new TypeError("host crash");
+          },
+        },
+      };
+      act(() => {
+        toggle().click();
+      });
+      expect(alerts[alerts.length - 1]).toBe(
+        "切换媒体加载失败，请刷新页面后重试",
+      );
+      expect(warnSpy).toHaveBeenCalledOnce();
+    } finally {
+      querySpy.mockRestore();
+      warnSpy.mockRestore();
+      delete win._alert;
+      delete win.mediaRoom;
+      delete win.Probe;
+      delete win.Objs;
+    }
+  });
 });

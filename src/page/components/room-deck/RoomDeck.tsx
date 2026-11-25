@@ -44,9 +44,13 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
     setExpanded(open);
   };
   // 收起：`restoreFocus` 时把焦点还给迷你条主体（点外侧、切模式、点收起钮）。
-  // `animate` 为假（面板整体关闭）时直接卸载，不播滑出动画。
+  // `animate` 为假（面板整体关闭 / 弹睡眠确认框）时直接卸载，不播滑出动画，
+  // 且中止已在途的滑出定时避免到期抢回焦点。
   const collapse = (restoreFocus: boolean, animate = true) => {
-    if (!expandedRef.current) return;
+    if (!expandedRef.current) {
+      if (!animate && closeTimer.current) setOpen(false);
+      return;
+    }
     expandedRef.current = false;
     const finish = () => {
       setOpen(false);
@@ -81,15 +85,26 @@ export function RoomDeck({ active, mode }: RoomDeckProps) {
     return pushOverlayLayer("deck", () => collapse(true));
   }, [expanded]);
 
-  // 展开层打开期间，若进度滑块因停播/切直播/失权被卸载导致焦点掉到弹窗外，
-  // 立即收回至收起钮，避免键盘 Tab 逃出模态框焦点锁（trapFocusWithin）。
+  // 展开层打开期间，若进度滑块因停播/切直播卸载导致焦点掉到页面根，或因失权被摘掉
+  // tabIndex 停在不可聚焦节点上，立即收回至收起钮；焦点位于上层浮层（如收藏随机面板）
+  // 或展开层其他有效控件上时绝不抢焦。
   const expandedIdle = deck?.idle ?? false;
   const expandedSeekable = deck?.seekable ?? false;
   const expandedLive = deck?.live ?? false;
   useEffect(() => {
     if (!expanded || closing) return;
     const sheet = closeButton.current?.closest('[data-imw-deck="expanded"]');
-    if (sheet && !sheet.contains(document.activeElement))
+    if (!sheet) return;
+    const activeEl = document.activeElement;
+    const lostToPage =
+      !activeEl ||
+      activeEl === document.body ||
+      activeEl === document.documentElement;
+    const staleInside =
+      activeEl instanceof HTMLElement &&
+      sheet.contains(activeEl) &&
+      activeEl.tabIndex < 0;
+    if (lostToPage || staleInside)
       closeButton.current?.focus({ preventScroll: true });
   }, [expanded, closing, expandedIdle, expandedSeekable, expandedLive]);
 

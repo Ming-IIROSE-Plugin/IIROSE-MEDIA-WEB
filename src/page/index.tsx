@@ -260,8 +260,9 @@ function initMediaProgress() {
     pickShuffle: (done, returnFocus) => openShuffle(returnFocus ?? null, done),
     setPanelOpen: (open) => {
       bridge.setActive("panel", open);
-      // 面板打开时立即回读一次快照，避免刚在宿站侧栏切过媒体加载时首帧闪旧态。
-      if (open) bridge.poke();
+      // 面板打开时立即回读一次快照，避免刚在宿站侧栏切过媒体加载时首帧闪旧态；
+      // 走 safePoke 防止订阅者异常中断面板展示副作用。
+      if (open) bridge.safePoke();
     },
   };
   provideMediaSession(session);

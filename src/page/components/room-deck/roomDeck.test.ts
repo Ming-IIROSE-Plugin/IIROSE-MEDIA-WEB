@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
 import { h, render } from "preact";
-import type { HostMediaBridge } from "../../../media-progress/HostMediaBridge";
+import {
+  MediaLoadingUnavailableError,
+  type HostMediaBridge,
+  type MediaLoadingToggleResult,
+} from "../../../media-progress/HostMediaBridge";
 import {
   provideMediaSession,
   releaseMediaSession,
@@ -26,7 +30,7 @@ class FakeBridge {
   controlUnavailable = false;
   controlUnavailableMessage = "宿站进度控制不可用";
   mediaLoadingToggles = 0;
-  toggleMediaLoadingHandler?: () => boolean;
+  toggleMediaLoadingHandler?: () => MediaLoadingToggleResult;
   private listeners = new Set<(media: MediaSnapshot) => void>();
 
   constructor(media: MediaSnapshot) {
@@ -56,16 +60,19 @@ class FakeBridge {
     return true;
   }
 
-  toggleMediaLoading(): boolean {
+  toggleMediaLoading(): MediaLoadingToggleResult {
     if (this.toggleMediaLoadingHandler) {
       this.mediaLoadingToggles++;
       return this.toggleMediaLoadingHandler();
     }
-    if (!this.current.mediaRoom) return false;
+    if (!this.current.mediaRoom) {
+      this.poke();
+      return "unsupported";
+    }
     this.mediaLoadingToggles++;
-    if (this.current.sleepMode) return true;
+    if (this.current.sleepMode) return "sleep-dialog";
     this.emit({ mediaLoadingEnabled: !this.current.mediaLoadingEnabled });
-    return true;
+    return "toggled";
   }
 
   poke() {
@@ -673,6 +680,134 @@ describe("迷你条与展开的底部条", () => {
     );
   });
 
+  it("展开层焦点回收：切直播/失权收回至收起钮；层内其他按钮与上层浮层（如随机面板）绝不抢焦", () => {
+    const { session, bridge } = harness({ duration: 200, current: 30 });
+    provideMediaSession(session);
+    mount();
+    act(() => {
+      miniBody().click();
+    });
+
+    const expanded = () => deck("expanded")!;
+    const close = () =>
+      expanded().querySelector<HTMLButtonElement>('[aria-label="收起"]')!;
+
+    // 1. 切直播：playing 仍为 true，但滑块被 LiveRow 卸载，焦点收回至收起钮
+    const slider1 = expanded().querySelector<HTMLElement>('[role="slider"]')!;
+    slider1.focus();
+    expect(document.activeElement).toBe(slider1);
+    act(() => {
+      bridge.emit({ duration: null });
+    });
+    expect(document.activeElement).toBe(close());
+
+    // 2. 失权（seekable: true -> false）：轨道 div 仍在 sheet 内但 tabIndex 被摘掉，必须收回焦点
+    act(() => {
+      bridge.emit({ duration: 200, current: 30 });
+    });
+    const slider2 = expanded().querySelector<HTMLElement>('[role="slider"]')!;
+    slider2.focus();
+    expect(document.activeElement).toBe(slider2);
+    act(() => {
+      bridge.emit({
+        permission: "denied",
+        permissionReason: "当前房间无媒体管理权限",
+        controlMode: "unavailable",
+      });
+    });
+    expect(expanded().querySelector('[role="slider"]')).toBeNull();
+    expect(document.activeElement).toBe(close());
+
+    // 3. 焦点已在展开层其他按钮上：停播时不应强行跳回收起钮
+    act(() => {
+      bridge.emit({
+        permission: "allowed",
+        permissionReason: "",
+        controlMode: "silent",
+        playing: true,
+      });
+    });
+    const mediaBtn = mediaToggleIn("expanded")!;
+    mediaBtn.focus();
+    expect(document.activeElement).toBe(mediaBtn);
+    act(() => {
+      bridge.emit({ playing: false });
+    });
+    expect(document.activeElement).toBe(mediaBtn);
+
+    // 4. 上层浮层（模拟收藏随机面板）持有焦点时：播放态变化绝不能把焦点抢回底层收起钮
+    act(() => {
+      bridge.emit({ playing: true, duration: 200, current: 30 });
+    });
+    const picker = document.createElement("div");
+    picker.id = "imw-shuffle-picker-root";
+    const pickerBtn = document.createElement("button");
+    pickerBtn.type = "button";
+    picker.appendChild(pickerBtn);
+    document.body.appendChild(picker);
+    try {
+      pickerBtn.focus();
+      expect(document.activeElement).toBe(pickerBtn);
+      act(() => {
+        bridge.emit({ playing: false });
+      });
+      expect(document.activeElement).toBe(pickerBtn);
+      act(() => {
+        bridge.emit({ playing: true, duration: null });
+      });
+      expect(document.activeElement).toBe(pickerBtn);
+    } finally {
+      picker.remove();
+    }
+  });
+
+  it("展开层 200ms 滑出收起期间置 inert 且忽略点击，立即无动画收起会取消在途定时不抢焦", () => {
+    const { session, bridge } = harness({
+      mediaRoom: true,
+      sleepMode: true,
+      mediaLoadingEnabled: false,
+    });
+    const sleepTrigger = vi.fn(() => "sleep-dialog" as const);
+    bridge.toggleMediaLoadingHandler = sleepTrigger;
+    provideMediaSession(session);
+    mount();
+
+    act(() => {
+      miniBody().click();
+    });
+    expect(deck("expanded")!.hasAttribute("inert")).toBe(false);
+
+    // 触发带动画的收起（进入 200ms closing 期）
+    act(() => {
+      deck("expanded")!
+        .querySelector<HTMLButtonElement>('[aria-label="收起"]')!
+        .click();
+    });
+    const closingSheet = deck("expanded")!;
+    expect(closingSheet).not.toBeNull();
+    expect(closingSheet.hasAttribute("inert")).toBe(true);
+    expect(closingSheet.getAttribute("class")).toContain("pointer-events-none");
+
+    // 滑出期间点击媒体开关不会误触发宿站弹窗
+    act(() => {
+      mediaToggleIn("expanded")!.click();
+    });
+    expect(sleepTrigger).not.toHaveBeenCalled();
+
+    // 滑出中途关面板（collapse(false, false)）：立刻卸载并取消定时，到期后不抢焦到 miniBody
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    try {
+      outside.focus();
+      mount(false);
+      expect(deck("expanded")).toBeNull();
+      settleCollapse();
+      expect(document.activeElement).toBe(outside);
+    } finally {
+      outside.remove();
+    }
+  });
+
   it("展开层的点播者行与桌面同用一套钩子", () => {
     const { session } = harness({ owner: "小飞鱼", ownMedia: false });
     provideMediaSession(session);
@@ -1208,7 +1343,7 @@ describe("本机媒体加载开关与窄窗适配", () => {
       spy.mockRestore();
     }
 
-    // 进入媒体房后自动恢复可用，且清掉读屏区旧的不可用提示
+    // 进入媒体房后自动恢复可用，且清掉读屏区旧的不可用提示与 10s 去重键
     act(() => {
       bridge.emit({ mediaRoom: true });
     });
@@ -1218,94 +1353,203 @@ describe("本机媒体加载开关与窄窗适配", () => {
       deck("room")!.querySelector('[role="status"]')!.textContent,
     ).not.toContain("当前房间不支持媒体加载");
 
-    // 离房瞬间快照未轮询到，直接点击仍按实时 bridge 返回 false 弹不支持提示
+    // 10s 内再次离房且快照尚未轮询到：直接点击立刻同步灰化、弹提示且不被旧快照清掉读屏状态
     bridge.current.mediaRoom = false;
-    const spy2 = vi.spyOn(Date, "now").mockReturnValue(now + 20_002);
-    try {
-      act(() => {
-        button().click();
-      });
-      expect(bridge.mediaLoadingToggles).toBe(0);
-      expect(alert).toHaveBeenCalledTimes(3);
-      expect(alert).toHaveBeenLastCalledWith("当前房间不支持媒体加载");
-    } finally {
-      spy2.mockRestore();
-    }
+    act(() => {
+      button().click();
+    });
+    expect(bridge.mediaLoadingToggles).toBe(0);
+    expect(alert).toHaveBeenCalledTimes(3);
+    expect(alert).toHaveBeenLastCalledWith("当前房间不支持媒体加载");
+    expect(button().getAttribute("aria-disabled")).toBe("true");
+    expect(
+      deck("room")!.querySelector('[role="status"]')!.textContent,
+    ).toContain("当前房间不支持媒体加载");
   });
 
-  it("睡眠模式呈关闭态「开启媒体」，点击委托桥接走宿站确认流；手机展开层先收起再弹确认", () => {
+  it("睡眠模式呈关闭态「开启媒体」，点击委托桥接走宿站确认流；手机展开层仅真实唤起确认框时才收起且不抢焦", () => {
     const { session, bridge } = harness({
       mediaRoom: true,
       sleepMode: true,
       mediaLoadingEnabled: false,
     });
-    const sleepTrigger = vi.fn(() => true);
+    const dialogBtn = document.createElement("button");
+    document.body.appendChild(dialogBtn);
+    const sleepTrigger = vi.fn(() => {
+      dialogBtn.focus();
+      return "sleep-dialog" as const;
+    });
     bridge.toggleMediaLoadingHandler = sleepTrigger;
     provideMediaSession(session);
     mount();
 
-    const button = mediaToggleIn("room")!;
-    expect(button.getAttribute("data-imw-media-loading")).toBe("off");
-    expect(button.getAttribute("aria-label")).toBe("开启媒体");
-    expect(button.getAttribute("title")).toBe("开启媒体");
+    try {
+      const button = mediaToggleIn("room")!;
+      expect(button.getAttribute("data-imw-media-loading")).toBe("off");
+      expect(button.getAttribute("aria-label")).toBe("开启媒体");
+      expect(button.getAttribute("title")).toBe("开启媒体");
 
-    act(() => {
-      button.click();
-    });
-    expect(sleepTrigger).toHaveBeenCalledOnce();
-    expect(alert).not.toHaveBeenCalled();
+      act(() => {
+        button.click();
+      });
+      expect(sleepTrigger).toHaveBeenCalledOnce();
+      expect(alert).not.toHaveBeenCalled();
 
-    // 手机展开层在睡眠态点击：先收起展开层再调宿站确认框，避免返回键冲突
-    act(() => {
-      miniBody().click();
-    });
-    expect(deck("expanded")).not.toBeNull();
-    act(() => {
-      mediaToggleIn("expanded")!.click();
-    });
-    expect(deck("expanded")).toBeNull();
-    expect(sleepTrigger).toHaveBeenCalledTimes(2);
+      // 手机展开层在睡眠态点击：实际唤起宿站确认框后收起展开层，且不把焦点抢回 miniBody
+      act(() => {
+        miniBody().click();
+      });
+      expect(deck("expanded")).not.toBeNull();
+      act(() => {
+        mediaToggleIn("expanded")!.click();
+      });
+      expect(deck("expanded")).toBeNull();
+      expect(sleepTrigger).toHaveBeenCalledTimes(2);
+      expect(document.activeElement).toBe(dialogBtn);
+      expect(document.activeElement).not.toBe(miniBody());
+
+      // 若睡眠入口缺失抛错：展开层保持打开、焦点不掉、读屏播报精确原因
+      bridge.toggleMediaLoadingHandler = () => {
+        throw new MediaLoadingUnavailableError(
+          "宿站退出睡眠模式入口不可用，请刷新页面后重试",
+        );
+      };
+      act(() => {
+        miniBody().click();
+      });
+      const sheetToggle = mediaToggleIn("expanded")!;
+      sheetToggle.focus();
+      act(() => {
+        sheetToggle.click();
+      });
+      expect(deck("expanded")).not.toBeNull();
+      expect(document.activeElement).toBe(sheetToggle);
+      expect(alert).toHaveBeenCalledExactlyOnceWith(
+        "宿站退出睡眠模式入口不可用，请刷新页面后重试",
+      );
+      expect(
+        deck("expanded")!.querySelector('[role="status"]')!.textContent,
+      ).toContain("宿站退出睡眠模式入口不可用，请刷新页面后重试");
+
+      // 非媒体房且处于睡眠态：点击只提示不支持，不收起展开层
+      bridge.toggleMediaLoadingHandler = undefined;
+      act(() => {
+        bridge.emit({ mediaRoom: false, sleepMode: true });
+      });
+      act(() => {
+        mediaToggleIn("expanded")!.click();
+      });
+      expect(deck("expanded")).not.toBeNull();
+      expect(alert).toHaveBeenLastCalledWith("当前房间不支持媒体加载");
+    } finally {
+      dialogBtn.remove();
+    }
   });
 
-  it("桥接抛错走 reportFailure（10s 去重并写读屏状态），恢复成功后清旧报错且不影响其余功能", () => {
+  it("桥接抛错透出本地化文案、未知宿站异常走兜底并 warn；恢复/换房同步清旧提示与去重键且不伤播放模式提示", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { session, bridge, playback } = harness({
       owner: "铭铭",
       ownMedia: true,
       mediaRoom: true,
       mediaLoadingEnabled: true,
     });
-    bridge.toggleMediaLoadingHandler = () => {
-      throw new Error("宿站媒体加载开关不可用");
-    };
-    provideMediaSession(session);
-    mount();
+    try {
+      // 1. 桥接层可判明的细分中文错误直接透出给用户，不打 console.warn
+      bridge.toggleMediaLoadingHandler = () => {
+        throw new MediaLoadingUnavailableError(
+          "宿站媒体加载开关不可用，请刷新页面后重试",
+        );
+      };
+      provideMediaSession(session);
+      mount();
 
-    act(() => {
-      mediaToggleIn("room")!.click();
-      mediaToggleIn("room")!.click();
-    });
-    expect(alert).toHaveBeenCalledExactlyOnceWith(
-      "切换媒体加载失败，请刷新页面后重试",
-    );
-    expect(
-      deck("room")!.querySelector('[role="status"]')!.textContent,
-    ).toContain("切换媒体加载失败，请刷新页面后重试");
-    expect(bridge.sent).toEqual([]);
+      act(() => {
+        mediaToggleIn("room")!.click();
+        mediaToggleIn("room")!.click();
+      });
+      expect(alert).toHaveBeenCalledExactlyOnceWith(
+        "宿站媒体加载开关不可用，请刷新页面后重试",
+      );
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(
+        deck("room")!.querySelector('[role="status"]')!.textContent,
+      ).toContain("宿站媒体加载开关不可用，请刷新页面后重试");
+      expect(bridge.sent).toEqual([]);
 
-    // 恢复正常切换后清掉读屏区旧的失败提示
-    bridge.toggleMediaLoadingHandler = undefined;
-    act(() => {
-      mediaToggleIn("room")!.click();
-    });
-    expect(
-      deck("room")!.querySelector('[role="status"]')!.textContent,
-    ).not.toContain("切换媒体加载失败，请刷新页面后重试");
+      // 恢复成功后同步清旧报错与 10s 去重键
+      bridge.toggleMediaLoadingHandler = undefined;
+      act(() => {
+        mediaToggleIn("room")!.click();
+      });
+      expect(
+        deck("room")!.querySelector('[role="status"]')!.textContent,
+      ).not.toContain("宿站媒体加载开关不可用，请刷新页面后重试");
 
-    // 插件其余功能照常
-    act(() => {
-      toggleIn("room", "loop")!.click();
-    });
-    expect(playback.mode).toBe("loop");
+      // 10s 内恢复后再次发生同原因报错不得静默
+      bridge.toggleMediaLoadingHandler = () => {
+        throw new MediaLoadingUnavailableError(
+          "宿站媒体加载开关不可用，请刷新页面后重试",
+        );
+      };
+      act(() => {
+        mediaToggleIn("room")!.click();
+      });
+      expect(alert).toHaveBeenCalledTimes(2);
+
+      // 换房后清掉旧失败提示
+      act(() => {
+        bridge.emit({ roomKey: "room-2" });
+      });
+      expect(
+        deck("room")!.querySelector('[role="status"]')!.textContent,
+      ).not.toContain("宿站媒体加载开关不可用，请刷新页面后重试");
+
+      // 2. 未知宿站原始异常走通用兜底文案并 console.warn 留痕
+      const rawError = new TypeError("cannot read switch");
+      bridge.toggleMediaLoadingHandler = () => {
+        throw rawError;
+      };
+      act(() => {
+        mediaToggleIn("room")!.click();
+      });
+      expect(alert).toHaveBeenLastCalledWith(
+        "切换媒体加载失败，请刷新页面后重试",
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[IIROSE-MEDIA-WEB] toggleMediaLoading failed:",
+        rawError,
+      );
+
+      // 3. 成功切换媒体加载不得抹掉读屏区已有的无关播放模式提示
+      bridge.toggleMediaLoadingHandler = undefined;
+      act(() => {
+        bridge.emit({ duration: null });
+      });
+      act(() => {
+        toggleIn("room", "loop")!.click();
+      });
+      expect(
+        deck("room")!.querySelector('[role="status"]')!.textContent,
+      ).toContain("直播或时间未知，无法使用");
+      act(() => {
+        mediaToggleIn("room")!.click();
+      });
+      expect(
+        deck("room")!.querySelector('[role="status"]')!.textContent,
+      ).toContain("直播或时间未知，无法使用");
+
+      // 插件其余功能照常
+      act(() => {
+        bridge.emit({ duration: 200 });
+      });
+      act(() => {
+        toggleIn("room", "loop")!.click();
+      });
+      expect(playback.mode).toBe("loop");
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it("桌面窄窗（@max-[816px]）：两个模式开关文字退为 sr-only 并缩 32×32，保留 relative 与完整 title", () => {
@@ -1330,38 +1574,56 @@ describe("本机媒体加载开关与窄窗适配", () => {
     expect(mediaToggleIn("room")!.getAttribute("class")).toContain("w-8");
   });
 
-  it("媒体加载开关只拦截无修饰非组字 Enter 冒泡、阻断长按 repeat，并放行 Escape / Tab / 组字 / 修饰键", () => {
+  it("底部条按钮统一拦截无修饰非组字 Enter 冒泡与长按 repeat，并放行 Escape / 组字 / 修饰键（Alt/Ctrl/Meta/Shift）", () => {
     const { session } = harness();
     provideMediaSession(session);
     mount();
+    act(() => {
+      miniBody().click();
+    });
 
     const seen: string[] = [];
     const hostKey = vi.fn((event: KeyboardEvent) => {
-      seen.push(`${event.key}:${event.isComposing}:${event.altKey}`);
+      seen.push(
+        `${event.key}:${event.isComposing}:${event.altKey}:${event.ctrlKey}:${event.metaKey}:${event.shiftKey}`,
+      );
       if (event.key === "Enter") event.preventDefault();
     });
     window.addEventListener("keydown", hostKey);
     try {
-      const enter = new KeyboardEvent("keydown", {
-        key: "Enter",
-        bubbles: true,
-        cancelable: true,
-      });
-      const repeatEnter = new KeyboardEvent("keydown", {
-        key: "Enter",
-        repeat: true,
-        bubbles: true,
-        cancelable: true,
-      });
-      act(() => {
-        mediaToggleIn("room")!.dispatchEvent(enter);
-        mediaToggleIn("room")!.dispatchEvent(repeatEnter);
-      });
+      const targets = [
+        mediaToggleIn("room")!,
+        toggleIn("room", "loop")!,
+        toggleIn("expanded", "shuffle")!,
+        miniBody(),
+        deck("expanded")!.querySelector<HTMLButtonElement>(
+          '[aria-label="收起"]',
+        )!,
+      ];
+      for (const target of targets) {
+        const enter = new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        });
+        const repeatEnter = new KeyboardEvent("keydown", {
+          key: "Enter",
+          repeat: true,
+          bubbles: true,
+          cancelable: true,
+        });
+        act(() => {
+          target.dispatchEvent(enter);
+          target.dispatchEvent(repeatEnter);
+        });
+        expect(enter.defaultPrevented).toBe(false);
+        expect(repeatEnter.defaultPrevented).toBe(true);
+      }
       expect(hostKey).not.toHaveBeenCalled();
-      expect(enter.defaultPrevented).toBe(false);
-      expect(repeatEnter.defaultPrevented).toBe(true);
 
-      // 非 Enter、组字 Enter 与修饰键 Enter 仍正常冒泡
+      // 关面板立即卸掉展开层（摘掉 overlayLayers 的 Escape 捕获），再验证非 Enter、组字 Enter 与全部修饰键 Enter 仍正常冒泡
+      mount(false);
+      mount(true);
       act(() => {
         mediaToggleIn("room")!.dispatchEvent(
           new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
@@ -1373,18 +1635,28 @@ describe("本机媒体加载开关与窄窗适配", () => {
             bubbles: true,
           }),
         );
-        mediaToggleIn("room")!.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            key: "Enter",
-            altKey: true,
-            bubbles: true,
-          }),
-        );
+        for (const mod of [
+          { altKey: true },
+          { ctrlKey: true },
+          { metaKey: true },
+          { shiftKey: true },
+        ]) {
+          mediaToggleIn("room")!.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "Enter",
+              bubbles: true,
+              ...mod,
+            }),
+          );
+        }
       });
       expect(seen).toEqual([
-        "Escape:false:false",
-        "Enter:true:false",
-        "Enter:false:true",
+        "Escape:false:false:false:false:false",
+        "Enter:true:false:false:false:false",
+        "Enter:false:true:false:false:false",
+        "Enter:false:false:true:false:false",
+        "Enter:false:false:false:true:false",
+        "Enter:false:false:false:false:true",
       ]);
     } finally {
       window.removeEventListener("keydown", hostKey);

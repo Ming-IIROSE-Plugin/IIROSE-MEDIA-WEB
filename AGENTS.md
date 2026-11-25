@@ -98,6 +98,7 @@
 - **面板停稳时不能带 `transform`**（`scale`、`translate` 也必须是 `none`，写 `scale: 1` 同样会改变 `fixed` 的基准；开合动画期间的 `clip-path` / `translate` 停稳后清掉，见 `panel-window/adr-panel-rests-without-transform.md`；`transform: none` 和 `scale: none` 不能写在同一条规则，lightningcss 会合并成 `transform: scale(1)`）：`OrderMenu` 的坐标和菜单的 `fixed inset-0` 遮罩都靠「`fixed` 以视口为基准」，带上就会菜单错位、点窗口外收不起来。容器也不设 `overflow: hidden`（抓取区伸在窗口外），圆角裁切放在标题栏和 `#IIROSE_MEDIA` 上；抓取区 `z-20` 必须低于菜单遮罩 `z-30`。判断面板开合看 `ShowIIROSE_MEDIA_CONTAINER` 类。
 - **`viewportMetrics` 量的是宿站缩放，元素自身的 `scale` 要除掉**：开合只裁不缩，容器平时不带 `scale`，但这层保护留着，带缩放时不除会把视口算大、放不下也判成窗口。另外 `offsetWidth` 是取整的，别拿小元素量（胶囊约 113px，1.15 倍下差 4px），要量就用宽的参照物。
 - **窗口模式下焦点可能在宿站输入框**：新增面板级键盘处理要先问 `isHostTextTarget(event.target)`，别抢聊天框的按键；聊天框 `@词` 在面板已开时只搜索不切换开合（`isPanelOpen`）。
+- **宿站 `window.onkeydown` 在非输入框聚焦时会对 `Enter`（`keyCode === 13`）调 `preventDefault()`**：点歌台内依赖键盘 `Enter` 激活的按钮若要在真站可用，须阻断无修饰非组字 `Enter` 冒泡并拦截长按 `repeat`（底部条共用 `room-deck/deckParts.tsx` 的 `guardDeckButtonEnter`）。
 
 ## 自动播放与真机联调（2026-10-25 实测补充）
 
@@ -122,3 +123,4 @@
 - **审查结论汇总前先对 HEAD 复核**：审查层读的是历史 diff，而工作区可能已在其后走了几十个提交。`spec-media-desk-redesign` 复盘里有 5 条审查意见在 HEAD 上已不成立（模块被删、函数不再存在、实现已换源）。逐条到 HEAD 核验「这段代码是否还在、这条路径是否仍可达」，再决定修或不修；未复核的条目不得进修复清单。
 - **新特性先建票再做**：先用 `bmad-agent-po` 建票、用 `bmad-build` 做，`baseline_revision` 才有意义；对话里直接做完再事后补票，范围只能按提交主题推定（`epic-panel-dock` 的教训）。
 - **设计 / 重构型 epic 收尾后观察两日再判「稳定」**：`spec-media-desk-redesign` 的 8 个 story 全绿之后，同一批文件又被 31 个提交继续修补两天才真正收敛。这类 epic 的最后一篇 story 不能只看测试全绿，复盘时把 epic 结束后的提交单列成一个视图（post-epic 收尾），据此判断是否还有同类缺陷在冒。
+- **二次审查加固引入的新防线须配反向单测**：针对审查意见补上的安全网（如宿站钩子异常隔离、焦点回收、去重清零等）同样要写「删改该行即红灯」的测试，避免二轮加固把未覆盖分支带进主线（`story-panel-close-media` 复盘 F1–F4、F10 教训）。

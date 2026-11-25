@@ -5,6 +5,10 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { ShowMessage } from "../../../iirose_func/ShowMessage";
 import { reportFailure } from "../../../tools/reportFailure";
 import {
+  MediaLoadingUnavailableError,
+  type MediaLoadingToggleResult,
+} from "../../../media-progress/HostMediaBridge";
+import {
   mediaSession,
   subscribeMediaSession,
   type MediaSessionHandle,
@@ -28,6 +32,8 @@ export interface MediaLoadingState {
   reason: string;
 }
 
+export type MediaLoadingActionResult = MediaLoadingToggleResult | "failed";
+
 export interface DeckModel {
   media: MediaSnapshot;
   progress: ProgressState;
@@ -43,7 +49,7 @@ export interface DeckModel {
   /** 读屏状态区文本：待命原因、最后一条会话消息与点击提示并列拼出。 */
   status: string;
   toggle: (kind: PlaybackModeKind, returnFocus?: HTMLElement | null) => void;
-  toggleMediaLoading: () => void;
+  toggleMediaLoading: () => MediaLoadingActionResult;
   progressSession: ProgressSession;
 }
 
@@ -72,6 +78,9 @@ export function useDeck(): DeckModel | null {
   const standby = useRef(false);
   const explained = useRef(false);
   const notices = useRef(new Map<string, number>());
+  const mediaLoadingErrorKeys = useRef(new Set<string>());
+  const prevMediaRoom = useRef<boolean | null>(null);
+  const prevMediaContext = useRef<string | null>(null);
 
   useEffect(() => subscribeMediaSession(setSession), []);
 
@@ -108,10 +117,43 @@ export function useDeck(): DeckModel | null {
     };
   }, [session]);
 
+  const clearNotices = (...keys: string[]) => {
+    const targets = keys.filter(Boolean);
+    if (!targets.length) return;
+    for (const key of targets) {
+      notices.current.delete(key);
+      mediaLoadingErrorKeys.current.delete(key);
+    }
+    setNotice((current) => (targets.includes(current) ? "" : current));
+  };
+
   useEffect(() => {
-    if (progress?.media.mediaRoom && notice === MEDIA_ROOM_UNSUPPORTED)
-      setNotice("");
-  }, [progress?.media.mediaRoom, notice]);
+    const room = progress?.media.mediaRoom;
+    if (room === undefined) return;
+    // 只在从非媒体房切回媒体房的跳变上清理不支持提示与去重键，
+    // 避免离房瞬间快照滞后时立刻抹掉刚写入的新提示。
+    if (prevMediaRoom.current === false && room)
+      clearNotices(MEDIA_ROOM_UNSUPPORTED);
+    prevMediaRoom.current = room;
+  }, [progress?.media.mediaRoom]);
+
+  useEffect(() => {
+    if (!progress) return;
+    const context = `${progress.media.roomKey ?? ""}|${progress.media.mediaRoom}|${progress.media.mediaLoadingEnabled}|${progress.media.sleepMode}`;
+    if (
+      prevMediaContext.current !== null &&
+      prevMediaContext.current !== context &&
+      mediaLoadingErrorKeys.current.size > 0
+    ) {
+      clearNotices(...mediaLoadingErrorKeys.current);
+    }
+    prevMediaContext.current = context;
+  }, [
+    progress?.media.roomKey,
+    progress?.media.mediaRoom,
+    progress?.media.mediaLoadingEnabled,
+    progress?.media.sleepMode,
+  ]);
 
   const recordNotice = (text: string, dedupe = true): boolean => {
     const now = Date.now();
@@ -172,18 +214,27 @@ export function useDeck(): DeckModel | null {
     }
   };
 
-  const toggleMediaLoading = () => {
-    if (!session) return;
+  const toggleMediaLoading = (): MediaLoadingActionResult => {
+    if (!session) return "failed";
     try {
-      if (!session.bridge.toggleMediaLoading()) {
+      const result = session.bridge.toggleMediaLoading();
+      if (result === "unsupported") {
         message(MEDIA_ROOM_UNSUPPORTED);
-        return;
+        return result;
       }
-      if (notice === MEDIA_ROOM_UNSUPPORTED || notice === MEDIA_LOADING_FAILED)
-        setNotice("");
+      clearNotices(MEDIA_ROOM_UNSUPPORTED, ...mediaLoadingErrorKeys.current);
+      return result;
     } catch (error) {
-      if (recordNotice(MEDIA_LOADING_FAILED))
-        reportFailure(error, MEDIA_LOADING_FAILED);
+      const localized = error instanceof MediaLoadingUnavailableError;
+      const text = localized ? error.message : MEDIA_LOADING_FAILED;
+      if (!localized)
+        console.warn("[IIROSE-MEDIA-WEB] toggleMediaLoading failed:", error);
+      if (recordNotice(text)) {
+        mediaLoadingErrorKeys.current.add(text);
+        if (localized) reportFailure(error);
+        else reportFailure(error, MEDIA_LOADING_FAILED);
+      }
+      return "failed";
     }
   };
 

@@ -18,6 +18,7 @@ import {
   deskRoseTint,
 } from "../floating-panel/tokens";
 import type { PlaybackModeKind } from "../../../playback/PlaybackMode";
+import { guardDeckButtonEnter } from "./deckParts";
 
 const ICONS: Record<PlaybackModeKind, "repeat" | "shuffle"> = {
   loop: "repeat",
@@ -60,6 +61,7 @@ export function ModeToggle({
         aria-pressed={active}
         aria-disabled={!enabled}
         title={hint}
+        onKeyDown={guardDeckButtonEnter}
         onClick={(event) => onToggle(kind, event.currentTarget)}
       >
         <DeskIcon name={ICONS[kind]} size={17} />
@@ -84,6 +86,7 @@ export function ModeToggle({
       aria-disabled={!enabled}
       aria-label={compact ? label : undefined}
       title={hint}
+      onKeyDown={guardDeckButtonEnter}
       onClick={(event) => onToggle(kind, event.currentTarget)}
     >
       <DeskIcon name={ICONS[kind]} size={compact ? 20 : 17} />

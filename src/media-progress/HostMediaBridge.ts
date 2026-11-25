@@ -17,6 +17,12 @@ interface RoomInfo {
   identity?: unknown;
 }
 
+export type MediaLoadingToggleResult =
+  "toggled" | "sleep-dialog" | "unsupported";
+
+/** 桥接层可判明的宿站媒体加载入口缺失错误（文案可直接展示给用户）。 */
+export class MediaLoadingUnavailableError extends Error {}
+
 export interface MediaHost {
   shareMediaCurrentTime?: unknown;
   shareMediaDuration?: unknown;
@@ -181,31 +187,41 @@ export class HostMediaBridge {
 
   /**
    * 切换宿站本机「媒体加载」双态开关（零聊天 / 零 `cut` / 零 WS）：
-   * - 非媒体房（`!mediaRoom`）直接返回 `false`，不触碰宿站入口；
-   * - 睡眠态必须走宿站原生退出睡眠确认框（不回退到 `switch`）；
-   * - 常规态调 `Objs.emptyMediaPlayer.switch(!Probe.emptyMediaPlayer)`；
-   * - 缺失入口或调用抛错向外抛出，由调用方交 `reportFailure` 提示。
+   * - 非媒体房（`!mediaRoom`）同步一次快照后返回 `"unsupported"`，不触碰宿站入口；
+   * - 睡眠态必须走宿站原生退出睡眠确认框（不回退到 `switch`），返回 `"sleep-dialog"`；
+   * - 常规态调 `Objs.emptyMediaPlayer.switch(!Probe.emptyMediaPlayer)`，返回 `"toggled"`；
+   * - 入口缺失抛 `MediaLoadingUnavailableError`，宿站调用抛错原样向外抛出。
    */
-  toggleMediaLoading(): boolean {
-    if (!this.host.mediaRoom) return false;
+  toggleMediaLoading(): MediaLoadingToggleResult {
+    if (!this.host.mediaRoom) {
+      this.safePoke();
+      return "unsupported";
+    }
     const probe = this.host.Probe;
     if (!probe || typeof probe !== "object")
-      throw new Error("宿站媒体状态探针不可用，请刷新页面后重试");
+      throw new MediaLoadingUnavailableError(
+        "宿站媒体状态探针不可用，请刷新页面后重试",
+      );
     if (probe.sleepMode) {
       const service = this.host.Utils?.service;
       if (typeof service?.openMediaLoadingWhenSleep !== "function")
-        throw new Error("宿站退出睡眠模式入口不可用，请刷新页面后重试");
+        throw new MediaLoadingUnavailableError(
+          "宿站退出睡眠模式入口不可用，请刷新页面后重试",
+        );
       try {
         service.openMediaLoadingWhenSleep();
       } finally {
         this.safePoke();
       }
-      return true;
+      return "sleep-dialog";
     }
     const player = this.host.Objs?.emptyMediaPlayer;
     if (typeof player?.switch !== "function")
-      throw new Error("宿站媒体加载开关不可用，请刷新页面后重试");
-    const hooked = this.hooked.get("switch")?.wrapper === player.switch;
+      throw new MediaLoadingUnavailableError(
+        "宿站媒体加载开关不可用，请刷新页面后重试",
+      );
+    const entry = this.hooked.get("switch");
+    const hooked = entry?.owner === player && entry.wrapper === player.switch;
     let succeeded = false;
     try {
       player.switch(!probe.emptyMediaPlayer);
@@ -213,14 +229,15 @@ export class HostMediaBridge {
     } finally {
       if (!hooked || !succeeded) this.safePoke();
     }
-    return true;
+    return "toggled";
   }
 
-  private safePoke(): void {
+  /** 安全立即刷新：吞掉订阅者抛错，避免干扰宿站入口或掩盖原始异常。 */
+  safePoke(): void {
     try {
       this.poke();
     } catch {
-      /* 不掩盖宿站原始异常 */
+      /* 不掩盖宿站原始异常或污染宿站调用链 */
     }
   }
 
@@ -397,7 +414,7 @@ export class HostMediaBridge {
     const player = this.host.Objs?.emptyMediaPlayer;
     if (player)
       this.observe(player, "switch", () => {
-        this.poke();
+        this.safePoke();
       });
   }
 

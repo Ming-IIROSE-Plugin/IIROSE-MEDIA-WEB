@@ -23,6 +23,7 @@ import { DeckProgress } from "./DeckProgress";
 import {
   DeckLabel,
   DeckToggles,
+  guardDeckButtonEnter,
   LiveRow,
   MediaLoadingToggle,
   percentOf,
@@ -96,6 +97,7 @@ export function MiniDeck({
           aria-expanded={expanded}
           aria-label={`${title}，展开房间播放条`}
           className={`flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center gap-[11px] border-0 bg-transparent p-0 text-left text-inherit ${deskFocusRingOnDeck}`}
+          onKeyDown={guardDeckButtonEnter}
           onClick={onOpen}
         >
           <Cover
@@ -144,12 +146,15 @@ export function MiniDeck({
             {...stopHostGestures}
           />
           <div
+            ref={(element) => {
+              element?.toggleAttribute("inert", closing);
+            }}
             data-imw-deck="expanded"
             role="dialog"
             aria-modal="true"
             aria-label={deckName}
             onKeyDown={trapFocusWithin}
-            className={`absolute inset-x-0 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing} ${deskDeckSheetShadow} ${closing ? "animate-[imwSheetSink_200ms_var(--imw-ease)_forwards] motion-reduce:animate-[imwSheetFadeOut_160ms_ease-out_forwards]" : "animate-[imwSheetRise_260ms_var(--imw-ease)] motion-reduce:animate-[imwSheetFade_160ms_ease-out]"}`}
+            className={`absolute inset-x-0 bottom-0 flex flex-col gap-3 rounded-t-[16px] px-4 pt-3 pb-4 ${deskDeckSurface} ${deskDeckText} ${deskDeckRing} ${deskDeckSheetShadow} ${closing ? "pointer-events-none animate-[imwSheetSink_200ms_var(--imw-ease)_forwards] motion-reduce:animate-[imwSheetFadeOut_160ms_ease-out_forwards]" : "animate-[imwSheetRise_260ms_var(--imw-ease)] motion-reduce:animate-[imwSheetFade_160ms_ease-out]"}`}
             {...stopHostGestures}
           >
             <div
@@ -187,11 +192,11 @@ export function MiniDeck({
                   reason={deck.mediaLoading.reason}
                   sheet
                   onToggle={() => {
-                    // 睡眠态即将唤起宿站原生退出睡眠确认框：先收起展开层，
-                    // 避免 Esc / 宿站返回键先吃掉底层抽屉而留下宿站确认框。
-                    if (deck.mediaLoading.supported && media.sleepMode)
+                    if (closing) return;
+                    // 仅实际唤起宿站原生退出睡眠确认框时立即收起展开层（不归还焦点给迷你条），
+                    // 避免 Esc / 返回键先吃掉底层抽屉；若入口缺失抛错或已离房则保留展开层。
+                    if (deck.toggleMediaLoading() === "sleep-dialog")
                       onCollapse(false, false);
-                    deck.toggleMediaLoading();
                   }}
                 />
                 <button
@@ -200,7 +205,10 @@ export function MiniDeck({
                   aria-label="收起"
                   title="收起"
                   className={`flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 ${roundedLg} ${deskDeckText} ${deskFocusRingOnDeck}`}
-                  onClick={() => onCollapse(true)}
+                  onKeyDown={guardDeckButtonEnter}
+                  onClick={() => {
+                    if (!closing) onCollapse(true);
+                  }}
                 >
                   <DeskIcon name="chev" size={20} />
                 </button>
@@ -226,7 +234,9 @@ export function MiniDeck({
                 playback={playback}
                 compact={false}
                 sheet
-                onToggle={deck.toggle}
+                onToggle={(kind, element) => {
+                  if (!closing) deck.toggle(kind, element);
+                }}
               />
             </div>
 

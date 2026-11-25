@@ -118,6 +118,24 @@ export function DeckToggles({
   );
 }
 
+/**
+ * 宿站 `window.onkeydown` 在非输入框聚焦时会对 `Enter`（keyCode 13）调 `preventDefault`
+ * 并截胡按键；仅阻断无修饰键的非组字 `Enter` 冒泡，并拦住长按 `repeat` 防止误连触或叠弹确认框。
+ */
+export function guardDeckButtonEnter(event: KeyboardEvent): void {
+  if (
+    event.key === "Enter" &&
+    !event.isComposing &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  ) {
+    event.stopPropagation();
+    if (event.repeat) event.preventDefault();
+  }
+}
+
 export interface MediaLoadingToggleProps {
   supported: boolean;
   enabled: boolean;
@@ -156,20 +174,7 @@ export function MediaLoadingToggle({
       aria-disabled={!supported}
       title={hint}
       className={`${base} ${tone} ${supported ? deskPress : "opacity-40"} ${deskFocusRingOnDeck}`}
-      onKeyDown={(event) => {
-        // 宿站 `window.onkeydown` 在非输入框聚焦时会对 Enter 调 preventDefault 并截胡按键；
-        // 仅阻断无修饰键的非组字 Enter 冒泡，并拦住长按 repeat 防止高频误切或叠弹睡眠确认框。
-        if (
-          event.key === "Enter" &&
-          !event.isComposing &&
-          !event.altKey &&
-          !event.ctrlKey &&
-          !event.metaKey
-        ) {
-          event.stopPropagation();
-          if (event.repeat) event.preventDefault();
-        }
-      }}
+      onKeyDown={guardDeckButtonEnter}
       onClick={onToggle}
     >
       <DeskIcon name={enabled ? "note" : "noteOff"} size={sheet ? 20 : 17} />

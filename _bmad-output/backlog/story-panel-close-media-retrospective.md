@@ -112,26 +112,20 @@ headless: false
 
 ## Action items
 
-以下均为维护者确认后的**待执行提议项（本次复盘未修改任何代码、规范或票据状态）**：
+以下 7 条行动项已于 2026-11-25 维护者确认后全部执行并验证（`npm test` 94 文件 / 1621 用例全绿，`npm run build` 476.57 kB / gzip 143.26 kB，真站实测通过）：
 
-1. **（待修复 · 代码，F1 + F11 安全调用）** `HostMediaBridge.ts:399-401` 的 `observe(player, "switch", ...)` 改调 `this.safePoke()`，`src/page/index.tsx:264` 的 `bridge.poke()` 同样防订阅者异常穿透，避免异常影响宿站入口或让已成功的切换误报失败。负责人：开发。来源：F1、F11。
-2. **（待修复 · 代码，F2）** 修正 `RoomDeck.tsx:86-94` 手机展开层焦点回收条件：仅在焦点落空（`null` / `document.body` / `document.documentElement`）或落在 `sheet` 内已不可聚焦节点（`tabIndex < 0`，如失权后的进度轨）时才收回至 `closeButton`，绝不从上层 `ShufflePicker` 等浮层抢焦。负责人：开发。来源：F2。
-3. **（待修复 · 代码，F3 + F4 + F5 + F6 + F7）**
-   - **F3 / F4**：`HostMediaBridge.toggleMediaLoading()` 在 `!this.host.mediaRoom` 返回前补 `this.safePoke()`，并返回明确结果枚举（例如 `"toggled" | "sleep-dialog" | "unsupported"`）；`MiniDeck.tsx:189-195` 仅在返回 `"sleep-dialog"` 时才执行 `onCollapse(false, false)`。`useDeck.ts` 清空某条 `notice` 时同步从 `notices.current` 删除对应键，按 `mediaRoom` 从 `false → true` 跳变清理 `MEDIA_ROOM_UNSUPPORTED`，换房或媒体加载态变化时清理旧 `MEDIA_LOADING_FAILED`。
-   - **F5**：透出 `HostMediaBridge` 的三条细分中文报错提示（探针不可用 / 退出睡眠入口不可用 / 媒体加载开关不可用），仅对未知宿站异常走通用兜底 `MEDIA_LOADING_FAILED`，并补 `console.warn` 留痕。
-   - **F6**：`deckParts.tsx:162-168` 补 `!event.shiftKey`，抽取 `guardDeckButtonEnter` 复用到 `ModeToggle` 与 `MiniDeck`（`miniButton`、`closeButton`）。
-   - **F7**：展开层 `closing` 滑出期间置 `inert` + `pointer-events-none`，`RoomDeck.tsx:48-61` 中 `collapse(false, false)` 取消在途 `closeTimer`。
+1. **（已做 · 代码，F1 + F11 安全调用）** `HostMediaBridge.ts` 公开 `safePoke()`，`observe(player, "switch", ...)` 与 `src/page/index.tsx:264` 统一改调 `safePoke()`，避免订阅者异常穿透宿站入口或中断面板打开副作用。负责人：开发。来源：F1、F11。
+2. **（已做 · 代码，F2）** `RoomDeck.tsx` 展开层焦点回收改为仅在焦点落空（`null` / `body` / `documentElement`）或落在 `sheet` 内已不可聚焦节点（`tabIndex < 0`，如失权后的进度轨）时收回至 `closeButton`，绝不从上层 `ShufflePicker` 抢焦。负责人：开发。来源：F2。
+3. **（已做 · 代码，F3 + F4 + F5 + F6 + F7）**
+   - **F3 / F4**：`HostMediaBridge.toggleMediaLoading()` 在 `!this.host.mediaRoom` 前补 `this.safePoke()`，返回 `"toggled" | "sleep-dialog" | "unsupported"`；`MiniDeck.tsx` 仅在返回 `"sleep-dialog"` 时执行 `onCollapse(false, false)`。`useDeck.ts` 通过 `clearNotices` 同步清理 `notice` 与 `notices.current` 去重键，按 `mediaRoom` `false → true` 跳变清理不支持提示，并在换房或媒体加载态变化时清理旧失败提示。
+   - **F5**：新增 `MediaLoadingUnavailableError`，透出 `HostMediaBridge` 的三条细分中文提示（探针 / 退出睡眠入口 / 媒体加载开关不可用），未知宿站异常走 `MEDIA_LOADING_FAILED` 兜底并 `console.warn` 留痕。
+   - **F6**：抽 `guardDeckButtonEnter`（补全 `!event.shiftKey`），复用到 `MediaLoadingToggle`、`ModeToggle` 与 `MiniDeck`（`miniButton`、`closeButton`）。
+   - **F7**：展开层 `closing` 滑出期间置 `inert` 与 `pointer-events-none` 并屏蔽按钮回调，`RoomDeck.collapse(false, false)` 中止在途 `closeTimer`。
    负责人：开发。来源：F3、F4、F5、F6、F7。
-4. **（待修复 · 测试，F10）** 补齐回归防线：① `index.test.ts` 测 `setPanelOpen(true)` 立即回读快照；② `HostMediaBridge.test.ts` 测已 hooked 订阅者抛错、未 hooked 成功 `safePoke`、睡眠态 `safePoke`；③ `roomDeck.test.ts` 测 F2 四种焦点场景（切直播 / 失权 / `ShufflePicker` 不抢焦 / 层内其他按钮不抢焦）、F3 去重恢复与换房清理、F4 非媒体房+睡眠态不收起与不抢焦、F5 细分报错透出与未知错误兜底、F6 `ctrlKey`/`metaKey`/`shiftKey` 与相邻按钮 `Enter`、F7 滑出期点击隔离、`useDeck` 保留无关播放模式提示；④ 补一条「真实 `HostMediaBridge` + `RoomDeck` + `LoopController`/`ShuffleController`」端到端集成测试，守住 `AGENTS.md` 端到端文案断言约定。负责人：开发。来源：F10。
-5. **（待规格对账 · 文档，A5）**
-   - 由 PO 更新 `_bmad-output/backlog/story-panel-close-media.md`：将 Notes L79 的 `Open question: 两态图标方案` 改为已定稿 `note` / `noteOff`，并在 Criterion 4 备注非媒体房 `aria-label` 附带不支持原因（与 `EXPERIENCE.md:287` 一致）；待行动项 1–4 落地验证后由 PO 标 `done`。
-   - 更新 `EXPERIENCE.md:183`：在展开的底部条收起条件中补上「睡眠态点击媒体加载开关时直接收起（让位宿站退出睡眠确认框）」。
-   负责人：Sofia（`bmad-agent-po`）/ 开发。来源：A5。
-6. **（待更新 · 流程与规范，F1 + F6 + F10）**
-   - 在 `AGENTS.md` Known pitfalls 补记：**宿站 `window.onkeydown` 在非输入框聚焦时会对 `Enter`（`keyCode === 13`）调 `preventDefault()`**，面板内需键盘 `Enter` 触发的按钮须阻断无修饰非组字 `Enter` 冒泡（并拦截长按 `repeat`）。
-   - 流程约定：第二轮审查/加固新增的安全网（宿站钩子观察、`safePoke`、焦点回收、去重清零等）须同步配「删改即红灯」的反向单测，防止修补引入未覆盖分支。
-   负责人：开发。来源：F1、F6、F10。
-7. **（待记录 · 推迟项，F8 + F11）** 将 F8（点歌台内页/面板与宿站 `#syncHolder` 确认弹窗的全局 `Esc`/返回键让位）与 F11（`MainAppControlLayer.shouldComponentUpdate` 合批首开与搜索词重复触发 `applyDisplaySideEffects`）记入 `_bmad-output/initiative-iirose-media-web/deferred-work.md`。负责人：开发。来源：F8、F11。
+4. **（已做 · 测试，F10）** 已在 `HostMediaBridge.test.ts`、`roomDeck.test.ts`、`index.test.ts` 补齐全部回归防线（含 `setPanelOpen(true)` 立即回读、已/未 hooked 与睡眠态 `safePoke`、F2 四种焦点场景、F3 去重与换房清理、F4/F5/F6/F7、以及「真实 `HostMediaBridge` + `RoomDeck` + 真实 `LoopController`/`ShuffleController`」端到端文案与独立性集成测试；总用例 1617 → 1621）。负责人：开发。来源：F10。
+5. **（已做 · 规格对账，A5）** 已更新 `_bmad-output/backlog/story-panel-close-media.md`（Criterion 4 备注非媒体房 `aria-label`、Notes 定稿 `note`/`noteOff`）、`EXPERIENCE.md:183`（补睡眠态唤起确认框时展开层直接收起不归还焦点），并经 `tickets.py mark` 将本票标为 `done`。负责人：开发 / PO。来源：A5。
+6. **（已做 · 流程与规范，F1 + F6 + F10）** 已在 `AGENTS.md` 补记「宿站 `window.onkeydown` 截胡非输入焦点 `Enter`」与「二次审查加固引入的新防线须配反向单测」。负责人：开发。来源：F1、F6、F10。
+7. **（已做 · 推迟项，F8 + F11）** 已将 F8（宿站 `#syncHolder` 弹窗与点歌台全局 `Esc`/返回键让位）与 F11（`MainAppControlLayer.shouldComponentUpdate` 合批首开/搜索词重复副作用）记入 `_bmad-output/initiative-iirose-media-web/deferred-work.md`。负责人：开发。来源：F8、F11。
 
 ## Decision records
 
@@ -151,7 +145,7 @@ headless: false
   - `story-panel-close-media.md` 声明的 5 条验收标准与 4 条边界在主路径上全部通过：桌面 1280×720（浅/深色）、窄窗 860×720（`<816px`）、手机 400×800（在播与真实空闲态）均实测正常；双向实时同步（≤50ms）、零 WS / 零聊天、睡眠确认流、真实键盘 `Enter`/`Space` 全部通过；`npm test` 94 文件 / 1617 用例全绿，`npm run build` 零错，`8ebf2bf` CI 部署成功。
   - `pending_tickets` 为空（本故事已达 `built`）。
 - **开放项**：
-  - 已核实并由维护者批准排入收口修复的边缘缺陷与测试缺口：F1–F7、F10（行动项 1–4），以及文档对账与规范补充（行动项 5–6）与推迟项 F8、F11（行动项 7）；F9 已确认接受现状。待行动项 1–4 落地验证后再由 PO 关票。
+  - 行动项 1–7 已于 2026-11-25 全部落地并经单测（94 文件 / 1621 用例）、构建与真站复测通过，`story-panel-close-media` 已关票（`done`）；推迟项 F8、F11 留在 `deferred-work.md` 追踪，F9 接受现状。无阻塞项。
 
 ## Open questions
 
