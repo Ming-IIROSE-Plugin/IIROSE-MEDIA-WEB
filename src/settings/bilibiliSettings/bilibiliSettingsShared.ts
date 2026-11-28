@@ -10,12 +10,12 @@ export interface BilibiliVideoSettings {
   streamqn: number;
   streamSeconds: number;
   videoStreamFormat: number;
-  api: "HK" | "Guangzhou" | "Dev";
+  api: "HK" | "Guangzhou";
 }
 
 export type BilibiliApiId = BilibiliVideoSettings["api"];
 
-/** 默认 API 节点：线上构建里未知值与不可用的节点都回落到它。 */
+/** 默认 API 节点：旧的开发者节点和未知值都回落到它。 */
 export const DEFAULT_BILIBILI_API: BilibiliApiId = "Guangzhou";
 
 /**
@@ -29,23 +29,7 @@ export const BILIBILI_API_NODES: {
 }[] = [
   { id: "HK", label: "香港-海外优化", icon: "mdi-crosshairs-gps" },
   { id: "Guangzhou", label: "广州-中国优化", icon: "mdi-crosshairs-gps" },
-  { id: "Dev", label: "开发者模式", icon: "mdi-dev-to" },
 ];
-
-/**
- * 「开发者模式」指向 localhost:9000 且没有兜底节点，只有开发构建才可能连得上；
- * 线上构建既不提供该选项，也要把存档里残留的 Dev 归一化回默认节点。
- */
-export function isDevApiAvailable(): boolean {
-  return Boolean(import.meta.env.DEV);
-}
-
-/** 当前构建里可选的节点（线上构建不含 Dev）。 */
-export function availableApiNodes() {
-  return BILIBILI_API_NODES.filter(
-    (node) => node.id !== "Dev" || isDevApiAvailable(),
-  );
-}
 
 /** 菜单需要的读取面：`BiliBiliSettings` 结构性满足它。 */
 export interface BilibiliSettingsReader {

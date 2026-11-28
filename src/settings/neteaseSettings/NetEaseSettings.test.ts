@@ -46,6 +46,10 @@ describe("NetEaseSettings.setNeteaseDefaultApi", () => {
     ];
 
     const hkOption = options.find((option) => option[1] === "香港-海外优化");
+    expect(options.map((option) => option.slice(0, 2))).toEqual([
+      ["default", "广州-默认节点"],
+      ["HK", "香港-海外优化"],
+    ]);
     expect(hkOption).toBeDefined();
     expect(hkOption?.[0]).toBe("HK");
 

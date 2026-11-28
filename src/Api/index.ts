@@ -7,12 +7,9 @@ import * as fetchTransport from "./transports/fetchTransport";
 import * as xhrTransport from "./transports/xhrTransport";
 
 export class SendFetch {
-  // public static cors = `http://localhost:9000/proxy?url=`;
-
   public static cors = `https://1309510434-0ia3djbhr3.ap-guangzhou.tencentscf.com/proxy?url=`;
   public static malaysiacors = `https://1309510434-j7rmgztk8t.ap-hongkong.tencentscf.com/proxy?url=`;
   public static cncors = `https://1309510434-0ia3djbhr3.ap-guangzhou.tencentscf.com/proxy?url=`;
-  public static devcors = `http://localhost:9000/proxy?url=`;
 
   static {
     if (
@@ -155,12 +152,10 @@ export class SendFetch {
     const setting = readJson<{ api?: string } | null>("bilibiliSetting", null);
     if (setting?.api) api = setting.api;
 
-    if (api === "Guangzhou") {
+    if (api === "Guangzhou" || api === "Dev") {
       return this.cncors;
     } else if (api === "HK") {
       return this.malaysiacors;
-    } else if (api === "Dev") {
-      return this.devcors;
     }
     return this.cors;
   }
@@ -195,13 +190,11 @@ export class SendFetch {
     if (signal?.aborted) return null;
     const TIMEOUT_MS = 5000;
     const primary = this.getNeteaseCors();
-    // Dev 模式下仅本地开发节点可用；其余情况优先节点在前，另一个 SCF 兜底
+    // 优先节点在前，另一个 SCF 兜底
     const nodes =
-      primary === this.devcors
-        ? [primary]
-        : primary === this.malaysiacors
-          ? [primary, this.cncors]
-          : [primary, this.malaysiacors];
+      primary === this.malaysiacors
+        ? [primary, this.cncors]
+        : [primary, this.malaysiacors];
 
     let lastError: "risk" | "timeout" | "http" | "network" = "http";
     let lastStatus: number | undefined;

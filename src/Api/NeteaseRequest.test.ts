@@ -402,16 +402,19 @@ describe("neteaseRequest：全部节点失败", () => {
     expect(String(showMock.mock.calls[0][0])).toContain("网络");
   });
 
-  it("Dev 模式只有本地节点，失败后仅请求一次并提示一次", async () => {
+  it("旧 Dev 配置优先走广州，失败时改用香港", async () => {
     setNeteaseApi("Dev");
-    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    fetchMock
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(Response.json({ code: 200 }));
 
     const data = await callNeteaseRequest();
 
-    expect(data).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(nodeOfCall(0).startsWith(SendFetch.devcors)).toBe(true);
-    expect(showMock).toHaveBeenCalledTimes(1);
+    expect(data).toEqual({ code: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(nodeOfCall(0).startsWith(SendFetch.cncors)).toBe(true);
+    expect(nodeOfCall(1).startsWith(SendFetch.malaysiacors)).toBe(true);
+    expect(showMock).not.toHaveBeenCalled();
   });
 });
 

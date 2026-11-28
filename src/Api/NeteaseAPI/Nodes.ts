@@ -2,7 +2,7 @@
  * 网易云优先节点的单一真源：读取端（`SendFetch.getNeteaseCors`）、
  * 设置写入端与展示文案都从这里派生，新增/改名节点只改这一处。
  */
-export type NeteaseNodeId = "default" | "HK" | "Dev";
+export type NeteaseNodeId = "default" | "HK";
 
 export interface NeteaseNode {
   id: NeteaseNodeId;
@@ -11,7 +11,7 @@ export interface NeteaseNode {
   /** 宿站设置弹窗的元素图标 class（需配合 `font-family:md` 使用） */
   icon: string;
   /** 对应的 `SendFetch` 代理常量名 */
-  cors: "cncors" | "malaysiacors" | "devcors";
+  cors: "cncors" | "malaysiacors";
 }
 
 export const NETEASE_NODES: NeteaseNode[] = [
@@ -27,7 +27,6 @@ export const NETEASE_NODES: NeteaseNode[] = [
     icon: "mdi-crosshairs-gps",
     cors: "malaysiacors",
   },
-  { id: "Dev", label: "开发者模式", icon: "mdi-dev-to", cors: "devcors" },
 ];
 
 /** 未知/缺失的存量值一律回落默认节点（广州） */

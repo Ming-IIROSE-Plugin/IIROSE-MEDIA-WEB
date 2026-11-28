@@ -12,7 +12,7 @@ import type {
   BilibiliSettingsReader,
   BilibiliVideoSettings,
 } from "./bilibiliSettingsShared";
-import { availableApiNodes } from "./bilibiliSettingsShared";
+import { BILIBILI_API_NODES } from "./bilibiliSettingsShared";
 
 /** 宿站单选选择弹窗：参数与各菜单早就固定成这一串，别按调用点各自改。 */
 const openMenu = (
@@ -318,10 +318,11 @@ export const showDefaultApiMenu = (
     }
   };
 
-  // 选项与图标一起由目录生成：隐藏 Dev 时剩下的行不会拿到别人的图标
-  const selectOption: (string | number)[][] = availableApiNodes().map(
-    (node) => [node.id, node.label, iconCell(node.icon)],
-  );
+  const selectOption: (string | number)[][] = BILIBILI_API_NODES.map((node) => [
+    node.id,
+    node.label,
+    iconCell(node.icon),
+  ]);
 
   openMenu(selectOption, set);
 };

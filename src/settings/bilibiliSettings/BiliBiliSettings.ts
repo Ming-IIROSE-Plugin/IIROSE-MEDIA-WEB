@@ -13,10 +13,8 @@ import type {
   BilibiliVideoSettings,
 } from "./bilibiliSettingsShared";
 import {
-  availableApiNodes,
   BILIBILI_API_NODES,
   DEFAULT_BILIBILI_API,
-  isDevApiAvailable,
 } from "./bilibiliSettingsShared";
 
 export type { BilibiliApiId, BilibiliVideoSettings };
@@ -67,8 +65,7 @@ export class BiliBiliSettings {
 
   /**
    * 读 B 站设置：`api` 过归一化。
-   * 线上构建里存档残留 `Dev` 会回退默认节点，并顺手写回存档——
-   * 请求层 `Api.getBilibiliCors` 直接读原始存档，不写回它还会打到 localhost。
+   * 存档残留的旧值会回退默认节点并写回存档。
    */
   public getBilibiliVideoSettings(): BilibiliVideoSettings {
     const parsed = readJson<BilibiliVideoSettings | null>(
@@ -94,17 +91,15 @@ export class BiliBiliSettings {
     }
   }
 
-  /** 归一化：未知值与线上构建里的 `Dev` 一律回退默认节点。 */
+  /** 归一化：旧的开发者节点和未知值都回退默认节点。 */
   public normalizeBilibiliApi(raw: unknown): BilibiliApiId {
     const node = BILIBILI_API_NODES.find((item) => item.id === raw);
-    if (!node) return DEFAULT_BILIBILI_API;
-    if (node.id === "Dev" && !isDevApiAvailable()) return DEFAULT_BILIBILI_API;
-    return node.id;
+    return node?.id ?? DEFAULT_BILIBILI_API;
   }
 
-  /** 当前构建里可选的节点 id（设置项展示顺序，线上构建不含 `Dev`）。 */
+  /** 可选节点 id，按设置项展示顺序。 */
   public availableBilibiliApis(): BilibiliApiId[] {
-    return availableApiNodes().map((node) => node.id);
+    return BILIBILI_API_NODES.map((node) => node.id);
   }
 
   public parseBilibiliVideoQn(qn: number) {
@@ -168,7 +163,7 @@ export class BiliBiliSettings {
     }, {});
   }
 
-  /** 节点文案取自目录（含 Dev：开发构建里它仍是合法取值，线上构建由归一化先挡住）。 */
+  /** 节点文案取自目录。 */
   public parseBilibiliApi(api: BilibiliApiId) {
     const node = BILIBILI_API_NODES.find((option) => option.id === api);
     if (node) {

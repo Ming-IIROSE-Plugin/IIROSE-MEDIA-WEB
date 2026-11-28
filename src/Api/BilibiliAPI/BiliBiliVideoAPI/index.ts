@@ -11,7 +11,7 @@ import { BiliBiliWatchApi } from "./watch";
  * 方法名只在各自模块里出现一次（用成员别名反而会重复一遍长方法名）；调用点仍是
  * `BiliBiliVideoApi.getXxx(...)`。
  *
- * 注意：链上任何一环都不要声明 `cors` / `cncors` / `malaysiacors` / `devcors` 同名静态字段，
+ * 注意：链上任何一环都不要声明 `cors` / `cncors` / `malaysiacors` 同名静态字段，
  * `getBilibiliCors()` 是靠 `this` 沿链读到 `SendFetch` 上那四个值的。
  */
 // 注意：30 个方法都在原型链上（继承而来），不是 `BiliBiliVideoApi` 的自有属性。

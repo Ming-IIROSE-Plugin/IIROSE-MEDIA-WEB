@@ -82,7 +82,7 @@ export class NetEaseSettings {
       );
 
       if (neteaseSetting) {
-        neteaseSetting.api = s as "default" | "HK" | "Dev";
+        neteaseSetting.api = getNeteaseNode(s).id;
         writeJson("neteaseSetting", neteaseSetting);
       }
 

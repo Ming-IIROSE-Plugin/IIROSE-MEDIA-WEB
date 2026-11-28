@@ -25,6 +25,7 @@ export class LocalStorageUtils {
   private static mergeSetting<T extends object>(
     key: string,
     defaultSetting: T,
+    migrate?: (setting: T) => void,
   ): void {
     const currentSetting = readJson<T | null>(key, null);
     if (!currentSetting) {
@@ -53,7 +54,17 @@ export class LocalStorageUtils {
       };
     }
 
+    migrate?.(merged);
     writeJson(key, merged);
+  }
+
+  private static mergePlatformSetting<T extends { api: string }>(
+    key: string,
+    defaults: T,
+  ) {
+    this.mergeSetting<{ api: string }>(key, defaults, (setting) => {
+      if (setting.api === "Dev") setting.api = defaults.api;
+    });
   }
 
   private static setBilibili() {
@@ -64,7 +75,7 @@ export class LocalStorageUtils {
       videoStreamFormat: 1,
       api: "Guangzhou",
     };
-    this.mergeSetting("bilibiliSetting", defaultBilibili);
+    this.mergePlatformSetting("bilibiliSetting", defaultBilibili);
   }
 
   private static setNetease() {
@@ -73,7 +84,7 @@ export class LocalStorageUtils {
       api: "default",
       lyricOption: "both",
     };
-    this.mergeSetting("neteaseSetting", defaultNetease);
+    this.mergePlatformSetting("neteaseSetting", defaultNetease);
   }
 
   private static setCommonSetting() {
