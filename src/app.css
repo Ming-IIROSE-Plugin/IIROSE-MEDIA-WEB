@@ -573,6 +573,12 @@
   font-family: "md";
 }
 
+/* 默认 API 节点图标 */
+.imwApiNodeIcon::before {
+  content: "\F01A4"; /* crosshairs-gps */
+  font-family: "md";
+}
+
 /* 点播播报三档设置图标（码点对 @mdi/font 7.3.67 核实） */
 .announceCardIcon::before {
   content: "\F0B78"; /* card-text-outline */

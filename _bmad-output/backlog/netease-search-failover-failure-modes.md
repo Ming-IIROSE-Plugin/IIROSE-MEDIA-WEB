@@ -47,21 +47,21 @@
 
 ## 受影响端点清单（均需接入检测与重试）
 
-| 端点 | 方法 | 加密 | 调用处 |
-|---|---|---|---|
-| `/weapi/search/get` | POST | weapi | `NeteaseSearch/index.ts` `getNeteaseMusicSearchData`（歌/歌单/专辑/MV 共用，type 1/1000/10/1004） |
-| `/api/v6/playlist/detail` | GET | 明文 | `NeteaseMusic/index.ts` `getSongListDetail` |
-| `/weapi/v1/album/{id}` | POST | weapi | `NeteaseMusic/index.ts` `getAlbumDetail` |
-| `/api/song/detail` | GET | 明文 | `NeteaseMusic/index.ts` `getNeteaseSongDetail`（注意现 URL 为 http，Mixed Content 隐患另论） |
-| `/api/song/lyric` | GET | 明文 | `NeteaseMusic/index.ts` `getLyric`（逐曲歌词，失败同样按本目录提示一次） |
-| `/weapi/v1/mv/detail` | POST | weapi | `NeteaseMusic/index.ts` `getNeteaseMVDetail` |
-| `/weapi/song/enhance/play/mv/url` | POST | weapi | `NeteaseMusic/index.ts` `getMVPlayURL`（原先硬编码广州前缀，现统一走请求入口） |
+| 端点                              | 方法 | 加密  | 调用处                                                                                            |
+| --------------------------------- | ---- | ----- | ------------------------------------------------------------------------------------------------- |
+| `/weapi/search/get`               | POST | weapi | `NeteaseSearch/index.ts` `getNeteaseMusicSearchData`（歌/歌单/专辑/MV 共用，type 1/1000/10/1004） |
+| `/api/v6/playlist/detail`         | GET  | 明文  | `NeteaseMusic/index.ts` `getSongListDetail`                                                       |
+| `/weapi/v1/album/{id}`            | POST | weapi | `NeteaseMusic/index.ts` `getAlbumDetail`                                                          |
+| `/api/song/detail`                | GET  | 明文  | `NeteaseMusic/index.ts` `getNeteaseSongDetail`（注意现 URL 为 http，Mixed Content 隐患另论）      |
+| `/api/song/lyric`                 | GET  | 明文  | `NeteaseMusic/index.ts` `getLyric`（逐曲歌词，失败同样按本目录提示一次）                          |
+| `/weapi/v1/mv/detail`             | POST | weapi | `NeteaseMusic/index.ts` `getNeteaseMVDetail`                                                      |
+| `/weapi/song/enhance/play/mv/url` | POST | weapi | `NeteaseMusic/index.ts` `getMVPlayURL`（原先硬编码广州前缀，现统一走请求入口）                    |
 
 ## 节点链
 
-- 优先节点（节点1）：用户在网易云设置中选定（`NeteaseSetting.api` 扩为节点枚举，默认广州）；`SendFetch.cors` — `https://1309510434-0ia3djbhr3.ap-guangzhou.tencentscf.com/proxy?url=`（广州 SCF）
-- 备用节点：`SendFetch.malaysiacors` — `https://1309510434-j7rmgztk8t.ap-hongkong.tencentscf.com/proxy?url=`（香港 SCF，与广州同构，可复用 `sendPost`）
-- 开发者模式：`SendFetch.devcors` — `http://localhost:9000/proxy?url=`（本地代理，仅单节点、不回落 SCF；生产设置里可见，属既有调试逃逸口）
+- 广州节点（默认）：`SendFetch.cncors` — `https://1309510434-0ia3djbhr3.ap-guangzhou.tencentscf.com/proxy?url=`（广州 SCF）
+- 香港节点：`SendFetch.malaysiacors` — `https://1309510434-j7rmgztk8t.ap-hongkong.tencentscf.com/proxy?url=`（香港 SCF）
+- 插件启动时将旧的开发者模式存档（`Dev`）迁移到广州。请求遇到旧值也优先走广州。
 
 节点 id / 文案 / 图标 / 代理常量的唯一真源是 `src/Api/NeteaseAPI/Nodes.ts` 的 `NETEASE_NODES`；读取端、设置选项与标题解析都从它派生。
 

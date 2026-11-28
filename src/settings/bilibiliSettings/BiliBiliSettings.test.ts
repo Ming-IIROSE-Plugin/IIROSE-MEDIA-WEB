@@ -3,6 +3,7 @@ import { BiliBiliSettings, DEFAULT_BILIBILI_API } from "./BiliBiliSettings";
 import { SendFetch } from "../../Api";
 
 class TestSendFetch extends SendFetch {
+  static cors = "https://generic-proxy.example/";
   static getBilibiliCors = () => super.getBilibiliCors();
 }
 
@@ -45,8 +46,8 @@ describe("B 站默认 API 节点", () => {
       "香港-海外优化",
       "广州-中国优化",
     ]);
-    expect(String(rows[0][2])).toContain("mdi-crosshairs-gps");
-    expect(String(rows[1][2])).toContain("mdi-crosshairs-gps");
+    expect(String(rows[0][2])).toContain("imwApiNodeIcon");
+    expect(String(rows[1][2])).toContain("imwApiNodeIcon");
     expect(rows.some((row) => String(row[2]).includes("mdi-dev-to"))).toBe(
       false,
     );

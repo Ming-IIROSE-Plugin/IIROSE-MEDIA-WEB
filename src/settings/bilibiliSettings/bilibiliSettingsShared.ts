@@ -27,8 +27,8 @@ export const BILIBILI_API_NODES: {
   label: string;
   icon: string;
 }[] = [
-  { id: "HK", label: "香港-海外优化", icon: "mdi-crosshairs-gps" },
-  { id: "Guangzhou", label: "广州-中国优化", icon: "mdi-crosshairs-gps" },
+  { id: "HK", label: "香港-海外优化", icon: "imwApiNodeIcon" },
+  { id: "Guangzhou", label: "广州-中国优化", icon: "imwApiNodeIcon" },
 ];
 
 /** 菜单需要的读取面：`BiliBiliSettings` 结构性满足它。 */

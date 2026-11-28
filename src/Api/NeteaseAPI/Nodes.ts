@@ -18,13 +18,13 @@ export const NETEASE_NODES: NeteaseNode[] = [
   {
     id: "default",
     label: "广州-默认节点",
-    icon: "mdi-crosshairs-gps",
+    icon: "imwApiNodeIcon",
     cors: "cncors",
   },
   {
     id: "HK",
     label: "香港-海外优化",
-    icon: "mdi-crosshairs-gps",
+    icon: "imwApiNodeIcon",
     cors: "malaysiacors",
   },
 ];
